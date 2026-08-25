@@ -89,6 +89,27 @@ class ProbeBoundaryTests(unittest.TestCase):
         self.assertIsNone(probe._find_executable("sh -c id"))
         self.assertIsNone(probe._find_executable("../tool"))
 
+    def test_executable_must_remain_inside_fixed_nonwritable_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            allowed = temporary_root / "allowed"
+            allowed.mkdir()
+            trusted = allowed / "trusted-tool"
+            trusted.write_bytes(b"#!/bin/false\n")
+            trusted.chmod(0o700)
+            outside = temporary_root / "outside-tool"
+            outside.write_bytes(b"#!/bin/false\n")
+            outside.chmod(0o700)
+            escape = allowed / "escape-tool"
+            escape.symlink_to(outside)
+            writable = allowed / "writable-tool"
+            writable.write_bytes(b"#!/bin/false\n")
+            writable.chmod(0o722)
+            with mock.patch.object(probe, "PROBE_PATH", str(allowed)):
+                self.assertEqual(probe._find_executable("trusted-tool"), str(trusted))
+                self.assertIsNone(probe._find_executable("escape-tool"))
+                self.assertIsNone(probe._find_executable("writable-tool"))
+
     def test_reads_are_bounded_regular_ascii_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -115,6 +136,10 @@ class ProbeBoundaryTests(unittest.TestCase):
             self.assertIsNone(probe._read_text(alias))
 
     def test_probe_process_boundary_matches_privacy_contract(self) -> None:
+        self.assertEqual(
+            probe.EXECUTABLE_INTEGRITY,
+            "resolved-within-path-and-not-group-or-world-writable",
+        )
         self.assertEqual(probe.SUBPROCESS_TIMEOUT_SECONDS, 5)
         self.assertEqual(probe.SUBPROCESS_STDOUT_BYTES, 65536)
         self.assertEqual(

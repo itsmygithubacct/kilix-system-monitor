@@ -12,12 +12,15 @@ canonical future HTTPS URL. The workspace root is the handoff's portable
 surface, resolving this registration without qualification must emit three
 dirty/unresolved development records. Qualification and staging must refuse.
 
-From the exact F120 tree, the consumer sequence is:
+From the exact F120 tree, enter the non-packaged tool directory first; selecting
+its uv project from another working directory does not put `kilix_f120` on
+Python's import path:
 
-    make --no-print-directory -C tools/closure check
-    uv run --project tools/closure --locked python -m kilix_f120 resolve \
+    cd tools/closure
+    make --no-print-directory check
+    uv run --locked python -m kilix_f120 resolve \
       PATH_TO_THIS_FILE OUTPUT
-    uv run --project tools/closure --locked python -m kilix_f120 validate \
+    uv run --locked python -m kilix_f120 validate \
       OUTPUT --allow-development-state
 
 Do not replace the sentinels merely because a local checkout exists. The F120

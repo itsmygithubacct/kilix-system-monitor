@@ -49,6 +49,7 @@ VENDORS = {
     "0x8086": "intel",
 }
 PROBE_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
+EXECUTABLE_INTEGRITY = "resolved-within-path-and-not-group-or-world-writable"
 SUBPROCESS_ENVIRONMENT = {
     "LANG": "C.UTF-8",
     "LC_ALL": "C.UTF-8",
@@ -100,13 +101,27 @@ def _read_int(path: Path, *, minimum: int | None = None, maximum: int | None = N
 def _find_executable(command: str) -> str | None:
     if re.fullmatch(r"[a-zA-Z0-9_.+-]{1,80}", command) is None:
         return None
-    for root in PROBE_PATH.split(":"):
-        candidate = Path(root) / command
+    roots: list[Path] = []
+    for raw_root in PROBE_PATH.split(":"):
         try:
-            resolved = candidate.resolve(strict=True)
+            root = Path(raw_root).resolve(strict=True)
         except OSError:
             continue
-        if resolved.is_file() and os.access(resolved, os.X_OK):
+        if root.is_dir() and root not in roots:
+            roots.append(root)
+    for root in roots:
+        try:
+            resolved = (root / command).resolve(strict=True)
+            metadata = resolved.stat()
+        except OSError:
+            continue
+        if not any(resolved.is_relative_to(allowed) for allowed in roots):
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            continue
+        if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            continue
+        if os.access(resolved, os.X_OK):
             return str(resolved)
     return None
 

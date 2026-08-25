@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/checkpoint-licenses/campp-english-voxceleb.json",
+  "expected": "CAM++ checkpoint is not bound to the digest-specific determination",
+  "path": "/artifact/model_id",
+  "value": "iic/speech_campplus_unlisted_checkpoint"
+}

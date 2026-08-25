@@ -63,6 +63,16 @@ EXPECTED_OBSERVATION_PRIVACY = {
     "export_requires_warning": True,
     "telemetry_eligible": False,
 }
+EXPECTED_SUBPROCESS_PRIVACY = {
+    "environment": "fixed-clean",
+    "executable_integrity": "resolved-within-path-and-not-group-or-world-writable",
+    "path_resolution": "fixed-system-path",
+    "shell": False,
+    "stderr": "discard",
+    "stdin": "dev-null",
+    "stdout_bytes": 65536,
+    "timeout_seconds": 5,
+}
 CAMPP_AUTHORITY_SHA256 = "54b36539688fe450074a0105a2e43719837c321e4cf0eff8d7884a2d92ad21ad"
 APACHE_2_LICENSE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 CAMPP_PINS = {
@@ -286,6 +296,8 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
             errors.append("privacy contract never_collected differs from the hardware denylist")
         if document.get("observation_projection") != EXPECTED_OBSERVATION_PRIVACY:
             errors.append("privacy contract observation projection is not exact")
+        if document.get("subprocess") != EXPECTED_SUBPROCESS_PRIVACY:
+            errors.append("privacy contract subprocess boundary is not exact")
         return errors
 
     if identity == "plebian.models.checkpoint-license/v1":
@@ -293,6 +305,8 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
         decision = document.get("decision", {})
         model_id = artifact.get("model_id")
         if isinstance(model_id, str) and model_id.startswith("iic/speech_campplus"):
+            if decision.get("wildcard_clearance") is not False:
+                errors.append("CAM++ wildcard clearance is forbidden")
             pin = CAMPP_PINS.get(model_id)
             if pin is None or any(
                 artifact.get(field) != value

@@ -133,6 +133,9 @@
         },
         "weight_grant": {
           "const": true
+        },
+        "wildcard_clearance": {
+          "const": false
         }
       },
       "required": [
@@ -151,7 +154,8 @@
         "training_data_rights",
         "example_audio_in_scope",
         "obligations",
-        "disposition"
+        "disposition",
+        "wildcard_clearance"
       ],
       "type": "object"
     },

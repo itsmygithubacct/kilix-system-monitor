@@ -20,6 +20,9 @@ Each record says that its Apache-2.0 weight grant comes from the official model
 repository declaration rather than a code licence, carries redistribution
 obligations, and explicitly leaves artifact/profile/runtime selection, fit
 claims and qualification false. It does not open the D4 gate.
+The records set `wildcard_clearance` to false: only their exact model IDs and
+checkpoint digests are determined, and every sibling
+`iic/speech_campplus_*` checkpoint remains unknown until separately reviewed.
 
 D4 starts only after both gates are recorded. Until then, the absence of a
 plebian-model-sizer entry point is intentional and checked by the aggregate

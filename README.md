@@ -58,7 +58,8 @@ CPU/RAM/cgroup/topology/cache/frequency/ISA, DRM/PCI GPUs, bounded backend
 commands, device-bound NVIDIA driver/VRAM evidence, buses, anonymous network
 links, firmware/IOMMU state, power/battery, thermal/fans, PSI and
 virtualization. Identifier-named files and final-component symlinks are refused
-at the common read boundary.
+at the common read boundary. Optional command probes refuse resolved targets
+outside the fixed system path and group- or world-writable executables.
 
 Not implemented or claimed: P1 freeze, privileged DMI, SMART/NVMe and private
 cache lifecycle, device-bound ROCm/Vulkan/OpenCL success, D3 telemetry vNext,

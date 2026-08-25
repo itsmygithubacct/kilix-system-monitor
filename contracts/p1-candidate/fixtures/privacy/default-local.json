@@ -54,6 +54,7 @@
   "schema": "plebian.hardware.privacy/v1",
   "subprocess": {
     "environment": "fixed-clean",
+    "executable_integrity": "resolved-within-path-and-not-group-or-world-writable",
     "path_resolution": "fixed-system-path",
     "shell": false,
     "stderr": "discard",

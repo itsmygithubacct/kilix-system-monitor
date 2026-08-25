@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/checkpoint-licenses/campp-english-voxceleb.json",
+  "expected": "CAM++ wildcard clearance is forbidden",
+  "path": "/decision/wildcard_clearance",
+  "value": true
+}
