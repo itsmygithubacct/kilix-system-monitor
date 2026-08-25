@@ -114,10 +114,11 @@
       "type": "object"
     },
     "delivery": {
+      "$comment": "This evidence-set identity is admission/citation only. F120-C11 forbids representing future heterogeneous artifact conveyance by changing this authority-set-level block.",
       "additionalProperties": false,
       "properties": {
         "acquisition_manifest_complete": {
-          "type": "boolean"
+          "const": false
         },
         "f120_gap_authority_sha256": {
           "$ref": "#/$defs/sha256"
@@ -126,34 +127,30 @@
           "items": {
             "$ref": "#/$defs/sha256"
           },
+          "maxItems": 0,
           "type": "array",
           "uniqueItems": true
         },
         "notice_transport": {
-          "enum": [
-            "bound-to-staged-artifacts",
-            "pending-f120-authority-disposition"
-          ]
+          "const": "pending-f120-authority-disposition"
         },
         "notices_required": {
           "const": true
         },
         "staged_license_artifact_identity": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "const": null
         },
         "staged_notice_paths": {
           "items": {
             "minLength": 1,
             "type": "string"
           },
+          "maxItems": 0,
           "type": "array",
           "uniqueItems": true
         },
         "transfer_eligible": {
-          "type": "boolean"
+          "const": false
         }
       },
       "required": [

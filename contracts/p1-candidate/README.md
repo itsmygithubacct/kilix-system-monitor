@@ -8,7 +8,7 @@ and release-wording drafts are deliberately excluded from this repository.
 
 The original eight schema files, invocation contract, 26 fixture files and two
 replay binaries retain their exact R2 bytes. Three additive D-side schema
-designs, five valid fixtures and eight invalid mutations cover the default
+designs, five valid fixtures and nine invalid mutations cover the default
 privacy boundary and digest-specific model-weight licence admission. The
 checkpoint decision explicitly forbids wildcard clearance, and separate
 mutations reject both an unlisted `iic/speech_campplus_*` sibling and any
@@ -26,9 +26,11 @@ licence is used as weight evidence. These are licence citations, not package
 manifests or profile selections. Notice bytes and staged paths remain empty and
 transfer is false. The delivery block is bound to F120-C11, which proves frozen
 F120 v1 can accept a staged payload without conveying its declared licence or
-notice text and cannot express heterogeneous per-payload obligations. It stays
-pending until the release authority selects and enforces either strict
-one-obligation-unit components or new per-artifact contract identities.
+notice text and cannot express heterogeneous per-payload obligations. The v1
+evidence-set delivery block is therefore permanently admission-only rather
+than a future unioned conveyance record. It stays pending until the release
+authority selects and enforces either strict one-obligation-unit components or
+new per-artifact contract identities in a successor shape.
 
 The privacy proposal also requires optional command probes to resolve inside
 the fixed system path and refuses group- or world-writable executables.
@@ -38,5 +40,5 @@ Verify it with the root locked environment:
     uv run --locked python contracts/p1-candidate/tools/validate.py --self-test
 
 Expected output names eleven candidate schemas, twenty-one valid fixtures,
-seventeen rejected invalid mutations, replayed success/failure paths, 56 installed-file
+eighteen rejected invalid mutations, replayed success/failure paths, 57 installed-file
 hashes, canonical JSON, and no qualification claim.

@@ -1,4 +1,4 @@
-d780e9fbaa4ea84d82e985e7c06704c634243bd6dfea22e569d802dc9ce051c3  ./README.md
+084019559077076037796a4e9382ed7da378c3930c1239e7c3e24c2af0d5af01  ./README.md
 a0b739740e21baf7b92dcdec48717b5f972bae09b3395a69a06c11edb834f88e  ./fixtures/checkpoint-licenses/campp-chinese-common.json
 249610dc089463f963f14e9dd6471e2f3bab342b8d4fcf504966d1e0fdc35a01  ./fixtures/checkpoint-licenses/campp-english-voxceleb.json
 ecec619ce4d5ae764f22819146e5ba20f09584bd15ea0e97433634fda0f9e19d  ./fixtures/fit/blocked-no-f100-c0.json
@@ -21,6 +21,7 @@ b36af5b2a9187a8ab36c5b62213f82f19fa4998212084691ddf0a484a1dd0762  ./fixtures/inv
 38f1d6378ba795ea4b588f9230d812110f212c414ca70fdc57fd853de7dcf6ff  ./fixtures/invalid/license-evidence-digest-not-reviewed.json
 fa02d77b7d1469e58f5c67530feb7784803ca01055a8815e5b984447bbd215b0  ./fixtures/invalid/license-evidence-f120-gap-mismatch.json
 b96953fce6bf9db5392642eb6fe12260c653e6fd67e4dc83ab7ca42d2a43735c  ./fixtures/invalid/license-evidence-pending-path-forbidden.json
+385b4e3da3bfda82ceaae0626a3906e47fc6568745ab46d8f8b047481bcb7ba5  ./fixtures/invalid/license-evidence-transfer-forbidden.json
 e22fdc5e4458359d52dca8d59538b32b0e03ba044fb1b2232a1e97fbe35210aa  ./fixtures/invalid/license-evidence-wildcard-forbidden.json
 9484aecf305bfddc2c0b7ee168a44a13793949bc7564f6fd43536e1dd9caaeb9  ./fixtures/invalid/plan-ready-without-authority.json
 e6d86988a80b2d0f8ea09c3fa0f8ce34b4a089cd639a74df66a0abf3acd924e5  ./fixtures/invalid/privacy-enables-network.json
@@ -47,10 +48,10 @@ f0f2a46adec28e2997e06b3976759a2dfc8e42e7e9d6a42bb1728c3453d8c8be  ./schemas/pleb
 7374fa500ea024885520104e4ebb6327f37401a0a3a6755f2aa30a53e9502edf  ./schemas/plebian.models.checkpoint-license-v1.schema.json
 a5307bb0cd7c960858e4736bd988dba64b9449c80cd5d743ad1282ae43a63a7e  ./schemas/plebian.models.fit-result-v1.schema.json
 2c6f1f31decc39864eafe568b6afcbfcbffe4ed6be4fa30e51e32e33fe78a529  ./schemas/plebian.models.install-plan-v1.schema.json
-ba8536063bf7c3e8ed92731576ccf99a60536fcc732b4064f94f26ff75cf7ce7  ./schemas/plebian.models.license-evidence-set-v1.schema.json
+f21a849229c09cd82858b461e1fe12b01400c761a7b48282649b0393c35cb15b  ./schemas/plebian.models.license-evidence-set-v1.schema.json
 31ca9cbac3eb0dd463835419fbb89def3da533cb4b6a6083d476678cc643af1c  ./schemas/plebian.models.profiles-v1.schema.json
 0eda85944c9fae1b0618a73319ea0933019094f09f4e297f8a2262a264e61422  ./schemas/plebian.models.snapshot-v1.schema.json
 70a8590d374e4559b2e868bba294f4c38b28f5cf802327740ae9eb5908e9df14  ./tools/replay-bin/plebian-hardware
 6bd7322b7825459212171d6ec855c90bcf7e26f6b0a2e019f755e53ae5043965  ./tools/replay-bin/plebian-model-sizer
 8ff41f30e98a4be07fa853b225e2bbf683d318a5543bcd8ae530604c7dfcf332  ./tools/replay_cli.py
-e0fdd3d6e7593f425abc0b826107fa57f2e5f5b76bf0d15d32221841752f4a1d  ./tools/validate.py
+772a0a3dfc62fe9216772a10c609305ba2201b13f1673c85364b8ce014e14cc6  ./tools/validate.py

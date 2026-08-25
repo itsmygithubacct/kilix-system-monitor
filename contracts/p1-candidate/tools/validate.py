@@ -388,15 +388,6 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
                 errors.append("pending notice transport carries staged identities")
             if delivery.get("transfer_eligible") is not False:
                 errors.append("pending notice transport cannot authorize transfer")
-        if delivery.get("transfer_eligible"):
-            if not (
-                delivery.get("acquisition_manifest_complete")
-                and delivery.get("notice_transport") == "bound-to-staged-artifacts"
-                and delivery.get("notice_content_sha256s")
-                and delivery.get("staged_license_artifact_identity")
-                and delivery.get("staged_notice_paths")
-            ):
-                errors.append("transfer eligibility lacks complete staged license and notice evidence")
         return errors
 
     if identity == "plebian.models.profiles/v1":

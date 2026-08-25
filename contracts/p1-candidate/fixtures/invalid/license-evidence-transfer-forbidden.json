@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/license-evidence/f105-ollama-selected.json",
+  "expected": "pending notice transport cannot authorize transfer",
+  "path": "/delivery/transfer_eligible",
+  "value": true
+}
