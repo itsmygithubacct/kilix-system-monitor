@@ -1,0 +1,77 @@
+{
+  "capture": {
+    "captured_at": null,
+    "network_used": false,
+    "privileged": false,
+    "qualification_eligible": false,
+    "redaction": "default",
+    "scope": "inventory",
+    "source": "synthetic-contract"
+  },
+  "cpu": {
+    "affinity_cpus": 16,
+    "architecture": "x86_64",
+    "effective_cpus": 16,
+    "logical_cpus": 16,
+    "model_bucket": "desktop-x86"
+  },
+  "gpus": [
+    {
+      "backends": [
+        {
+          "evidence": "executable-probe",
+          "name": "cuda",
+          "status": "available",
+          "version": "fixture"
+        },
+        {
+          "evidence": "executable-probe",
+          "name": "vulkan",
+          "status": "available",
+          "version": "fixture"
+        }
+      ],
+      "device_class": "discrete",
+      "device_id": "2684",
+      "index": 0,
+      "kernel_driver": "nvidia",
+      "render_access": true,
+      "vendor": "nvidia",
+      "vendor_id": "10de",
+      "vram_bytes": 12884901888
+    }
+  ],
+  "memory": {
+    "available_bytes": 34359738368,
+    "effective_limit_bytes": null,
+    "total_bytes": 68719476736
+  },
+  "never_collected": [
+    "asset_tag",
+    "hostname",
+    "ip_address",
+    "mac_address",
+    "machine_id",
+    "serial_number",
+    "system_uuid",
+    "username"
+  ],
+  "power": {
+    "ac_online": true,
+    "battery_percent": null,
+    "battery_present": false
+  },
+  "pressure": {
+    "cpu": true,
+    "io": true,
+    "memory": true
+  },
+  "schema": "plebian.hardware/v1",
+  "snapshot_id": "fixture:h2-nvidia-synthetic",
+  "storage": {
+    "free_bytes": 214748364800,
+    "scope": "model-store"
+  },
+  "unknowns": [],
+  "virtualization": "none"
+}

@@ -1,0 +1,32 @@
+{
+  "command": "sizer.snapshot",
+  "data": {
+    "capacity_contract": {
+      "identity": null,
+      "status": "missing"
+    },
+    "generated_at": null,
+    "hardware_snapshot_id": "fixture:h0-cpu-only",
+    "profile_catalog_ids": [
+      "fixture-catalog"
+    ],
+    "qualification_eligible": false,
+    "schema": "plebian.models.snapshot/v1",
+    "telemetry": {
+      "available": false,
+      "fresh": null
+    },
+    "unknowns": [
+      "capacity-contract",
+      "telemetry"
+    ]
+  },
+  "schema": "plebian.cli.response/v1",
+  "status": "unknown",
+  "warnings": [
+    {
+      "code": "ENTRY_GATE_CLOSED",
+      "message": "The capacity contract is not frozen."
+    }
+  ]
+}

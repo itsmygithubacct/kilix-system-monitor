@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/hardware/current-host-redacted.json",
+  "expected": "hardware network indexes must be contiguous",
+  "path": "/network/interfaces/1/index",
+  "value": 7
+}

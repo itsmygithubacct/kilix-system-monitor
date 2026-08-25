@@ -1,0 +1,210 @@
+{
+  "$comment": "Track D P1 candidate only; F100-C0 must be resolved before a positive resource verdict.",
+  "$defs": {
+    "bytesOrNull": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "shaOrNull": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:model-fit-result:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capacity_contract": {
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/shaOrNull"
+        },
+        "status": {
+          "enum": [
+            "missing",
+            "resolved"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "identity",
+        "source_commit",
+        "source_sha256"
+      ],
+      "type": "object"
+    },
+    "hardware_snapshot_id": {
+      "pattern": "^(fixture|local|redacted):[a-z0-9][a-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "overall_verdict": {
+      "enum": [
+        "does-not-fit",
+        "fits",
+        "fits-tightly",
+        "recommended",
+        "unknown",
+        "unsupported"
+      ]
+    },
+    "performance": {
+      "additionalProperties": false,
+      "properties": {
+        "comparable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "first_result_ms": {
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "realtime_factor": {
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tokens_per_second": {
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "verdict": {
+          "enum": [
+            "recommended",
+            "unknown",
+            "unqualified"
+          ]
+        }
+      },
+      "required": [
+        "verdict",
+        "comparable",
+        "first_result_ms",
+        "realtime_factor",
+        "tokens_per_second"
+      ],
+      "type": "object"
+    },
+    "profile_id": {
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "qualification_eligible": {
+      "type": "boolean"
+    },
+    "reasons": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[A-Z0-9_]+$",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "request_id": {
+      "pattern": "^[a-z0-9]+(?:[._:-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "resources": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "available_bytes": {
+            "$ref": "#/$defs/bytesOrNull"
+          },
+          "kind": {
+            "enum": [
+              "disk",
+              "ram",
+              "temporary-disk",
+              "vram"
+            ]
+          },
+          "required_bytes": {
+            "$ref": "#/$defs/bytesOrNull"
+          },
+          "reserve_bytes": {
+            "$ref": "#/$defs/bytesOrNull"
+          },
+          "verdict": {
+            "enum": [
+              "fail",
+              "pass",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "required_bytes",
+          "available_bytes",
+          "reserve_bytes",
+          "verdict"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "const": "plebian.models.fit-result/v1"
+    }
+  },
+  "required": [
+    "schema",
+    "request_id",
+    "profile_id",
+    "hardware_snapshot_id",
+    "capacity_contract",
+    "resources",
+    "performance",
+    "overall_verdict",
+    "qualification_eligible",
+    "reasons"
+  ],
+  "title": "Candidate plebian.models.fit-result/v1",
+  "type": "object"
+}

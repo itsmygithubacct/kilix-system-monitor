@@ -1,0 +1,94 @@
+{
+  "$comment": "Track D P1 candidate only; coarse local binding state, not an exportable fingerprint.",
+  "$id": "urn:plebian:candidate:schema:model-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capacity_contract": {
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "missing",
+            "resolved"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "identity"
+      ],
+      "type": "object"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hardware_snapshot_id": {
+      "pattern": "^(fixture|local|redacted):[a-z0-9][a-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "profile_catalog_ids": {
+      "items": {
+        "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "qualification_eligible": {
+      "type": "boolean"
+    },
+    "schema": {
+      "const": "plebian.models.snapshot/v1"
+    },
+    "telemetry": {
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "fresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "available",
+        "fresh"
+      ],
+      "type": "object"
+    },
+    "unknowns": {
+      "items": {
+        "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema",
+    "generated_at",
+    "hardware_snapshot_id",
+    "capacity_contract",
+    "profile_catalog_ids",
+    "telemetry",
+    "qualification_eligible",
+    "unknowns"
+  ],
+  "title": "Candidate plebian.models.snapshot/v1",
+  "type": "object"
+}

@@ -1,0 +1,1044 @@
+{
+  "$comment": "Track D P1 candidate only; not frozen and not release evidence.",
+  "$defs": {
+    "backend": {
+      "additionalProperties": false,
+      "properties": {
+        "compute_target": {
+          "maxLength": 80,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "driver_version": {
+          "maxLength": 80,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "enum": [
+            "api-query",
+            "command-unavailable",
+            "contradictory",
+            "device-open",
+            "executable-probe",
+            "permission-denied",
+            "runtime-query",
+            "unknown"
+          ]
+        },
+        "name": {
+          "enum": [
+            "cuda",
+            "oneapi",
+            "opencl",
+            "rocm",
+            "vulkan"
+          ]
+        },
+        "runtime_version": {
+          "maxLength": 80,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "available",
+            "denied",
+            "incompatible",
+            "permission-denied",
+            "untested",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "usable_memory_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "version": {
+          "maxLength": 80,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "evidence",
+        "version"
+      ],
+      "type": "object"
+    },
+    "battery": {
+      "additionalProperties": false,
+      "properties": {
+        "energy_design_wh": {
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "energy_full_wh": {
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "power_watts": {
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "charging",
+            "discharging",
+            "full",
+            "not-charging",
+            "unknown"
+          ]
+        },
+        "wear_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "status",
+        "percent",
+        "energy_full_wh",
+        "energy_design_wh",
+        "power_watts",
+        "wear_percent"
+      ],
+      "type": "object"
+    },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "enum": [
+            "fixture",
+            "observed",
+            "unknown"
+          ]
+        },
+        "field_prefix": {
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "cgroup",
+            "command",
+            "fixture",
+            "procfs",
+            "python-runtime",
+            "sysfs"
+          ]
+        },
+        "status": {
+          "enum": [
+            "observed",
+            "partial",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "field_prefix",
+        "source",
+        "status",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "gpu": {
+      "additionalProperties": false,
+      "properties": {
+        "backends": {
+          "items": {
+            "$ref": "#/$defs/backend"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "device_class": {
+          "enum": [
+            "discrete",
+            "integrated",
+            "unknown",
+            "virtual"
+          ]
+        },
+        "device_id": {
+          "pattern": "^[0-9a-f]{4}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "iommu_group_present": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kernel_driver": {
+          "pattern": "^[a-zA-Z0-9_.+-]{1,80}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memory_kind": {
+          "enum": [
+            "dedicated",
+            "shared",
+            "unified",
+            "unknown"
+          ]
+        },
+        "numa_node": {
+          "minimum": -1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pcie": {
+          "additionalProperties": false,
+          "properties": {
+            "current_gtps": {
+              "exclusiveMinimum": 0,
+              "maximum": 128,
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "current_width": {
+              "maximum": 32,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "maximum_gtps": {
+              "exclusiveMinimum": 0,
+              "maximum": 128,
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "maximum_width": {
+              "maximum": 32,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "current_width",
+            "maximum_width",
+            "current_gtps",
+            "maximum_gtps"
+          ],
+          "type": "object"
+        },
+        "render_access": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "shared_memory_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "vendor": {
+          "enum": [
+            "amd",
+            "intel",
+            "nvidia",
+            "other",
+            "unknown"
+          ]
+        },
+        "vendor_id": {
+          "pattern": "^[0-9a-f]{4}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vram_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "vendor",
+        "vendor_id",
+        "device_id",
+        "device_class",
+        "kernel_driver",
+        "render_access",
+        "vram_bytes",
+        "backends"
+      ],
+      "type": "object"
+    },
+    "networkInterface": {
+      "additionalProperties": false,
+      "properties": {
+        "bus": {
+          "enum": [
+            "other",
+            "pci",
+            "unknown",
+            "usb",
+            "virtual"
+          ]
+        },
+        "driver": {
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_.+-]{1,80}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "link_mbps": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "online": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "type": {
+          "enum": [
+            "ethernet",
+            "other",
+            "unknown",
+            "wireless"
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "type",
+        "online",
+        "link_mbps",
+        "driver",
+        "bus"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:hardware:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buses": {
+      "additionalProperties": false,
+      "properties": {
+        "pci_devices_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "storage_controllers_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "usb_devices_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "pci_devices_count",
+        "usb_devices_count",
+        "storage_controllers_count"
+      ],
+      "type": "object"
+    },
+    "capture": {
+      "additionalProperties": false,
+      "properties": {
+        "captured_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "network_used": {
+          "const": false
+        },
+        "privileged": {
+          "const": false
+        },
+        "qualification_eligible": {
+          "type": "boolean"
+        },
+        "redaction": {
+          "const": "default"
+        },
+        "scope": {
+          "enum": [
+            "gpu",
+            "inventory"
+          ]
+        },
+        "source": {
+          "enum": [
+            "live-probe",
+            "redacted-observation",
+            "synthetic-contract"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "scope",
+        "captured_at",
+        "redaction",
+        "network_used",
+        "privileged",
+        "qualification_eligible"
+      ],
+      "type": "object"
+    },
+    "cpu": {
+      "additionalProperties": false,
+      "properties": {
+        "affinity_cpus": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "architecture": {
+          "enum": [
+            "aarch64",
+            "other",
+            "unknown",
+            "x86_64"
+          ]
+        },
+        "cache_bytes": {
+          "additionalProperties": false,
+          "properties": {
+            "l1_data_bytes": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "l1_instruction_bytes": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "l2_bytes": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "l3_bytes": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "l1_data_bytes",
+            "l1_instruction_bytes",
+            "l2_bytes",
+            "l3_bytes"
+          ],
+          "type": "object"
+        },
+        "cpuset_cpus": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "effective_cpus": {
+          "exclusiveMinimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "frequency_hz": {
+          "additionalProperties": false,
+          "properties": {
+            "current_max_hz": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "current_min_hz": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "hardware_max_hz": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "hardware_min_hz": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "current_min_hz",
+            "current_max_hz",
+            "hardware_min_hz",
+            "hardware_max_hz"
+          ],
+          "type": "object"
+        },
+        "isa_features": {
+          "items": {
+            "enum": [
+              "amx",
+              "avx",
+              "avx2",
+              "avx512",
+              "fma",
+              "asimd",
+              "sve",
+              "vnni"
+            ]
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "logical_cpus": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "model_bucket": {
+          "enum": [
+            "desktop-x86",
+            "mobile-x86",
+            "other",
+            "server-x86",
+            "unknown"
+          ]
+        },
+        "numa_nodes": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "online_cpus": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "packages": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "physical_cores": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "quota_cpus": {
+          "exclusiveMinimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "smt": {
+          "enum": [
+            "disabled",
+            "enabled",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "architecture",
+        "model_bucket",
+        "logical_cpus",
+        "affinity_cpus",
+        "effective_cpus"
+      ],
+      "type": "object"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/evidence"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "gpus": {
+      "items": {
+        "$ref": "#/$defs/gpu"
+      },
+      "maxItems": 32,
+      "type": "array"
+    },
+    "memory": {
+      "additionalProperties": false,
+      "properties": {
+        "available_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "effective_limit_bytes": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hugepage_free_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hugepage_size_bytes": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hugepage_total_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "numa_nodes": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "swap_free_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "swap_total_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "total_bytes": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "total_bytes",
+        "available_bytes",
+        "effective_limit_bytes"
+      ],
+      "type": "object"
+    },
+    "network": {
+      "additionalProperties": false,
+      "properties": {
+        "interfaces": {
+          "items": {
+            "$ref": "#/$defs/networkInterface"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "offline": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "interfaces",
+        "offline"
+      ],
+      "type": "object"
+    },
+    "never_collected": {
+      "const": [
+        "asset_tag",
+        "hostname",
+        "ip_address",
+        "mac_address",
+        "machine_id",
+        "serial_number",
+        "system_uuid",
+        "username"
+      ],
+      "type": "array"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "properties": {
+        "dmi_access": {
+          "enum": [
+            "available",
+            "denied",
+            "not-probed",
+            "unknown"
+          ]
+        },
+        "firmware_mode": {
+          "enum": [
+            "bios",
+            "uefi",
+            "unknown"
+          ]
+        },
+        "iommu": {
+          "enum": [
+            "disabled",
+            "enabled",
+            "unknown"
+          ]
+        },
+        "secure_boot": {
+          "enum": [
+            "disabled",
+            "enabled",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "firmware_mode",
+        "secure_boot",
+        "iommu",
+        "dmi_access"
+      ],
+      "type": "object"
+    },
+    "power": {
+      "additionalProperties": false,
+      "properties": {
+        "ac_online": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "batteries": {
+          "items": {
+            "$ref": "#/$defs/battery"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
+        "battery_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "battery_present": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "ac_online",
+        "battery_present",
+        "battery_percent"
+      ],
+      "type": "object"
+    },
+    "pressure": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "type": "boolean"
+        },
+        "io": {
+          "type": "boolean"
+        },
+        "memory": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cpu",
+        "memory",
+        "io"
+      ],
+      "type": "object"
+    },
+    "privacy": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_mode": {
+          "const": "0600"
+        },
+        "classification": {
+          "const": "fingerprinting-grade-local"
+        },
+        "export_requires_warning": {
+          "const": true
+        },
+        "telemetry_eligible": {
+          "const": false
+        }
+      },
+      "required": [
+        "classification",
+        "telemetry_eligible",
+        "export_requires_warning",
+        "cache_mode"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "plebian.hardware/v1"
+    },
+    "snapshot_id": {
+      "pattern": "^(fixture|local|redacted):[a-z0-9][a-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "properties": {
+        "filesystem_type": {
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_.+-]{1,80}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "free_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "read_only": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "scope": {
+          "const": "model-store"
+        },
+        "total_bytes": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "free_bytes"
+      ],
+      "type": "object"
+    },
+    "thermal": {
+      "additionalProperties": false,
+      "properties": {
+        "fan_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maximum_celsius": {
+          "maximum": 250,
+          "minimum": -100,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sensor_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "throttle": {
+          "enum": [
+            "active",
+            "inactive",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "sensor_count",
+        "maximum_celsius",
+        "fan_count",
+        "throttle"
+      ],
+      "type": "object"
+    },
+    "unknowns": {
+      "items": {
+        "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "virtualization": {
+      "enum": [
+        "container",
+        "none",
+        "unknown",
+        "virtual-machine"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "snapshot_id",
+    "capture",
+    "never_collected",
+    "virtualization",
+    "cpu",
+    "memory",
+    "gpus",
+    "storage",
+    "power",
+    "pressure",
+    "unknowns"
+  ],
+  "title": "Candidate plebian.hardware/v1",
+  "type": "object"
+}

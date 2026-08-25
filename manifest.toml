@@ -1,0 +1,24 @@
+schema = "kilix.system-monitor.manifest/v0-development"
+publication_disposition = "unpublished"
+visibility = "local-only"
+contracts = "contracts/p1-candidate"
+contracts_status = "pre-freeze"
+f120_registration = "integration/f120-registration.json"
+
+[[components]]
+id = "kilix-telemetry"
+path = "components/kilix-telemetry"
+version = "0.1.2"
+status = "history-imported"
+
+[[components]]
+id = "plebian-hardware"
+path = "components/plebian-hardware"
+version = "0.1.0"
+status = "unprivileged-d2"
+
+[[components]]
+id = "plebian-model-sizer"
+path = "components/plebian-model-sizer"
+version = "unassigned"
+status = "blocked-f100-u5-f100-c0"

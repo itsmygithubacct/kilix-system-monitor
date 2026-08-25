@@ -1,0 +1,62 @@
+{
+  "$comment": "Track D subprocess envelope candidate; validate data against the schema named by invocation-contract.json.",
+  "$id": "urn:plebian:candidate:schema:cli-response:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "command": {
+      "enum": [
+        "hardware.gpu",
+        "hardware.inventory",
+        "sizer.install",
+        "sizer.plan.local-ai-balanced",
+        "sizer.recommend.tts",
+        "sizer.snapshot"
+      ]
+    },
+    "data": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "plebian.cli.response/v1"
+    },
+    "status": {
+      "enum": [
+        "blocked",
+        "ok",
+        "unknown"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[A-Z0-9_]+$",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "command",
+    "status",
+    "warnings",
+    "data"
+  ],
+  "title": "Candidate plebian.cli.response/v1",
+  "type": "object"
+}

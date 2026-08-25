@@ -1,0 +1,339 @@
+{
+  "buses": {
+    "pci_devices_count": 36,
+    "storage_controllers_count": 1,
+    "usb_devices_count": 8
+  },
+  "capture": {
+    "captured_at": "2026-08-25T03:30:15Z",
+    "network_used": false,
+    "privileged": false,
+    "qualification_eligible": false,
+    "redaction": "default",
+    "scope": "inventory",
+    "source": "redacted-observation"
+  },
+  "cpu": {
+    "affinity_cpus": 12,
+    "architecture": "x86_64",
+    "cache_bytes": {
+      "l1_data_bytes": 196608,
+      "l1_instruction_bytes": 196608,
+      "l2_bytes": 1572864,
+      "l3_bytes": 12582912
+    },
+    "cpuset_cpus": 12,
+    "effective_cpus": 12,
+    "frequency_hz": {
+      "current_max_hz": 3425151000,
+      "current_min_hz": 3408378000,
+      "hardware_max_hz": 4600000000,
+      "hardware_min_hz": 800000000
+    },
+    "isa_features": [
+      "avx",
+      "avx2",
+      "fma"
+    ],
+    "logical_cpus": 12,
+    "model_bucket": "unknown",
+    "numa_nodes": 1,
+    "online_cpus": 12,
+    "packages": 1,
+    "physical_cores": 6,
+    "quota_cpus": null,
+    "smt": "enabled"
+  },
+  "evidence": [
+    {
+      "confidence": "observed",
+      "field_prefix": "buses",
+      "source": "sysfs",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "cpu.affinity",
+      "source": "python-runtime",
+      "status": "observed"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "cpu.cache",
+      "source": "sysfs",
+      "status": "observed"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "cpu.cgroup",
+      "source": "cgroup",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "cpu.frequency",
+      "source": "sysfs",
+      "status": "observed"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "cpu.isa",
+      "source": "procfs",
+      "status": "observed"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "cpu.topology",
+      "source": "sysfs",
+      "status": "observed"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "gpus",
+      "source": "sysfs",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "memory",
+      "source": "procfs",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "network",
+      "source": "sysfs",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "platform",
+      "source": "sysfs",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "power",
+      "source": "sysfs",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "pressure",
+      "source": "procfs",
+      "status": "observed"
+    },
+    {
+      "confidence": "unknown",
+      "field_prefix": "storage",
+      "source": "sysfs",
+      "status": "unknown"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "thermal",
+      "source": "sysfs",
+      "status": "partial"
+    },
+    {
+      "confidence": "observed",
+      "field_prefix": "virtualization",
+      "source": "command",
+      "status": "observed"
+    }
+  ],
+  "gpus": [
+    {
+      "backends": [
+        {
+          "evidence": "command-unavailable",
+          "name": "cuda",
+          "status": "unknown",
+          "version": null
+        },
+        {
+          "evidence": "command-unavailable",
+          "name": "opencl",
+          "status": "unknown",
+          "version": null
+        },
+        {
+          "evidence": "command-unavailable",
+          "name": "vulkan",
+          "status": "unknown",
+          "version": null
+        }
+      ],
+      "device_class": "unknown",
+      "device_id": "1f36",
+      "index": 0,
+      "iommu_group_present": true,
+      "kernel_driver": "nouveau",
+      "memory_kind": "unknown",
+      "numa_node": -1,
+      "pcie": {
+        "current_gtps": 8.0,
+        "current_width": 16,
+        "maximum_gtps": 8.0,
+        "maximum_width": 16
+      },
+      "render_access": true,
+      "shared_memory_bytes": null,
+      "vendor": "nvidia",
+      "vendor_id": "10de",
+      "vram_bytes": null
+    },
+    {
+      "backends": [
+        {
+          "evidence": "command-unavailable",
+          "name": "opencl",
+          "status": "unknown",
+          "version": null
+        },
+        {
+          "evidence": "command-unavailable",
+          "name": "vulkan",
+          "status": "unknown",
+          "version": null
+        }
+      ],
+      "device_class": "unknown",
+      "device_id": "3e9b",
+      "index": 1,
+      "iommu_group_present": true,
+      "kernel_driver": "i915",
+      "memory_kind": "unknown",
+      "numa_node": -1,
+      "pcie": {
+        "current_gtps": null,
+        "current_width": null,
+        "maximum_gtps": null,
+        "maximum_width": null
+      },
+      "render_access": true,
+      "shared_memory_bytes": null,
+      "vendor": "intel",
+      "vendor_id": "8086",
+      "vram_bytes": null
+    }
+  ],
+  "memory": {
+    "available_bytes": 37815746560,
+    "effective_limit_bytes": null,
+    "hugepage_free_bytes": 0,
+    "hugepage_size_bytes": 2097152,
+    "hugepage_total_bytes": 0,
+    "numa_nodes": 1,
+    "swap_free_bytes": 17060818944,
+    "swap_total_bytes": 38925234176,
+    "total_bytes": 67023126528
+  },
+  "network": {
+    "interfaces": [
+      {
+        "bus": "pci",
+        "driver": "e1000e",
+        "index": 0,
+        "link_mbps": null,
+        "online": false,
+        "type": "ethernet"
+      },
+      {
+        "bus": "pci",
+        "driver": "iwlwifi",
+        "index": 1,
+        "link_mbps": null,
+        "online": true,
+        "type": "wireless"
+      }
+    ],
+    "offline": false
+  },
+  "never_collected": [
+    "asset_tag",
+    "hostname",
+    "ip_address",
+    "mac_address",
+    "machine_id",
+    "serial_number",
+    "system_uuid",
+    "username"
+  ],
+  "platform": {
+    "dmi_access": "not-probed",
+    "firmware_mode": "uefi",
+    "iommu": "enabled",
+    "secure_boot": "disabled"
+  },
+  "power": {
+    "ac_online": true,
+    "batteries": [
+      {
+        "energy_design_wh": 90.0,
+        "energy_full_wh": 73.74,
+        "index": 0,
+        "percent": 100,
+        "power_watts": 0.0,
+        "status": "full",
+        "wear_percent": 18.07
+      }
+    ],
+    "battery_percent": 100,
+    "battery_present": true
+  },
+  "pressure": {
+    "cpu": true,
+    "io": true,
+    "memory": true
+  },
+  "privacy": {
+    "cache_mode": "0600",
+    "classification": "fingerprinting-grade-local",
+    "export_requires_warning": true,
+    "telemetry_eligible": false
+  },
+  "schema": "plebian.hardware/v1",
+  "snapshot_id": "redacted:current-host-20260825-r2",
+  "storage": {
+    "filesystem_type": null,
+    "free_bytes": null,
+    "read_only": null,
+    "scope": "model-store",
+    "total_bytes": null
+  },
+  "thermal": {
+    "fan_count": 2,
+    "maximum_celsius": 100.05,
+    "sensor_count": 10,
+    "throttle": "unknown"
+  },
+  "unknowns": [
+    "cpu.model-bucket",
+    "cpu.quota",
+    "gpu.0.class",
+    "gpu.0.cuda",
+    "gpu.0.memory-kind",
+    "gpu.0.opencl",
+    "gpu.0.shared-memory",
+    "gpu.0.vram",
+    "gpu.0.vulkan",
+    "gpu.1.class",
+    "gpu.1.memory-kind",
+    "gpu.1.opencl",
+    "gpu.1.pcie",
+    "gpu.1.shared-memory",
+    "gpu.1.vram",
+    "gpu.1.vulkan",
+    "memory.effective-limit",
+    "network.0.link-mbps",
+    "network.1.link-mbps",
+    "platform.dmi",
+    "storage.filesystem-type",
+    "storage.free",
+    "storage.read-only",
+    "storage.total",
+    "thermal.throttle"
+  ],
+  "virtualization": "none"
+}

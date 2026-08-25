@@ -1,0 +1,121 @@
+{
+  "components": [
+    {
+      "abi_version": "0",
+      "api_version": "0",
+      "architecture": "unresolved",
+      "build_options": {},
+      "canonical_url": "https://github.com/itsmygithubacct/kilix-system-monitor.git",
+      "component_id": "kilix-telemetry",
+      "component_version": "0.0.0",
+      "expected_commit": "0000000000000000000000000000000000000000",
+      "features": [],
+      "instance_id": "kilix-telemetry",
+      "licenses": [
+        {
+          "spdx": "NOASSERTION",
+          "text_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "path": "kilix-system-monitor/components/kilix-telemetry",
+      "publication_disposition": "unpublished",
+      "ref_kind": "exact-commit",
+      "requested_ref": "0000000000000000000000000000000000000000",
+      "required_tests": [
+        "conformance"
+      ],
+      "runtime_kind": "python-distribution",
+      "toolchain": {
+        "executables": [],
+        "name": "unresolved",
+        "version": "unresolved"
+      },
+      "visibility": "local-only"
+    },
+    {
+      "abi_version": "0",
+      "api_version": "0",
+      "architecture": "unresolved",
+      "build_options": {},
+      "canonical_url": "https://github.com/itsmygithubacct/kilix-system-monitor.git",
+      "component_id": "plebian-hardware",
+      "component_version": "0.0.0",
+      "expected_commit": "0000000000000000000000000000000000000000",
+      "features": [],
+      "instance_id": "plebian-hardware",
+      "licenses": [
+        {
+          "spdx": "NOASSERTION",
+          "text_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "path": "kilix-system-monitor/components/plebian-hardware",
+      "publication_disposition": "unpublished",
+      "ref_kind": "exact-commit",
+      "requested_ref": "0000000000000000000000000000000000000000",
+      "required_tests": [
+        "conformance"
+      ],
+      "runtime_kind": "python-distribution",
+      "toolchain": {
+        "executables": [],
+        "name": "unresolved",
+        "version": "unresolved"
+      },
+      "visibility": "local-only"
+    },
+    {
+      "abi_version": "0",
+      "api_version": "0",
+      "architecture": "unresolved",
+      "build_options": {},
+      "canonical_url": "https://github.com/itsmygithubacct/kilix-system-monitor.git",
+      "component_id": "plebian-model-sizer",
+      "component_version": "0.0.0",
+      "expected_commit": "0000000000000000000000000000000000000000",
+      "features": [],
+      "instance_id": "plebian-model-sizer",
+      "licenses": [
+        {
+          "spdx": "NOASSERTION",
+          "text_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "path": "kilix-system-monitor/components/plebian-model-sizer",
+      "publication_disposition": "unpublished",
+      "ref_kind": "exact-commit",
+      "requested_ref": "0000000000000000000000000000000000000000",
+      "required_tests": [
+        "conformance"
+      ],
+      "runtime_kind": "python-distribution",
+      "toolchain": {
+        "executables": [],
+        "name": "unresolved",
+        "version": "unresolved"
+      },
+      "visibility": "local-only"
+    }
+  ],
+  "dependencies": [],
+  "schema": "kilix.f120.registration/v1",
+  "workspace_root": "/workspace"
+}

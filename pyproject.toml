@@ -1,0 +1,13 @@
+[project]
+name = "kilix-system-monitor-contracts"
+version = "0.0.0"
+description = "Aggregate contract checks for the Kilix system-monitor monorepo"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "itsmygithubacct", email = "itsmygithubacct@users.noreply.github.com" },
+]
+dependencies = ["jsonschema[format]==4.25.1"]
+
+[tool.uv]
+package = false

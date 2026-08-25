@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/hardware/current-host-redacted.json",
+  "expected": "IP-address value",
+  "path": "/snapshot_id",
+  "value": "2001:db8::1"
+}

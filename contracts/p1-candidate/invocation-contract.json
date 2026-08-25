@@ -1,0 +1,119 @@
+{
+  "candidate": true,
+  "commands": [
+    {
+      "argv": [
+        "plebian-hardware",
+        "show"
+      ],
+      "command_id": "hardware.show",
+      "fixture": "fixtures/responses/hardware-show.txt",
+      "side_effects": "none",
+      "stdout": "text"
+    },
+    {
+      "argv": [
+        "plebian-hardware",
+        "inventory",
+        "--json"
+      ],
+      "command_id": "hardware.inventory",
+      "data_schema": "plebian.hardware/v1",
+      "fixture": "fixtures/responses/hardware-inventory.json",
+      "side_effects": "none",
+      "stdout": "plebian.cli.response/v1"
+    },
+    {
+      "argv": [
+        "plebian-hardware",
+        "gpu",
+        "--json"
+      ],
+      "command_id": "hardware.gpu",
+      "data_schema": "plebian.hardware/v1",
+      "fixture": "fixtures/responses/hardware-gpu.json",
+      "side_effects": "none",
+      "stdout": "plebian.cli.response/v1"
+    },
+    {
+      "argv": [
+        "plebian-model-sizer",
+        "recommend",
+        "tts",
+        "--json"
+      ],
+      "command_id": "sizer.recommend.tts",
+      "data_schema": "plebian.models.fit-result/v1",
+      "fixture": "fixtures/responses/sizer-recommend-tts.json",
+      "side_effects": "none",
+      "stdout": "plebian.cli.response/v1"
+    },
+    {
+      "argv": [
+        "plebian-model-sizer",
+        "plan",
+        "local-ai-balanced",
+        "--json"
+      ],
+      "command_id": "sizer.plan.local-ai-balanced",
+      "data_schema": "plebian.models.install-plan/v1",
+      "fixture": "fixtures/responses/sizer-plan.json",
+      "side_effects": "none",
+      "stdout": "plebian.cli.response/v1"
+    },
+    {
+      "argv": [
+        "plebian-model-sizer",
+        "install",
+        "PLAN_PATH",
+        "--json"
+      ],
+      "command_id": "sizer.install",
+      "data_schema": "plebian.models.install-plan/v1",
+      "fixture": "fixtures/responses/sizer-install-blocked.json",
+      "side_effects": "none-when-blocked; provider-owned execution-after-revalidation-when-ready",
+      "stdout": "plebian.cli.response/v1"
+    },
+    {
+      "argv": [
+        "plebian-model-sizer",
+        "snapshot",
+        "--json"
+      ],
+      "command_id": "sizer.snapshot",
+      "data_schema": "plebian.models.snapshot/v1",
+      "fixture": "fixtures/responses/sizer-snapshot.json",
+      "side_effects": "none",
+      "stdout": "plebian.cli.response/v1"
+    }
+  ],
+  "environment": {
+    "locale": "C.UTF-8",
+    "network": "not-required",
+    "stdin": "dev-null"
+  },
+  "exit_statuses": {
+    "0": "contract-valid result, including unknown or blocked",
+    "2": "command-line usage error",
+    "65": "invalid input document",
+    "69": "required local dependency unavailable",
+    "70": "internal invariant failure",
+    "75": "temporary local failure"
+  },
+  "limits": {
+    "diagnostic_bytes": 4096,
+    "read_only_timeout_seconds": 15,
+    "stdout_bytes": 4194304
+  },
+  "schema": "f106.invocation-contract/v0-draft",
+  "streams": {
+    "nonzero": {
+      "stderr": "one redacted UTF-8 line followed by LF",
+      "stdout": "empty"
+    },
+    "success": {
+      "stderr": "empty",
+      "stdout": "one document followed by LF"
+    }
+  }
+}

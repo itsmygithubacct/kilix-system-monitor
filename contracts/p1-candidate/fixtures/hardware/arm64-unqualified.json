@@ -1,0 +1,55 @@
+{
+  "capture": {
+    "captured_at": null,
+    "network_used": false,
+    "privileged": false,
+    "qualification_eligible": false,
+    "redaction": "default",
+    "scope": "inventory",
+    "source": "synthetic-contract"
+  },
+  "cpu": {
+    "affinity_cpus": 4,
+    "architecture": "aarch64",
+    "effective_cpus": 4,
+    "logical_cpus": 4,
+    "model_bucket": "other"
+  },
+  "gpus": [],
+  "memory": {
+    "available_bytes": 4294967296,
+    "effective_limit_bytes": null,
+    "total_bytes": 8589934592
+  },
+  "never_collected": [
+    "asset_tag",
+    "hostname",
+    "ip_address",
+    "mac_address",
+    "machine_id",
+    "serial_number",
+    "system_uuid",
+    "username"
+  ],
+  "power": {
+    "ac_online": true,
+    "battery_percent": null,
+    "battery_present": false
+  },
+  "pressure": {
+    "cpu": true,
+    "io": true,
+    "memory": true
+  },
+  "schema": "plebian.hardware/v1",
+  "snapshot_id": "fixture:arm64-unqualified",
+  "storage": {
+    "free_bytes": 17179869184,
+    "scope": "model-store"
+  },
+  "unknowns": [
+    "desktop-qualification",
+    "gpu.inventory"
+  ],
+  "virtualization": "none"
+}

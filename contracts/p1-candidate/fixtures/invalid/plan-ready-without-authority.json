@@ -1,0 +1,7 @@
+{
+  "base": "fixtures/plans/blocked-no-f100-c0.json",
+  "expected": "ready plan lacks authority",
+  "mutation": "set",
+  "path": "/status",
+  "value": "ready"
+}

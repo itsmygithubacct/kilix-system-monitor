@@ -1,0 +1,44 @@
+{
+  "catalog_id": "fixture-catalog",
+  "fixture_kind": "synthetic-contract",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "fixture-tts-small",
+        "content_sha256": null,
+        "license_decision_id": null,
+        "version": "fixture"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": null,
+        "confidence": "estimated",
+        "fixture": "synthetic-contract",
+        "measured_at": null,
+        "raw_evidence_sha256": null,
+        "reference_hardware_class": null,
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": null,
+        "realtime_factor": null,
+        "tokens_per_second": null
+      },
+      "profile_id": "fixture-tts-small-cpu",
+      "provider": "fixture-provider",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 1073741824,
+        "download_bytes": 805306368,
+        "ram_peak_bytes": 2147483648,
+        "temporary_bytes": 1073741824,
+        "vram_peak_bytes": null
+      },
+      "task": "tts",
+      "version": "0.0.0"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

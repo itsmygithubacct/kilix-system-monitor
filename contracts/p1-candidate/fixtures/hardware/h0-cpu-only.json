@@ -1,0 +1,81 @@
+{
+  "capture": {
+    "captured_at": null,
+    "network_used": false,
+    "privileged": false,
+    "qualification_eligible": false,
+    "redaction": "default",
+    "scope": "inventory",
+    "source": "synthetic-contract"
+  },
+  "cpu": {
+    "affinity_cpus": 4,
+    "architecture": "x86_64",
+    "effective_cpus": 4,
+    "logical_cpus": 4,
+    "model_bucket": "desktop-x86"
+  },
+  "gpus": [
+    {
+      "backends": [
+        {
+          "evidence": "command-unavailable",
+          "name": "opencl",
+          "status": "unknown",
+          "version": null
+        },
+        {
+          "evidence": "command-unavailable",
+          "name": "vulkan",
+          "status": "unknown",
+          "version": null
+        }
+      ],
+      "device_class": "integrated",
+      "device_id": "0162",
+      "index": 0,
+      "kernel_driver": "i915",
+      "render_access": true,
+      "vendor": "intel",
+      "vendor_id": "8086",
+      "vram_bytes": null
+    }
+  ],
+  "memory": {
+    "available_bytes": 4294967296,
+    "effective_limit_bytes": null,
+    "total_bytes": 8589934592
+  },
+  "never_collected": [
+    "asset_tag",
+    "hostname",
+    "ip_address",
+    "mac_address",
+    "machine_id",
+    "serial_number",
+    "system_uuid",
+    "username"
+  ],
+  "power": {
+    "ac_online": true,
+    "battery_percent": null,
+    "battery_present": false
+  },
+  "pressure": {
+    "cpu": true,
+    "io": true,
+    "memory": true
+  },
+  "schema": "plebian.hardware/v1",
+  "snapshot_id": "fixture:h0-cpu-only",
+  "storage": {
+    "free_bytes": 21474836480,
+    "scope": "model-store"
+  },
+  "unknowns": [
+    "gpu.0.opencl",
+    "gpu.0.vram",
+    "gpu.0.vulkan"
+  ],
+  "virtualization": "none"
+}

@@ -1,0 +1,7 @@
+{
+  "base": "fixtures/fit/blocked-no-f100-c0.json",
+  "expected": "positive fit verdict without resolved F100-C0",
+  "mutation": "set",
+  "path": "/overall_verdict",
+  "value": "fits"
+}

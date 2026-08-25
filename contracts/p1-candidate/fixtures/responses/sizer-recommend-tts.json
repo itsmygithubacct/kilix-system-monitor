@@ -1,0 +1,65 @@
+{
+  "command": "sizer.recommend.tts",
+  "data": {
+    "capacity_contract": {
+      "identity": null,
+      "source_commit": null,
+      "source_sha256": null,
+      "status": "missing"
+    },
+    "hardware_snapshot_id": "fixture:h0-cpu-only",
+    "overall_verdict": "unknown",
+    "performance": {
+      "comparable": null,
+      "first_result_ms": null,
+      "realtime_factor": null,
+      "tokens_per_second": null,
+      "verdict": "unknown"
+    },
+    "profile_id": "fixture-tts-small-cpu",
+    "qualification_eligible": false,
+    "reasons": [
+      {
+        "code": "F100_C0_MISSING",
+        "message": "Capacity reserves are not frozen; no fit or recommendation verdict is available."
+      },
+      {
+        "code": "PROFILE_UNQUALIFIED",
+        "message": "The synthetic profile has no comparable measured performance evidence."
+      }
+    ],
+    "request_id": "fixture:recommend-tts",
+    "resources": [
+      {
+        "available_bytes": null,
+        "kind": "ram",
+        "required_bytes": 2147483648,
+        "reserve_bytes": null,
+        "verdict": "unknown"
+      },
+      {
+        "available_bytes": null,
+        "kind": "disk",
+        "required_bytes": 1073741824,
+        "reserve_bytes": null,
+        "verdict": "unknown"
+      },
+      {
+        "available_bytes": null,
+        "kind": "temporary-disk",
+        "required_bytes": 1073741824,
+        "reserve_bytes": null,
+        "verdict": "unknown"
+      }
+    ],
+    "schema": "plebian.models.fit-result/v1"
+  },
+  "schema": "plebian.cli.response/v1",
+  "status": "unknown",
+  "warnings": [
+    {
+      "code": "ENTRY_GATE_CLOSED",
+      "message": "F100-C0 is missing and this fixture has no measured profile."
+    }
+  ]
+}

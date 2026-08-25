@@ -1,0 +1,7 @@
+{
+  "base": "fixtures/hardware/h0-cpu-only.json",
+  "expected": "forbidden identifier key",
+  "mutation": "set",
+  "path": "/hostname",
+  "value": "redacted-but-still-forbidden"
+}

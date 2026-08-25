@@ -1,0 +1,7 @@
+{
+  "base": "fixtures/profiles/unqualified-estimate.json",
+  "expected": "qualified profile lacks measured evidence",
+  "mutation": "set",
+  "path": "/profiles/0/qualification",
+  "value": "qualified"
+}

@@ -1,0 +1,45 @@
+{
+  "boot_id": "fixture-boot",
+  "interval_ns": 1000000000,
+  "monotonic_ns": 2000000000,
+  "processes": [],
+  "schema": 1,
+  "sequence": 2,
+  "system": {
+    "cpu_percent": 12.5,
+    "logical_cpus": 4,
+    "memory_available": 4294967296,
+    "memory_total": 8589934592
+  },
+  "thermal": [],
+  "vnext": {
+    "batteries": [],
+    "discontinuity": "none",
+    "gpus": [
+      {
+        "busy_percent": null,
+        "index": 0,
+        "power_watts": null,
+        "temperature_celsius": null,
+        "vram_total_bytes": null,
+        "vram_used_bytes": null
+      }
+    ],
+    "hardware_snapshot_id": "fixture:h0-cpu-only",
+    "network": {
+      "link_mbps": null,
+      "receive_bytes_per_second": null,
+      "transmit_bytes_per_second": null,
+      "type": "unknown"
+    },
+    "storage": [
+      {
+        "free_bytes": 21474836480,
+        "health": "unknown",
+        "read_bytes_per_second": null,
+        "write_bytes_per_second": null
+      }
+    ]
+  },
+  "wall_time_ns": 1770000000000000000
+}

@@ -1,0 +1,77 @@
+{
+  "capture": {
+    "captured_at": null,
+    "network_used": false,
+    "privileged": false,
+    "qualification_eligible": false,
+    "redaction": "default",
+    "scope": "inventory",
+    "source": "synthetic-contract"
+  },
+  "cpu": {
+    "affinity_cpus": 2,
+    "architecture": "x86_64",
+    "effective_cpus": 2,
+    "logical_cpus": 2,
+    "model_bucket": "unknown"
+  },
+  "gpus": [
+    {
+      "backends": [
+        {
+          "evidence": "command-unavailable",
+          "name": "vulkan",
+          "status": "unknown",
+          "version": null
+        }
+      ],
+      "device_class": "virtual",
+      "device_id": null,
+      "index": 0,
+      "kernel_driver": "virtio_gpu",
+      "render_access": null,
+      "vendor": "other",
+      "vendor_id": null,
+      "vram_bytes": null
+    }
+  ],
+  "memory": {
+    "available_bytes": 2147483648,
+    "effective_limit_bytes": 4294967296,
+    "total_bytes": 8589934592
+  },
+  "never_collected": [
+    "asset_tag",
+    "hostname",
+    "ip_address",
+    "mac_address",
+    "machine_id",
+    "serial_number",
+    "system_uuid",
+    "username"
+  ],
+  "power": {
+    "ac_online": null,
+    "battery_percent": null,
+    "battery_present": null
+  },
+  "pressure": {
+    "cpu": true,
+    "io": true,
+    "memory": true
+  },
+  "schema": "plebian.hardware/v1",
+  "snapshot_id": "fixture:virtual-machine-unknown",
+  "storage": {
+    "free_bytes": 10737418240,
+    "scope": "model-store"
+  },
+  "unknowns": [
+    "gpu.0.render-access",
+    "gpu.0.vram",
+    "gpu.0.vulkan",
+    "power.ac",
+    "power.battery"
+  ],
+  "virtualization": "virtual-machine"
+}

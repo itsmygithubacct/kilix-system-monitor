@@ -1,0 +1,438 @@
+{
+  "$comment": "Track D/F107-B handoff candidate only; joint sign-off is required before a v1 freeze.",
+  "$defs": {
+    "command": {
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "command_id": {
+          "enum": [
+            "hardware.gpu",
+            "hardware.inventory",
+            "hardware.show",
+            "sizer.install",
+            "sizer.plan.local-ai-balanced",
+            "sizer.recommend.tts",
+            "sizer.snapshot"
+          ]
+        },
+        "data_schema": {
+          "enum": [
+            "plebian.hardware/v1",
+            "plebian.models.fit-result/v1",
+            "plebian.models.install-plan/v1",
+            "plebian.models.snapshot/v1"
+          ]
+        },
+        "fixture": {
+          "pattern": "^fixtures/responses/[a-z0-9][a-z0-9._-]*$",
+          "type": "string"
+        },
+        "side_effects": {
+          "enum": [
+            "none",
+            "none-when-blocked; provider-owned execution-after-revalidation-when-ready"
+          ]
+        },
+        "stdout": {
+          "enum": [
+            "plebian.cli.response/v1",
+            "text"
+          ]
+        }
+      },
+      "required": [
+        "argv",
+        "command_id",
+        "fixture",
+        "side_effects",
+        "stdout"
+      ],
+      "type": "object"
+    },
+    "hardwareGpu": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "plebian-hardware",
+            "gpu",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "hardware.gpu"
+        },
+        "data_schema": {
+          "const": "plebian.hardware/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/hardware-gpu.json"
+        },
+        "side_effects": {
+          "const": "none"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    },
+    "hardwareInventory": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "plebian-hardware",
+            "inventory",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "hardware.inventory"
+        },
+        "data_schema": {
+          "const": "plebian.hardware/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/hardware-inventory.json"
+        },
+        "side_effects": {
+          "const": "none"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    },
+    "hardwareShow": {
+      "$ref": "#/$defs/command",
+      "not": {
+        "required": [
+          "data_schema"
+        ]
+      },
+      "properties": {
+        "argv": {
+          "const": [
+            "plebian-hardware",
+            "show"
+          ]
+        },
+        "command_id": {
+          "const": "hardware.show"
+        },
+        "fixture": {
+          "const": "fixtures/responses/hardware-show.txt"
+        },
+        "side_effects": {
+          "const": "none"
+        },
+        "stdout": {
+          "const": "text"
+        }
+      }
+    },
+    "sizerInstall": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "plebian-model-sizer",
+            "install",
+            "PLAN_PATH",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "sizer.install"
+        },
+        "data_schema": {
+          "const": "plebian.models.install-plan/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/sizer-install-blocked.json"
+        },
+        "side_effects": {
+          "const": "none-when-blocked; provider-owned execution-after-revalidation-when-ready"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    },
+    "sizerPlan": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "plebian-model-sizer",
+            "plan",
+            "local-ai-balanced",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "sizer.plan.local-ai-balanced"
+        },
+        "data_schema": {
+          "const": "plebian.models.install-plan/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/sizer-plan.json"
+        },
+        "side_effects": {
+          "const": "none"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    },
+    "sizerRecommendTts": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "plebian-model-sizer",
+            "recommend",
+            "tts",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "sizer.recommend.tts"
+        },
+        "data_schema": {
+          "const": "plebian.models.fit-result/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/sizer-recommend-tts.json"
+        },
+        "side_effects": {
+          "const": "none"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    },
+    "sizerSnapshot": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "plebian-model-sizer",
+            "snapshot",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "sizer.snapshot"
+        },
+        "data_schema": {
+          "const": "plebian.models.snapshot/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/sizer-snapshot.json"
+        },
+        "side_effects": {
+          "const": "none"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:f106-invocation-contract:v0-draft",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate": {
+      "const": true
+    },
+    "commands": {
+      "items": false,
+      "maxItems": 7,
+      "minItems": 7,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/hardwareShow"
+        },
+        {
+          "$ref": "#/$defs/hardwareInventory"
+        },
+        {
+          "$ref": "#/$defs/hardwareGpu"
+        },
+        {
+          "$ref": "#/$defs/sizerRecommendTts"
+        },
+        {
+          "$ref": "#/$defs/sizerPlan"
+        },
+        {
+          "$ref": "#/$defs/sizerInstall"
+        },
+        {
+          "$ref": "#/$defs/sizerSnapshot"
+        }
+      ],
+      "type": "array",
+      "uniqueItems": true
+    },
+    "environment": {
+      "additionalProperties": false,
+      "properties": {
+        "locale": {
+          "const": "C.UTF-8"
+        },
+        "network": {
+          "const": "not-required"
+        },
+        "stdin": {
+          "const": "dev-null"
+        }
+      },
+      "required": [
+        "locale",
+        "network",
+        "stdin"
+      ],
+      "type": "object"
+    },
+    "exit_statuses": {
+      "additionalProperties": false,
+      "properties": {
+        "0": {
+          "const": "contract-valid result, including unknown or blocked"
+        },
+        "2": {
+          "const": "command-line usage error"
+        },
+        "65": {
+          "const": "invalid input document"
+        },
+        "69": {
+          "const": "required local dependency unavailable"
+        },
+        "70": {
+          "const": "internal invariant failure"
+        },
+        "75": {
+          "const": "temporary local failure"
+        }
+      },
+      "required": [
+        "0",
+        "2",
+        "65",
+        "69",
+        "70",
+        "75"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnostic_bytes": {
+          "const": 4096
+        },
+        "read_only_timeout_seconds": {
+          "const": 15
+        },
+        "stdout_bytes": {
+          "const": 4194304
+        }
+      },
+      "required": [
+        "diagnostic_bytes",
+        "read_only_timeout_seconds",
+        "stdout_bytes"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "f106.invocation-contract/v0-draft"
+    },
+    "streams": {
+      "additionalProperties": false,
+      "properties": {
+        "nonzero": {
+          "additionalProperties": false,
+          "properties": {
+            "stderr": {
+              "const": "one redacted UTF-8 line followed by LF"
+            },
+            "stdout": {
+              "const": "empty"
+            }
+          },
+          "required": [
+            "stderr",
+            "stdout"
+          ],
+          "type": "object"
+        },
+        "success": {
+          "additionalProperties": false,
+          "properties": {
+            "stderr": {
+              "const": "empty"
+            },
+            "stdout": {
+              "const": "one document followed by LF"
+            }
+          },
+          "required": [
+            "stderr",
+            "stdout"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "success",
+        "nonzero"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "candidate",
+    "environment",
+    "limits",
+    "streams",
+    "exit_statuses",
+    "commands"
+  ],
+  "title": "Candidate F106 invocation contract",
+  "type": "object"
+}

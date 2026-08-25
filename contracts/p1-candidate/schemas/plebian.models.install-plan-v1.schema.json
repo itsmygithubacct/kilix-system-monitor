@@ -1,0 +1,191 @@
+{
+  "$comment": "Track D P1 candidate only. Plan paths and documents never constitute consent.",
+  "$defs": {
+    "bytesOrNull": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:model-install-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authorization_receipts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "decision_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "receipt_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "decision_id",
+          "present",
+          "receipt_sha256"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "blockers": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[A-Z0-9_]+$",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "capacity_contract_status": {
+      "enum": [
+        "missing",
+        "resolved"
+      ]
+    },
+    "confirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "granted": {
+          "const": false
+        },
+        "required": {
+          "const": true
+        }
+      },
+      "required": [
+        "required",
+        "granted"
+      ],
+      "type": "object"
+    },
+    "executable": {
+      "type": "boolean"
+    },
+    "items": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "license_decision_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "profile_id": {
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "provider": {
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_id",
+          "provider",
+          "artifact_id",
+          "license_decision_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "operation": {
+      "enum": [
+        "install",
+        "plan"
+      ]
+    },
+    "plan_id": {
+      "pattern": "^[a-z0-9]+(?:[._:-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "preset": {
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "schema": {
+      "const": "plebian.models.install-plan/v1"
+    },
+    "status": {
+      "enum": [
+        "blocked",
+        "ready"
+      ]
+    },
+    "totals": {
+      "additionalProperties": false,
+      "properties": {
+        "download_bytes": {
+          "$ref": "#/$defs/bytesOrNull"
+        },
+        "installed_bytes": {
+          "$ref": "#/$defs/bytesOrNull"
+        },
+        "shared_bytes": {
+          "$ref": "#/$defs/bytesOrNull"
+        },
+        "temporary_bytes": {
+          "$ref": "#/$defs/bytesOrNull"
+        }
+      },
+      "required": [
+        "download_bytes",
+        "installed_bytes",
+        "temporary_bytes",
+        "shared_bytes"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "plan_id",
+    "operation",
+    "preset",
+    "status",
+    "executable",
+    "capacity_contract_status",
+    "items",
+    "totals",
+    "authorization_receipts",
+    "confirmation",
+    "blockers"
+  ],
+  "title": "Candidate plebian.models.install-plan/v1",
+  "type": "object"
+}

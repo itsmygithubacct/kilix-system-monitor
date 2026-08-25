@@ -1,0 +1,7 @@
+{
+  "base": "invocation-contract.json",
+  "expected": "duplicate invocation command_id",
+  "mutation": "set",
+  "path": "/commands/1/command_id",
+  "value": "hardware.show"
+}

@@ -1,0 +1,5 @@
+Hardware inventory: redacted fixture
+CPU: x86_64, 4 effective CPUs
+Memory: 8 GiB total
+GPU: Intel integrated; OpenCL unknown; Vulkan unknown
+Qualification: fixture only; no hardware class is qualified by this output

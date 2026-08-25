@@ -1,0 +1,261 @@
+{
+  "$comment": "Candidate additive extension. Outer schema remains integer 1 so current readers that ignore unknown fields continue to parse it.",
+  "$id": "urn:plebian:candidate:schema:kilix-telemetry:vnext",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "boot_id": {
+      "maxLength": 128,
+      "type": "string"
+    },
+    "interval_ns": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "monotonic_ns": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "processes": {
+      "type": "array"
+    },
+    "schema": {
+      "const": 1
+    },
+    "sequence": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "system": {
+      "type": "object"
+    },
+    "thermal": {
+      "type": "array"
+    },
+    "vnext": {
+      "additionalProperties": false,
+      "properties": {
+        "batteries": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "charge_percent": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "power_watts": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "charging",
+                  "discharging",
+                  "full",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "charge_percent",
+              "power_watts"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "discontinuity": {
+          "enum": [
+            "device-reset",
+            "none",
+            "provider-restart",
+            "resume",
+            "unknown"
+          ]
+        },
+        "gpus": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "busy_percent": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "index": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "power_watts": {
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "temperature_celsius": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "vram_total_bytes": {
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "vram_used_bytes": {
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "index",
+              "busy_percent",
+              "vram_total_bytes",
+              "vram_used_bytes",
+              "temperature_celsius",
+              "power_watts"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "hardware_snapshot_id": {
+          "pattern": "^(fixture|local|redacted):[a-z0-9][a-z0-9._:-]{0,127}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "network": {
+          "additionalProperties": false,
+          "properties": {
+            "link_mbps": {
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "receive_bytes_per_second": {
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "transmit_bytes_per_second": {
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "type": {
+              "enum": [
+                "ethernet",
+                "other",
+                "unknown",
+                "wireless"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "link_mbps",
+            "receive_bytes_per_second",
+            "transmit_bytes_per_second"
+          ],
+          "type": "object"
+        },
+        "storage": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "free_bytes": {
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "health": {
+                "enum": [
+                  "failing",
+                  "healthy",
+                  "unknown",
+                  "warning"
+                ]
+              },
+              "read_bytes_per_second": {
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "write_bytes_per_second": {
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "health",
+              "free_bytes",
+              "read_bytes_per_second",
+              "write_bytes_per_second"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "hardware_snapshot_id",
+        "discontinuity",
+        "gpus",
+        "storage",
+        "network",
+        "batteries"
+      ],
+      "type": "object"
+    },
+    "wall_time_ns": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema",
+    "sequence",
+    "wall_time_ns",
+    "monotonic_ns",
+    "interval_ns",
+    "boot_id",
+    "system",
+    "thermal",
+    "processes",
+    "vnext"
+  ],
+  "title": "Candidate additive kilix-telemetry schema-1 extension",
+  "type": "object"
+}

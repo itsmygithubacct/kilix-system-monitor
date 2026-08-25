@@ -1,0 +1,7 @@
+{
+  "base": "fixtures/hardware/hybrid-backend-unavailable.json",
+  "expected": "available backend lacks a successful runtime probe",
+  "mutation": "set",
+  "path": "/gpus/1/backends/0/status",
+  "value": "available"
+}

@@ -1,0 +1,113 @@
+{
+  "capture": {
+    "captured_at": null,
+    "network_used": false,
+    "privileged": false,
+    "qualification_eligible": false,
+    "redaction": "default",
+    "scope": "inventory",
+    "source": "synthetic-contract"
+  },
+  "cpu": {
+    "affinity_cpus": 8,
+    "architecture": "x86_64",
+    "effective_cpus": 8,
+    "logical_cpus": 8,
+    "model_bucket": "mobile-x86"
+  },
+  "gpus": [
+    {
+      "backends": [
+        {
+          "evidence": "command-unavailable",
+          "name": "opencl",
+          "status": "unknown",
+          "version": null
+        },
+        {
+          "evidence": "executable-probe",
+          "name": "vulkan",
+          "status": "available",
+          "version": "fixture"
+        }
+      ],
+      "device_class": "integrated",
+      "device_id": "3ea0",
+      "index": 0,
+      "kernel_driver": "i915",
+      "render_access": true,
+      "vendor": "intel",
+      "vendor_id": "8086",
+      "vram_bytes": null
+    },
+    {
+      "backends": [
+        {
+          "evidence": "command-unavailable",
+          "name": "cuda",
+          "status": "unknown",
+          "version": null
+        },
+        {
+          "evidence": "command-unavailable",
+          "name": "opencl",
+          "status": "unknown",
+          "version": null
+        },
+        {
+          "evidence": "command-unavailable",
+          "name": "vulkan",
+          "status": "unknown",
+          "version": null
+        }
+      ],
+      "device_class": "discrete",
+      "device_id": "1f36",
+      "index": 1,
+      "kernel_driver": "nouveau",
+      "render_access": true,
+      "vendor": "nvidia",
+      "vendor_id": "10de",
+      "vram_bytes": null
+    }
+  ],
+  "memory": {
+    "available_bytes": 17179869184,
+    "effective_limit_bytes": null,
+    "total_bytes": 34359738368
+  },
+  "never_collected": [
+    "asset_tag",
+    "hostname",
+    "ip_address",
+    "mac_address",
+    "machine_id",
+    "serial_number",
+    "system_uuid",
+    "username"
+  ],
+  "power": {
+    "ac_online": true,
+    "battery_percent": 80,
+    "battery_present": true
+  },
+  "pressure": {
+    "cpu": true,
+    "io": true,
+    "memory": true
+  },
+  "schema": "plebian.hardware/v1",
+  "snapshot_id": "fixture:hybrid-backend-unavailable",
+  "storage": {
+    "free_bytes": 53687091200,
+    "scope": "model-store"
+  },
+  "unknowns": [
+    "gpu.0.opencl",
+    "gpu.0.vram",
+    "gpu.1.opencl",
+    "gpu.1.vram",
+    "gpu.1.vulkan"
+  ],
+  "virtualization": "none"
+}
