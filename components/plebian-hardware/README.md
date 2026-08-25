@@ -18,6 +18,12 @@ local commands are found only in a fixed system path and run with fixed argv,
 a clean locale, null stdin, a five-second deadline and a 64 KiB output limit.
 It never uses the network or elevates privilege.
 
+The additive plebian.hardware.privacy/v1 candidate fixes those boundaries as
+data rather than leaving them as review conventions. The common file reader
+refuses identifier-named inputs and final-component symlinks before opening
+them. The NVIDIA query is bound to one transient PCI address and asks only for
+that address, the driver version and total memory; the address is not emitted.
+
 Hostname, user name, machine ID, system UUID, serial numbers, asset tags, MAC
 addresses and IP addresses are never collected. Interface names, DRM connector
 names, CPU-list text and PCI bus addresses are transient lookup inputs and are

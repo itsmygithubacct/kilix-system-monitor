@@ -16,7 +16,7 @@ kilix-telemetry = "kilix_telemetry.cli:main"
 kilix-telemetryd = "kilix_telemetry.cli:daemon_main"
 
 [build-system]
-requires = ["uv_build>=0.12.5,<0.13"]
+requires = ["uv_build==0.12.5"]
 build-backend = "uv_build"
 
 [tool.uv]

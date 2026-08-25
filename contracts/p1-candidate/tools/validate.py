@@ -24,7 +24,9 @@ MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 SCHEMA_PATHS = {
     "f106.invocation-contract/v0-draft": ROOT / "schemas" / "f106.invocation-contract-v0-draft.schema.json",
     "plebian.hardware/v1": ROOT / "schemas" / "plebian.hardware-v1.schema.json",
+    "plebian.hardware.privacy/v1": ROOT / "schemas" / "plebian.hardware.privacy-v1.schema.json",
     "kilix.telemetry/schema-1-vnext": ROOT / "schemas" / "kilix.telemetry-vnext.schema.json",
+    "plebian.models.checkpoint-license/v1": ROOT / "schemas" / "plebian.models.checkpoint-license-v1.schema.json",
     "plebian.models.profiles/v1": ROOT / "schemas" / "plebian.models.profiles-v1.schema.json",
     "plebian.models.fit-result/v1": ROOT / "schemas" / "plebian.models.fit-result-v1.schema.json",
     "plebian.models.install-plan/v1": ROOT / "schemas" / "plebian.models.install-plan-v1.schema.json",
@@ -33,7 +35,9 @@ SCHEMA_PATHS = {
 }
 FIXTURE_GROUPS = {
     "plebian.hardware/v1": ROOT / "fixtures" / "hardware",
+    "plebian.hardware.privacy/v1": ROOT / "fixtures" / "privacy",
     "kilix.telemetry/schema-1-vnext": ROOT / "fixtures" / "telemetry-vnext-additive.json",
+    "plebian.models.checkpoint-license/v1": ROOT / "fixtures" / "checkpoint-licenses",
     "plebian.models.profiles/v1": ROOT / "fixtures" / "profiles",
     "plebian.models.fit-result/v1": ROOT / "fixtures" / "fit",
     "plebian.models.install-plan/v1": ROOT / "fixtures" / "plans",
@@ -53,6 +57,44 @@ PROHIBITED_KEYS = {
 }
 IPV4 = re.compile(r"(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])")
 MAC = re.compile(r"(?i)(?<![0-9a-f])(?:[0-9a-f]{2}:){5}[0-9a-f]{2}(?![0-9a-f])")
+EXPECTED_OBSERVATION_PRIVACY = {
+    "cache_mode": "0600",
+    "classification": "fingerprinting-grade-local",
+    "export_requires_warning": True,
+    "telemetry_eligible": False,
+}
+CAMPP_AUTHORITY_SHA256 = "54b36539688fe450074a0105a2e43719837c321e4cf0eff8d7884a2d92ad21ad"
+APACHE_2_LICENSE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+CAMPP_PINS = {
+    "iic/speech_campplus_sv_en_voxceleb_16k": {
+        "artifact": {
+            "bytes": 29_357_703,
+            "checkpoint_filename": "campplus_voxceleb.bin",
+            "content_sha256": "5b1a88b6f8d85826fabef804779c3372b42f3af21457fa48bd5c097c0686b2de",
+            "model_card_sha256": "5219533788a85bd3dc7a2c2175d1f727906676927c17919a7c6061bf0f3131f7",
+            "provider": "iic-modelscope",
+            "source_commit": "032b8131a7ad812f87061955ca974c99060c5a03",
+            "source_revision_label": None,
+            "source_tree": "e7a3d915a1b6e7d8ea1eaba68d8472874e1a6145",
+        },
+        "decision_id": "f104-campp-english-voxceleb-2026-08-25",
+        "disposition": "cleared-for-comparison",
+    },
+    "iic/speech_campplus_sv_zh-cn_16k-common": {
+        "artifact": {
+            "bytes": 28_036_335,
+            "checkpoint_filename": "campplus_cn_common.bin",
+            "content_sha256": "3388cf5fd3493c9ac9c69851d8e7a8badcfb4f3dc631020c4961371646d5ada8",
+            "model_card_sha256": "9bd58b989a534fa0121c8d10e62c0cce9080a9a9aeb2499bb429676f9c17cc3a",
+            "provider": "iic-modelscope",
+            "source_commit": "930086088e5c5fa8a3f911c20795ca72f7f16397",
+            "source_revision_label": "v2.0.2",
+            "source_tree": "d58e716798173af958ac944d933f0bb3d27ead58",
+        },
+        "decision_id": "f104-campp-chinese-common-2026-08-25",
+        "disposition": "eligible-unselected",
+    },
+}
 
 
 class ValidationFailure(ValueError):
@@ -173,6 +215,8 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
         expected_never = sorted(PROHIBITED_KEYS - {"serial", "uuid"})
         if document.get("never_collected") != expected_never:
             errors.append("never_collected must be the frozen sorted denylist")
+        if "privacy" in document and document.get("privacy") != EXPECTED_OBSERVATION_PRIVACY:
+            errors.append("hardware privacy projection differs from the default privacy contract")
         capture = document.get("capture", {})
         if capture.get("source") in {"synthetic-contract", "redacted-observation"} and capture.get("qualification_eligible"):
             errors.append("synthetic or redacted fixture cannot qualify hardware")
@@ -234,6 +278,38 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
         battery_indices = [battery.get("index") for battery in batteries]
         if battery_indices != list(range(len(battery_indices))):
             errors.append("hardware battery indexes must be contiguous")
+        return errors
+
+    if identity == "plebian.hardware.privacy/v1":
+        expected_never = sorted(PROHIBITED_KEYS - {"serial", "uuid"})
+        if document.get("collection", {}).get("never_collected") != expected_never:
+            errors.append("privacy contract never_collected differs from the hardware denylist")
+        if document.get("observation_projection") != EXPECTED_OBSERVATION_PRIVACY:
+            errors.append("privacy contract observation projection is not exact")
+        return errors
+
+    if identity == "plebian.models.checkpoint-license/v1":
+        artifact = document.get("artifact", {})
+        decision = document.get("decision", {})
+        model_id = artifact.get("model_id")
+        if isinstance(model_id, str) and model_id.startswith("iic/speech_campplus"):
+            pin = CAMPP_PINS.get(model_id)
+            if pin is None or any(
+                artifact.get(field) != value
+                for field, value in (pin.get("artifact") or {}).items()
+            ):
+                errors.append("CAM++ checkpoint is not bound to the digest-specific determination")
+            elif (
+                decision.get("decision_id") != pin.get("decision_id")
+                or decision.get("disposition") != pin.get("disposition")
+            ):
+                errors.append("CAM++ disposition differs from the digest-specific determination")
+        if decision.get("authority_document_sha256") != CAMPP_AUTHORITY_SHA256:
+            errors.append("checkpoint decision is not bound to the reviewed authority document")
+        if decision.get("license_expression") == "Apache-2.0" and decision.get("license_text_sha256") != APACHE_2_LICENSE_SHA256:
+            errors.append("Apache-2.0 decision carries the wrong license-text digest")
+        if decision.get("disposition") in {"cleared-for-comparison", "eligible-unselected"} and decision.get("redistributable") is not True:
+            errors.append("cleared checkpoint is not marked redistributable")
         return errors
 
     if identity == "plebian.models.profiles/v1":

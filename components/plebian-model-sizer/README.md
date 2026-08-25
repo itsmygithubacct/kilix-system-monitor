@@ -14,6 +14,13 @@ blocked verdicts. The seven-command invocation candidate includes future sizer
 calls so consumers can test fail-closed fixtures, but this component does not
 install or impersonate those replay binaries.
 
+The additive plebian.models.checkpoint-license/v1 candidate records two exact
+CAM++ checkpoint licence determinations as digest-bound admission metadata.
+Each record says that its Apache-2.0 weight grant comes from the official model
+repository declaration rather than a code licence, carries redistribution
+obligations, and explicitly leaves artifact/profile/runtime selection, fit
+claims and qualification false. It does not open the D4 gate.
+
 D4 starts only after both gates are recorded. Until then, the absence of a
 plebian-model-sizer entry point is intentional and checked by the aggregate
 test suite.

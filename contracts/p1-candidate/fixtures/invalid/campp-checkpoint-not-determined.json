@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/checkpoint-licenses/campp-english-voxceleb.json",
+  "expected": "CAM++ checkpoint is not bound to the digest-specific determination",
+  "path": "/artifact/content_sha256",
+  "value": "0000000000000000000000000000000000000000000000000000000000000000"
+}

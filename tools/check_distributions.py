@@ -9,6 +9,7 @@ import sys
 import tarfile
 import tempfile
 import zipfile
+from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path, PurePosixPath
 
 
@@ -25,6 +26,7 @@ PACKAGES = {
         "version": "0.1.0",
     },
 }
+BUILD_BACKEND_VERSION = "0.12.5"
 
 
 def _safe(names: list[str]) -> None:
@@ -64,6 +66,15 @@ def _inspect_sdist(path: Path, module: str, name: str) -> None:
 
 def main() -> int:
     uv = os.environ.get("UV", "uv")
+    try:
+        observed_backend = distribution_version("uv-build")
+    except PackageNotFoundError as error:
+        raise RuntimeError("locked uv-build backend is absent") from error
+    if observed_backend != BUILD_BACKEND_VERSION:
+        raise RuntimeError(
+            "uv-build backend mismatch: "
+            f"expected {BUILD_BACKEND_VERSION}, observed {observed_backend}"
+        )
     with tempfile.TemporaryDirectory(prefix="kilix-system-monitor-build-") as temporary:
         output = Path(temporary)
         for name, details in PACKAGES.items():
@@ -74,6 +85,7 @@ def main() -> int:
                     uv,
                     "build",
                     "--offline",
+                    "--no-build-isolation",
                     "--no-progress",
                     "--out-dir",
                     str(destination),

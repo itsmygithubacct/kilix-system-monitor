@@ -25,6 +25,10 @@ testing, but they are not P1-frozen and they make no hardware, backend, model,
 fit or performance qualification claim. They move to a frozen root schema
 surface only after all named consumers sign identical bytes.
 
+Two additive design contracts now make privacy and checkpoint-licence admission
+machine-checkable without changing the original R2 invocation or response
+fixtures. They remain D-side proposals until the same P1 signoff occurs.
+
 integration/f120-registration.json is the exact pre-repository scaffold from
 the published F120 handoff. Its zero commit and metadata sentinels are retained
 until the parent has a reviewed public install surface. An F120 development
@@ -37,6 +41,10 @@ Use the release-pinned uv 0.12.5:
 
     make check
 
+The locked aggregate environment includes the exact uv-build 0.12.5 backend
+needed by both component sdists, so the package gate can stay offline after the
+normal locked environment sync instead of depending on an unrelated cache hit.
+
 The aggregate check verifies contract integrity and negative fixtures, the
 imported telemetry suite, the hardware unit boundaries, live inventory/GPU
 schema and privacy rules, wheel/sdist contents, and the intentional model-sizer
@@ -47,8 +55,10 @@ block. Hardware checks use no network and no privilege.
 Implemented now: history-preserving local parent creation, aggregate contract
 tooling, exact F120 development registration, and unprivileged D2 probes for
 CPU/RAM/cgroup/topology/cache/frequency/ISA, DRM/PCI GPUs, bounded backend
-commands, buses, anonymous network links, firmware/IOMMU state, power/battery,
-thermal/fans, PSI and virtualization.
+commands, device-bound NVIDIA driver/VRAM evidence, buses, anonymous network
+links, firmware/IOMMU state, power/battery, thermal/fans, PSI and
+virtualization. Identifier-named files and final-component symlinks are refused
+at the common read boundary.
 
 Not implemented or claimed: P1 freeze, privileged DMI, SMART/NVMe and private
 cache lifecycle, device-bound ROCm/Vulkan/OpenCL success, D3 telemetry vNext,

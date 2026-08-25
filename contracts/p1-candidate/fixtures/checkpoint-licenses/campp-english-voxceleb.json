@@ -1,0 +1,46 @@
+{
+  "artifact": {
+    "bytes": 29357703,
+    "checkpoint_filename": "campplus_voxceleb.bin",
+    "content_sha256": "5b1a88b6f8d85826fabef804779c3372b42f3af21457fa48bd5c097c0686b2de",
+    "model_card_sha256": "5219533788a85bd3dc7a2c2175d1f727906676927c17919a7c6061bf0f3131f7",
+    "model_id": "iic/speech_campplus_sv_en_voxceleb_16k",
+    "provider": "iic-modelscope",
+    "source_commit": "032b8131a7ad812f87061955ca974c99060c5a03",
+    "source_revision_label": null,
+    "source_tree": "e7a3d915a1b6e7d8ea1eaba68d8472874e1a6145"
+  },
+  "decision": {
+    "artifact_repository_cloning_permitted": true,
+    "authority_document_sha256": "54b36539688fe450074a0105a2e43719837c321e4cf0eff8d7884a2d92ad21ad",
+    "basis": "model-repository-declaration",
+    "cloning_permitted_as_license_matter": true,
+    "code_license_inference": false,
+    "decision_id": "f104-campp-english-voxceleb-2026-08-25",
+    "disposition": "cleared-for-comparison",
+    "example_audio_in_scope": false,
+    "license_expression": "Apache-2.0",
+    "license_text_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "obligations": [
+      "bind-source-evidence",
+      "include-complete-license-text",
+      "mark-onnx-conversion-modified",
+      "preserve-applicable-notices"
+    ],
+    "redistributable": true,
+    "scope": "checkpoint-digest-only",
+    "training_data_rights": "not-determined",
+    "use_restricted": false,
+    "weight_grant": true
+  },
+  "fit_claims_present": false,
+  "qualification_eligible": false,
+  "schema": "plebian.models.checkpoint-license/v1",
+  "selection": {
+    "artifact_selected": false,
+    "local_onnx_conversion_required_if_selected": true,
+    "mirror_onnx_cleared": false,
+    "profile_selected": false,
+    "runtime_selected": false
+  }
+}

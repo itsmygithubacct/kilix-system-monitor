@@ -28,19 +28,45 @@ NEVER_COLLECTED = [
     "system_uuid",
     "username",
 ]
+FORBIDDEN_PROBE_BASENAMES = {
+    "address",
+    "asset_tag",
+    "chassis_asset_tag",
+    "hostname",
+    "machine-id",
+    "machine_id",
+    "product_serial",
+    "product_uuid",
+    "serial",
+    "serial_number",
+    "system_serial",
+    "system_uuid",
+    "uuid",
+}
 VENDORS = {
     "0x1002": "amd",
     "0x10de": "nvidia",
     "0x8086": "intel",
 }
 PROBE_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
+SUBPROCESS_ENVIRONMENT = {
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PATH": PROBE_PATH,
+}
+SUBPROCESS_STDOUT_BYTES = 64 * 1024
+SUBPROCESS_TIMEOUT_SECONDS = 5
 
 
 def _read_bytes(path: Path, limit: int = 4096) -> bytes | None:
-    if limit < 0:
+    if limit < 0 or path.name.lower() in FORBIDDEN_PROBE_BASENAMES:
         return None
+    flags = os.O_RDONLY | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
     try:
-        with path.open("rb") as handle:
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as handle:
             if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
                 return None
             value = handle.read(limit + 1)
@@ -335,13 +361,13 @@ def _run_bounded(executable: str, arguments: list[str]) -> tuple[int | None, byt
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            env={"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PATH": PROBE_PATH},
+            env=SUBPROCESS_ENVIRONMENT,
             start_new_session=True,
         )
     except OSError:
         return None, None
     output = bytearray()
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + SUBPROCESS_TIMEOUT_SECONDS
     try:
         if process.stdout is None:
             raise OSError("stdout pipe unavailable")
@@ -350,15 +376,22 @@ def _run_bounded(executable: str, arguments: list[str]) -> tuple[int | None, byt
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise subprocess.TimeoutExpired([executable, *arguments], 5)
+                raise subprocess.TimeoutExpired(
+                    [executable, *arguments], SUBPROCESS_TIMEOUT_SECONDS
+                )
             readable, _, _ = select.select([descriptor], [], [], remaining)
             if not readable:
-                raise subprocess.TimeoutExpired([executable, *arguments], 5)
-            chunk = os.read(descriptor, min(8192, 64 * 1024 + 1 - len(output)))
+                raise subprocess.TimeoutExpired(
+                    [executable, *arguments], SUBPROCESS_TIMEOUT_SECONDS
+                )
+            chunk = os.read(
+                descriptor,
+                min(8192, SUBPROCESS_STDOUT_BYTES + 1 - len(output)),
+            )
             if not chunk:
                 break
             output.extend(chunk)
-            if len(output) > 64 * 1024:
+            if len(output) > SUBPROCESS_STDOUT_BYTES:
                 raise OSError("stdout exceeds boundary")
         return process.wait(timeout=max(0.001, deadline - time.monotonic())), bytes(output)
     except (OSError, subprocess.TimeoutExpired):
@@ -390,45 +423,58 @@ def _command_probe(command: str, arguments: list[str]) -> tuple[str, str, str | 
     return "available", "executable-probe", version
 
 
-def _nvidia_probe(device: Path) -> tuple[str, str, str | None]:
+def _nvidia_probe(device: Path) -> tuple[str, str, str | None, int | None]:
     """Bind an nvidia-smi result to one sysfs PCI device without emitting its BDF."""
     executable = _find_executable("nvidia-smi")
     if executable is None:
-        return "unknown", "command-unavailable", None
+        return "unknown", "command-unavailable", None, None
     returncode, stdout = _run_bounded(
         executable,
         [
-            "--query-gpu=pci.bus_id,driver_version",
+            "--query-gpu=pci.bus_id,driver_version,memory.total",
             "--format=csv,noheader,nounits",
         ],
     )
     if returncode is None or stdout is None:
-        return "unknown", "unknown", None
+        return "unknown", "unknown", None, None
     if returncode != 0:
-        return "unknown", "executable-probe", None
+        return "unknown", "executable-probe", None, None
     try:
         local_bdf = device.resolve(strict=True).name.lower()
     except OSError:
-        return "unknown", "unknown", None
+        return "unknown", "unknown", None, None
     if re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]", local_bdf) is None:
-        return "unknown", "unknown", None
+        return "unknown", "unknown", None, None
     local_suffix = local_bdf[-12:]
-    matches: list[str | None] = []
+    matches: list[tuple[str | None, int | None]] = []
     for raw_line in stdout.decode("utf-8", errors="replace").splitlines():
-        raw_bdf, separator, raw_version = raw_line.partition(",")
-        normalized_bdf = raw_bdf.strip().lower()
+        fields = [field.strip() for field in raw_line.split(",")]
+        if len(fields) != 3:
+            continue
+        normalized_bdf = fields[0].lower()
         if (
-            separator
-            and re.fullmatch(
+            re.fullmatch(
                 r"(?:[0-9a-f]{8}|[0-9a-f]{4}):[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]",
                 normalized_bdf,
             )
             and normalized_bdf[-12:] == local_suffix
         ):
-            matches.append(_safe_token(raw_version.strip()))
+            memory_mib = (
+                int(fields[2])
+                if re.fullmatch(r"[0-9]+", fields[2])
+                and 0 < int(fields[2]) <= 16 * 1024 * 1024
+                else None
+            )
+            matches.append(
+                (
+                    _safe_token(fields[1]),
+                    None if memory_mib is None else memory_mib * 1024**2,
+                )
+            )
     if len(matches) != 1:
-        return "unknown", "contradictory", None
-    return "available", "executable-probe", matches[0]
+        return "unknown", "contradictory", None, None
+    version, vram_bytes = matches[0]
+    return "available", "executable-probe", version, vram_bytes
 
 
 def _render_access(device: Path, device_root: Path = Path("/dev/dri")) -> bool | None:
@@ -490,8 +536,9 @@ def _gpu_inventory(
         except OSError:
             driver = None
         backends: list[dict[str, Any]] = []
+        vram_bytes = None
         if vendor == "nvidia":
-            status, evidence, version = _nvidia_probe(device)
+            status, evidence, version, vram_bytes = _nvidia_probe(device)
             backends.append({"name": "cuda", "status": status, "evidence": evidence, "version": version})
         if vendor == "amd":
             status, evidence, _ = _command_probe("rocminfo", [])
@@ -518,7 +565,7 @@ def _gpu_inventory(
                 "device_class": "unknown",
                 "kernel_driver": driver,
                 "render_access": _render_access(device, device_root),
-                "vram_bytes": None,
+                "vram_bytes": vram_bytes,
                 "memory_kind": "unknown",
                 "shared_memory_bytes": None,
                 "numa_node": _read_int(device / "numa_node", minimum=-1),

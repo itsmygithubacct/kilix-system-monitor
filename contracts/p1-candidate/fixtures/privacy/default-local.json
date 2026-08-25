@@ -1,0 +1,65 @@
+{
+  "cache": {
+    "mode": "0600",
+    "root": "private-xdg-state",
+    "symlink_policy": "refuse"
+  },
+  "capability_digest": {
+    "cross_context_identifier": false,
+    "material": "coarse-capability-buckets",
+    "purpose": "local-change-detection-only"
+  },
+  "collection": {
+    "network_used": false,
+    "never_collected": [
+      "asset_tag",
+      "hostname",
+      "ip_address",
+      "mac_address",
+      "machine_id",
+      "serial_number",
+      "system_uuid",
+      "username"
+    ],
+    "privilege_elevation": false,
+    "sources": [
+      "cgroup-v2",
+      "fixed-local-command",
+      "procfs",
+      "python-runtime",
+      "sysfs"
+    ],
+    "transient_only": [
+      "cpu-list-text",
+      "drm-connector-name",
+      "network-interface-name",
+      "pci-bus-address"
+    ]
+  },
+  "diagnostics": {
+    "default_identifier_bearing": false,
+    "explicit_export_warning": true,
+    "telemetry_eligible": false
+  },
+  "helper_boundary": {
+    "raw_identifiers_cross_boundary": false
+  },
+  "observation_projection": {
+    "cache_mode": "0600",
+    "classification": "fingerprinting-grade-local",
+    "export_requires_warning": true,
+    "telemetry_eligible": false
+  },
+  "qualification_eligible": false,
+  "schema": "plebian.hardware.privacy/v1",
+  "subprocess": {
+    "environment": "fixed-clean",
+    "path_resolution": "fixed-system-path",
+    "shell": false,
+    "stderr": "discard",
+    "stdin": "dev-null",
+    "stdout_bytes": 65536,
+    "timeout_seconds": 5
+  },
+  "unknown_policy": "unknown-not-zero-or-pass"
+}

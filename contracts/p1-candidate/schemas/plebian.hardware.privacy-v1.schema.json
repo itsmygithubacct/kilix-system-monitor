@@ -1,0 +1,214 @@
+{
+  "$comment": "Additive Track D design contract. Privacy behavior is fixed before probe output is reviewed.",
+  "$id": "urn:plebian:candidate:schema:hardware-privacy:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cache": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "const": "0600"
+        },
+        "root": {
+          "const": "private-xdg-state"
+        },
+        "symlink_policy": {
+          "const": "refuse"
+        }
+      },
+      "required": [
+        "mode",
+        "root",
+        "symlink_policy"
+      ],
+      "type": "object"
+    },
+    "capability_digest": {
+      "additionalProperties": false,
+      "properties": {
+        "cross_context_identifier": {
+          "const": false
+        },
+        "material": {
+          "const": "coarse-capability-buckets"
+        },
+        "purpose": {
+          "const": "local-change-detection-only"
+        }
+      },
+      "required": [
+        "cross_context_identifier",
+        "material",
+        "purpose"
+      ],
+      "type": "object"
+    },
+    "collection": {
+      "additionalProperties": false,
+      "properties": {
+        "network_used": {
+          "const": false
+        },
+        "never_collected": {
+          "const": [
+            "asset_tag",
+            "hostname",
+            "ip_address",
+            "mac_address",
+            "machine_id",
+            "serial_number",
+            "system_uuid",
+            "username"
+          ],
+          "type": "array"
+        },
+        "privilege_elevation": {
+          "const": false
+        },
+        "sources": {
+          "const": [
+            "cgroup-v2",
+            "fixed-local-command",
+            "procfs",
+            "python-runtime",
+            "sysfs"
+          ],
+          "type": "array"
+        },
+        "transient_only": {
+          "const": [
+            "cpu-list-text",
+            "drm-connector-name",
+            "network-interface-name",
+            "pci-bus-address"
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "network_used",
+        "never_collected",
+        "privilege_elevation",
+        "sources",
+        "transient_only"
+      ],
+      "type": "object"
+    },
+    "diagnostics": {
+      "additionalProperties": false,
+      "properties": {
+        "default_identifier_bearing": {
+          "const": false
+        },
+        "explicit_export_warning": {
+          "const": true
+        },
+        "telemetry_eligible": {
+          "const": false
+        }
+      },
+      "required": [
+        "default_identifier_bearing",
+        "explicit_export_warning",
+        "telemetry_eligible"
+      ],
+      "type": "object"
+    },
+    "helper_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "raw_identifiers_cross_boundary": {
+          "const": false
+        }
+      },
+      "required": [
+        "raw_identifiers_cross_boundary"
+      ],
+      "type": "object"
+    },
+    "observation_projection": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_mode": {
+          "const": "0600"
+        },
+        "classification": {
+          "const": "fingerprinting-grade-local"
+        },
+        "export_requires_warning": {
+          "const": true
+        },
+        "telemetry_eligible": {
+          "const": false
+        }
+      },
+      "required": [
+        "cache_mode",
+        "classification",
+        "export_requires_warning",
+        "telemetry_eligible"
+      ],
+      "type": "object"
+    },
+    "qualification_eligible": {
+      "const": false
+    },
+    "schema": {
+      "const": "plebian.hardware.privacy/v1"
+    },
+    "subprocess": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "const": "fixed-clean"
+        },
+        "path_resolution": {
+          "const": "fixed-system-path"
+        },
+        "shell": {
+          "const": false
+        },
+        "stderr": {
+          "const": "discard"
+        },
+        "stdin": {
+          "const": "dev-null"
+        },
+        "stdout_bytes": {
+          "const": 65536
+        },
+        "timeout_seconds": {
+          "const": 5
+        }
+      },
+      "required": [
+        "environment",
+        "path_resolution",
+        "shell",
+        "stderr",
+        "stdin",
+        "stdout_bytes",
+        "timeout_seconds"
+      ],
+      "type": "object"
+    },
+    "unknown_policy": {
+      "const": "unknown-not-zero-or-pass"
+    }
+  },
+  "required": [
+    "schema",
+    "collection",
+    "observation_projection",
+    "subprocess",
+    "cache",
+    "capability_digest",
+    "helper_boundary",
+    "diagnostics",
+    "unknown_policy",
+    "qualification_eligible"
+  ],
+  "title": "Candidate plebian.hardware.privacy/v1",
+  "type": "object"
+}

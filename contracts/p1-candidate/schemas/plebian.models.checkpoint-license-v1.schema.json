@@ -1,0 +1,206 @@
+{
+  "$comment": "Additive Track D admission metadata. A checkpoint licence decision cannot select or qualify a model and carries no fit evidence.",
+  "$defs": {
+    "sha1": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:model-checkpoint-license:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "checkpoint_filename": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+          "type": "string"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_card_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9_-]+/[a-z0-9._-]+$",
+          "type": "string"
+        },
+        "provider": {
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+          "type": "string"
+        },
+        "source_commit": {
+          "$ref": "#/$defs/sha1"
+        },
+        "source_revision_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_tree": {
+          "$ref": "#/$defs/sha1"
+        }
+      },
+      "required": [
+        "provider",
+        "model_id",
+        "source_commit",
+        "source_tree",
+        "source_revision_label",
+        "checkpoint_filename",
+        "bytes",
+        "content_sha256",
+        "model_card_sha256"
+      ],
+      "type": "object"
+    },
+    "decision": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_repository_cloning_permitted": {
+          "type": "boolean"
+        },
+        "authority_document_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "basis": {
+          "enum": [
+            "model-repository-declaration",
+            "standalone-artifact-license"
+          ]
+        },
+        "cloning_permitted_as_license_matter": {
+          "type": "boolean"
+        },
+        "code_license_inference": {
+          "const": false
+        },
+        "decision_id": {
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "cleared-for-comparison",
+            "eligible-unselected"
+          ]
+        },
+        "example_audio_in_scope": {
+          "const": false
+        },
+        "license_expression": {
+          "pattern": "^[A-Za-z0-9.+-]+$",
+          "type": "string"
+        },
+        "license_text_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "obligations": {
+          "items": {
+            "enum": [
+              "bind-source-evidence",
+              "include-complete-license-text",
+              "mark-onnx-conversion-modified",
+              "preserve-applicable-notices"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "redistributable": {
+          "type": "boolean"
+        },
+        "scope": {
+          "const": "checkpoint-digest-only"
+        },
+        "training_data_rights": {
+          "const": "not-determined"
+        },
+        "use_restricted": {
+          "type": "boolean"
+        },
+        "weight_grant": {
+          "const": true
+        }
+      },
+      "required": [
+        "decision_id",
+        "authority_document_sha256",
+        "basis",
+        "code_license_inference",
+        "weight_grant",
+        "license_expression",
+        "license_text_sha256",
+        "scope",
+        "redistributable",
+        "use_restricted",
+        "cloning_permitted_as_license_matter",
+        "artifact_repository_cloning_permitted",
+        "training_data_rights",
+        "example_audio_in_scope",
+        "obligations",
+        "disposition"
+      ],
+      "type": "object"
+    },
+    "fit_claims_present": {
+      "const": false
+    },
+    "qualification_eligible": {
+      "const": false
+    },
+    "schema": {
+      "const": "plebian.models.checkpoint-license/v1"
+    },
+    "selection": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_selected": {
+          "const": false
+        },
+        "local_onnx_conversion_required_if_selected": {
+          "const": true
+        },
+        "mirror_onnx_cleared": {
+          "const": false
+        },
+        "profile_selected": {
+          "const": false
+        },
+        "runtime_selected": {
+          "const": false
+        }
+      },
+      "required": [
+        "artifact_selected",
+        "profile_selected",
+        "runtime_selected",
+        "mirror_onnx_cleared",
+        "local_onnx_conversion_required_if_selected"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "artifact",
+    "decision",
+    "selection",
+    "fit_claims_present",
+    "qualification_eligible"
+  ],
+  "title": "Candidate plebian.models.checkpoint-license/v1",
+  "type": "object"
+}

@@ -102,6 +102,30 @@ class ProbeBoundaryTests(unittest.TestCase):
             directory.mkdir()
             self.assertIsNone(probe._read_bytes(directory))
 
+    def test_identifier_paths_and_final_symlinks_are_never_read(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "safe-target"
+            target.write_text("private-value\n", encoding="ascii")
+            serial = root / "serial"
+            serial.write_text("private-value\n", encoding="ascii")
+            alias = root / "safe-alias"
+            alias.symlink_to(target)
+            self.assertIsNone(probe._read_text(serial))
+            self.assertIsNone(probe._read_text(alias))
+
+    def test_probe_process_boundary_matches_privacy_contract(self) -> None:
+        self.assertEqual(probe.SUBPROCESS_TIMEOUT_SECONDS, 5)
+        self.assertEqual(probe.SUBPROCESS_STDOUT_BYTES, 65536)
+        self.assertEqual(
+            probe.SUBPROCESS_ENVIRONMENT,
+            {
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+                "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+            },
+        )
+
     def test_schema_tokens_fail_closed(self) -> None:
         self.assertEqual(probe._safe_token("nvidia-uvm"), "nvidia-uvm")
         self.assertIsNone(probe._safe_token("value with spaces"))
@@ -185,24 +209,43 @@ class ProbeBoundaryTests(unittest.TestCase):
                 mock.patch.object(
                     probe,
                     "_run_bounded",
-                    return_value=(0, b"00000000:01:00.0, 555.42.02\n"),
-                ),
+                    return_value=(0, b"00000000:01:00.0, 555.42.02, 24564\n"),
+                ) as run,
             ):
                 self.assertEqual(
                     probe._nvidia_probe(device),
-                    ("available", "executable-probe", "555.42.02"),
+                    (
+                        "available",
+                        "executable-probe",
+                        "555.42.02",
+                        24564 * 1024**2,
+                    ),
+                )
+                arguments = run.call_args.args[1]
+                self.assertEqual(
+                    arguments,
+                    [
+                        "--query-gpu=pci.bus_id,driver_version,memory.total",
+                        "--format=csv,noheader,nounits",
+                    ],
+                )
+                self.assertFalse(
+                    any(
+                        forbidden in " ".join(arguments).lower()
+                        for forbidden in ("uuid", "serial", "name", "mac", "ip")
+                    )
                 )
             with (
                 mock.patch.object(probe, "_find_executable", return_value="/usr/bin/nvidia-smi"),
                 mock.patch.object(
                     probe,
                     "_run_bounded",
-                    return_value=(0, b"not-a-bdf, 555.42.02\n"),
+                    return_value=(0, b"not-a-bdf, 555.42.02, 24564\n"),
                 ),
             ):
                 self.assertEqual(
                     probe._nvidia_probe(device),
-                    ("unknown", "contradictory", None),
+                    ("unknown", "contradictory", None, None),
                 )
 
     def test_library_scope_is_strict(self) -> None:

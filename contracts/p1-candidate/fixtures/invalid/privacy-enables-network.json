@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/privacy/default-local.json",
+  "expected": "False was expected",
+  "path": "/collection/network_used",
+  "value": true
+}

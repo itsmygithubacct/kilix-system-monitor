@@ -1,0 +1,46 @@
+{
+  "artifact": {
+    "bytes": 28036335,
+    "checkpoint_filename": "campplus_cn_common.bin",
+    "content_sha256": "3388cf5fd3493c9ac9c69851d8e7a8badcfb4f3dc631020c4961371646d5ada8",
+    "model_card_sha256": "9bd58b989a534fa0121c8d10e62c0cce9080a9a9aeb2499bb429676f9c17cc3a",
+    "model_id": "iic/speech_campplus_sv_zh-cn_16k-common",
+    "provider": "iic-modelscope",
+    "source_commit": "930086088e5c5fa8a3f911c20795ca72f7f16397",
+    "source_revision_label": "v2.0.2",
+    "source_tree": "d58e716798173af958ac944d933f0bb3d27ead58"
+  },
+  "decision": {
+    "artifact_repository_cloning_permitted": true,
+    "authority_document_sha256": "54b36539688fe450074a0105a2e43719837c321e4cf0eff8d7884a2d92ad21ad",
+    "basis": "model-repository-declaration",
+    "cloning_permitted_as_license_matter": true,
+    "code_license_inference": false,
+    "decision_id": "f104-campp-chinese-common-2026-08-25",
+    "disposition": "eligible-unselected",
+    "example_audio_in_scope": false,
+    "license_expression": "Apache-2.0",
+    "license_text_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "obligations": [
+      "bind-source-evidence",
+      "include-complete-license-text",
+      "mark-onnx-conversion-modified",
+      "preserve-applicable-notices"
+    ],
+    "redistributable": true,
+    "scope": "checkpoint-digest-only",
+    "training_data_rights": "not-determined",
+    "use_restricted": false,
+    "weight_grant": true
+  },
+  "fit_claims_present": false,
+  "qualification_eligible": false,
+  "schema": "plebian.models.checkpoint-license/v1",
+  "selection": {
+    "artifact_selected": false,
+    "local_onnx_conversion_required_if_selected": true,
+    "mirror_onnx_cleared": false,
+    "profile_selected": false,
+    "runtime_selected": false
+  }
+}

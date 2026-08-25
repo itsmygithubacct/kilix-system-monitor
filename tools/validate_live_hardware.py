@@ -70,6 +70,16 @@ def main() -> int:
     validator = _candidate_module()
     available = validator.validators()
     contract = validator.load_json(CANDIDATE / "invocation-contract.json")
+    privacy_contract = validator.load_json(
+        CANDIDATE / "fixtures" / "privacy" / "default-local.json"
+    )
+    privacy_errors = validator.validate_document(
+        "plebian.hardware.privacy/v1", privacy_contract, available
+    )
+    if privacy_errors:
+        raise RuntimeError(
+            "default privacy contract is invalid: " + "; ".join(privacy_errors)
+        )
     by_command = {
         item["command_id"]: item
         for item in contract["commands"]
@@ -95,6 +105,10 @@ def main() -> int:
             or capture.get("qualification_eligible") is not False
         ):
             raise RuntimeError(f"{command} crossed the unprivileged local boundary")
+        if document["data"].get("never_collected") != privacy_contract["collection"]["never_collected"]:
+            raise RuntimeError(f"{command} does not carry the contracted denylist")
+        if document["data"].get("privacy") != privacy_contract["observation_projection"]:
+            raise RuntimeError(f"{command} differs from the contracted privacy projection")
         observed.append(document)
 
     show = _invoke(["show"])
@@ -119,7 +133,7 @@ def main() -> int:
     print(
         "PASS: exact show/inventory/gpu argv; two live candidate-valid redacted "
         f"observations; unknown counts {unknown_counts}; GPU counts {gpu_counts}; "
-        "no network, privilege, or qualification claim"
+        "privacy contract enforced; no network, privilege, or qualification claim"
     )
     return 0
 
