@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
@@ -14,20 +15,25 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CANDIDATE = ROOT / "contracts" / "p1-candidate"
 SOURCE = ROOT / "components" / "plebian-hardware" / "src"
 TIMEOUT_SECONDS = 15
 MAX_STDOUT_BYTES = 4 * 1024 * 1024
 MAX_DIAGNOSTIC_BYTES = 4096
 
 
-def _candidate_module() -> ModuleType:
-    path = CANDIDATE / "tools" / "validate.py"
-    spec = importlib.util.spec_from_file_location("f106_candidate_validator", path)
+def _candidate_module(
+    validator_path: Path,
+    candidate_root: Path,
+    site_packages: Path,
+) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "f106_external_candidate_validator", validator_path
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError("candidate validator cannot be loaded")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    module.configure_boundary(candidate_root, site_packages)
     return module
 
 
@@ -37,13 +43,26 @@ def _environment() -> dict[str, str]:
         "LC_ALL": "C.UTF-8",
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "PYTHONDONTWRITEBYTECODE": "1",
-        "PYTHONPATH": str(SOURCE),
     }
 
 
 def _invoke(arguments: list[str]) -> subprocess.CompletedProcess[bytes]:
+    bootstrap = (
+        "import runpy,sys; "
+        "sys.path.insert(0,sys.argv.pop(1)); "
+        "runpy.run_module('plebian_hardware',run_name='__main__')"
+    )
     return subprocess.run(
-        [sys.executable, "-m", "plebian_hardware", *arguments],
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            bootstrap,
+            str(SOURCE),
+            *arguments,
+        ],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -67,11 +86,21 @@ def _json_document(stdout: bytes) -> dict[str, Any]:
 
 
 def main() -> int:
-    validator = _candidate_module()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--candidate-root", type=Path, required=True)
+    parser.add_argument("--site-packages", type=Path, required=True)
+    parser.add_argument("--validator", type=Path, required=True)
+    arguments = parser.parse_args()
+    candidate = arguments.candidate_root.resolve(strict=True)
+    validator = _candidate_module(
+        arguments.validator.resolve(strict=True),
+        candidate,
+        arguments.site_packages.resolve(strict=True),
+    )
     available = validator.validators()
-    contract = validator.load_json(CANDIDATE / "invocation-contract.json")
+    contract = validator.load_json(candidate / "invocation-contract.json")
     privacy_contract = validator.load_json(
-        CANDIDATE / "fixtures" / "privacy" / "default-local.json"
+        candidate / "fixtures" / "privacy" / "default-local.json"
     )
     privacy_errors = validator.validate_document(
         "plebian.hardware.privacy/v1", privacy_contract, available

@@ -42,11 +42,20 @@ staging must refuse.
 
 Use the release-pinned uv 0.12.5:
 
-    make check
+    /absolute/path/to/release-pinned-uv-0.12.5 sync --locked --offline \
+      --no-install-project --managed-python --no-python-downloads --python 3.12.8
+    make check UV=/absolute/path/to/release-pinned-uv-0.12.5
 
 The locked aggregate environment includes the exact uv-build 0.12.5 backend
 needed by both component sdists, so the package gate can stay offline after the
 normal locked environment sync instead of depending on an unrelated cache hit.
+
+The P1 candidate is checked through `tools/validate_candidate`, an external
+shell boundary that refuses an unpinned uv or Python, closes the candidate's
+complete file set before Python starts, then runs the external semantic
+validator with `-I -S -B` from a private empty directory and an allowlisted
+environment. Candidate-root `sitecustomize.py` and `usercustomize.py` files are
+therefore rejected before they can execute.
 
 The aggregate check verifies contract integrity and negative fixtures, the
 imported telemetry suite, the hardware unit boundaries, live inventory/GPU

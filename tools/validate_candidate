@@ -1,0 +1,143 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+readonly EXPECTED_UV_SHA256="b65f23a420c4acc96427efb30e5ed9bc0f7e25d2d712000f6ede77c1a0de5f46"
+readonly EXPECTED_PYTHON_SHA256="0dc3a692fa85fcdb7f1a5877d2adf179809ac417a07ffde2373c832863800a15"
+readonly EXPECTED_PROJECT_SHA256="36ebc3bbb7a53396280d7658339980f79c60f2c86eb93b7e1a34fd1abcb31a0d"
+readonly EXPECTED_LOCK_SHA256="26e317988dca9d10ab17744a54d0a9e9ded7a415b200b3d2ec7d0badb74073b4"
+readonly EXPECTED_VALIDATOR_SHA256="dea1d7bb404472df5432d1d950ef3edde4d85e65fdf8aa9c35c7d2666192a7d0"
+readonly EXPECTED_LIVE_VALIDATOR_SHA256="35ad94a9bf4bdad7f5a9cac5786a8273504e9cb0b5b436c1e006deee084a669a"
+readonly EXPECTED_CANDIDATE_MANIFEST_SHA256="45aa4c84620a063610fb9a75f37225c8eb967940c7bfa5fce22eb398bf33aa86"
+readonly FIXED_PATH="/usr/bin:/bin"
+LC_ALL=C.UTF-8
+export LC_ALL
+
+fail() {
+    /usr/bin/printf 'FAIL: external P1 candidate gate: %s\n' "$*" >&2
+    exit 1
+}
+
+digest() {
+    /usr/bin/sha256sum "$1" | /usr/bin/cut -d ' ' -f 1
+}
+
+check_digest() {
+    expected=$1
+    path=$2
+    label=$3
+    observed=$(digest "$path") || fail "cannot hash $label"
+    [ "$observed" = "$expected" ] || fail "$label digest mismatch"
+}
+
+case "${UV-}" in
+    /*) ;;
+    *) fail "UV must name the absolute release-pinned uv 0.12.5 executable" ;;
+esac
+
+script_path=$(/usr/bin/readlink -f -- "$0") || fail "cannot resolve launcher path"
+tools_root=$(/usr/bin/dirname -- "$script_path")
+root=$(/usr/bin/realpath -e -- "$tools_root/..") || fail "cannot resolve repository root"
+candidate=$root/contracts/p1-candidate
+manifest=$candidate/CANDIDATE-SHA256SUMS
+validator=$root/tools/validate_candidate.py
+live_validator=$root/tools/validate_live_hardware.py
+project=$root/pyproject.toml
+lock=$root/uv.lock
+uv_path=$(/usr/bin/realpath -e -- "$UV") || fail "cannot resolve UV"
+python_path=$(/usr/bin/realpath -e -- "$root/.venv/bin/python") || fail "locked Python environment is absent"
+site_packages=$root/.venv/lib/python3.12/site-packages
+
+[ -x "$uv_path" ] || fail "UV is not executable"
+[ -x "$python_path" ] || fail "locked Python is not executable"
+[ -d "$candidate" ] || fail "candidate root is absent"
+[ -d "$site_packages" ] || fail "locked site-packages is absent"
+
+check_digest "$EXPECTED_UV_SHA256" "$uv_path" "uv"
+check_digest "$EXPECTED_PYTHON_SHA256" "$python_path" "Python"
+check_digest "$EXPECTED_PROJECT_SHA256" "$project" "pyproject.toml"
+check_digest "$EXPECTED_LOCK_SHA256" "$lock" "uv.lock"
+check_digest "$EXPECTED_VALIDATOR_SHA256" "$validator" "external validator"
+check_digest "$EXPECTED_CANDIDATE_MANIFEST_SHA256" "$manifest" "candidate manifest"
+for argument in "$@"; do
+    if [ "$argument" = "--live-hardware" ]; then
+        check_digest "$EXPECTED_LIVE_VALIDATOR_SHA256" "$live_validator" \
+            "external live-hardware validator"
+    fi
+done
+
+unexpected=$(/usr/bin/find "$candidate" ! -type d ! -type f -print -quit)
+[ -z "$unexpected" ] || fail "candidate tree contains a symlink or non-file entry"
+
+control_root=$(/usr/bin/mktemp -d "/tmp/kilix-p1-gate.XXXXXXXX") \
+    || fail "cannot create private control directory"
+cleanup() {
+    /usr/bin/rm -rf -- "$control_root"
+}
+trap cleanup EXIT HUP INT TERM
+trusted_cwd=$control_root/empty
+/usr/bin/mkdir -- "$trusted_cwd"
+
+(
+    cd "$candidate"
+    /usr/bin/sha256sum --check --strict --quiet CANDIDATE-SHA256SUMS
+) || fail "candidate file digest check failed"
+
+(
+    cd "$candidate"
+    /usr/bin/find . -type f -printf '%p\0' | /usr/bin/sort -z
+) >"$control_root/observed-files"
+(
+    /usr/bin/awk '{print substr($0, 67)}' "$manifest"
+    /usr/bin/printf '%s\n' './CANDIDATE-SHA256SUMS'
+) | /usr/bin/sort | /usr/bin/tr '\n' '\0' >"$control_root/expected-files"
+/usr/bin/cmp -s "$control_root/expected-files" "$control_root/observed-files" \
+    || fail "candidate tree file set differs from its externally pinned manifest"
+
+cd "$trusted_cwd"
+uv_version=$(
+    /usr/bin/env -i \
+        HOME=/nonexistent \
+        LANG=C.UTF-8 \
+        LC_ALL=C.UTF-8 \
+        PATH="$FIXED_PATH" \
+        TZ=UTC \
+        UV_OFFLINE=1 \
+        UV_PYTHON_DOWNLOADS=never \
+        "$uv_path" --version
+) || fail "cannot execute pinned uv"
+[ "$uv_version" = "uv 0.12.5 (x86_64-unknown-linux-gnu)" ] \
+    || fail "uv version mismatch"
+
+/usr/bin/env -i \
+    HOME=/nonexistent \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PATH="$FIXED_PATH" \
+    TZ=UTC \
+    UV_CACHE_DIR="$control_root/uv-cache" \
+    UV_OFFLINE=1 \
+    UV_PYTHON_DOWNLOADS=never \
+    "$uv_path" sync --check --locked --offline --no-install-project \
+        --project "$root" --python "$python_path" \
+    || fail "locked validator environment is not synchronized"
+
+/usr/bin/env -i \
+    HOME=/nonexistent \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PATH="$FIXED_PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONHASHSEED=0 \
+    TZ=UTC \
+    "$python_path" -I -S -B "$validator" \
+        --candidate-root "$candidate" \
+        --site-packages "$site_packages" \
+        --expected-candidate-manifest-sha256 "$EXPECTED_CANDIDATE_MANIFEST_SHA256" \
+        --launcher "$script_path" \
+        --uv "$uv_path" \
+        --self-test "$@"
+
+/usr/bin/printf '%s\n' \
+    'PASS: external candidate startup boundary, toolchain pins and complete file closure verified'

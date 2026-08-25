@@ -1,4 +1,4 @@
-084019559077076037796a4e9382ed7da378c3930c1239e7c3e24c2af0d5af01  ./README.md
+c64ffbda88c1eaf9b2475884b2cdc43a92bd460626367fc745e119a01396347f  ./README.md
 a0b739740e21baf7b92dcdec48717b5f972bae09b3395a69a06c11edb834f88e  ./fixtures/checkpoint-licenses/campp-chinese-common.json
 249610dc089463f963f14e9dd6471e2f3bab342b8d4fcf504966d1e0fdc35a01  ./fixtures/checkpoint-licenses/campp-english-voxceleb.json
 ecec619ce4d5ae764f22819146e5ba20f09584bd15ea0e97433634fda0f9e19d  ./fixtures/fit/blocked-no-f100-c0.json
@@ -54,4 +54,3 @@ f21a849229c09cd82858b461e1fe12b01400c761a7b48282649b0393c35cb15b  ./schemas/pleb
 70a8590d374e4559b2e868bba294f4c38b28f5cf802327740ae9eb5908e9df14  ./tools/replay-bin/plebian-hardware
 6bd7322b7825459212171d6ec855c90bcf7e26f6b0a2e019f755e53ae5043965  ./tools/replay-bin/plebian-model-sizer
 8ff41f30e98a4be07fa853b225e2bbf683d318a5543bcd8ae530604c7dfcf332  ./tools/replay_cli.py
-772a0a3dfc62fe9216772a10c609305ba2201b13f1673c85364b8ce014e14cc6  ./tools/validate.py

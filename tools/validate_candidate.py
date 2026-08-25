@@ -10,40 +10,43 @@ import ipaddress
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator, FormatChecker
-
-
-ROOT = Path(__file__).resolve().parents[1]
+ROOT: Path
+SCHEMA_PATHS: dict[str, Path]
+FIXTURE_GROUPS: dict[str, Path]
+Draft202012Validator: Any
+FormatChecker: Any
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
-SCHEMA_PATHS = {
-    "f106.invocation-contract/v0-draft": ROOT / "schemas" / "f106.invocation-contract-v0-draft.schema.json",
-    "plebian.hardware/v1": ROOT / "schemas" / "plebian.hardware-v1.schema.json",
-    "plebian.hardware.privacy/v1": ROOT / "schemas" / "plebian.hardware.privacy-v1.schema.json",
-    "kilix.telemetry/schema-1-vnext": ROOT / "schemas" / "kilix.telemetry-vnext.schema.json",
-    "plebian.models.checkpoint-license/v1": ROOT / "schemas" / "plebian.models.checkpoint-license-v1.schema.json",
-    "plebian.models.license-evidence-set/v1": ROOT / "schemas" / "plebian.models.license-evidence-set-v1.schema.json",
-    "plebian.models.profiles/v1": ROOT / "schemas" / "plebian.models.profiles-v1.schema.json",
-    "plebian.models.fit-result/v1": ROOT / "schemas" / "plebian.models.fit-result-v1.schema.json",
-    "plebian.models.install-plan/v1": ROOT / "schemas" / "plebian.models.install-plan-v1.schema.json",
-    "plebian.models.snapshot/v1": ROOT / "schemas" / "plebian.models.snapshot-v1.schema.json",
-    "plebian.cli.response/v1": ROOT / "schemas" / "plebian.cli.response-v1.schema.json",
+EXPECTED_PYTHON_SHA256 = "0dc3a692fa85fcdb7f1a5877d2adf179809ac417a07ffde2373c832863800a15"
+SCHEMA_RELATIVE_PATHS = {
+    "f106.invocation-contract/v0-draft": "schemas/f106.invocation-contract-v0-draft.schema.json",
+    "plebian.hardware/v1": "schemas/plebian.hardware-v1.schema.json",
+    "plebian.hardware.privacy/v1": "schemas/plebian.hardware.privacy-v1.schema.json",
+    "kilix.telemetry/schema-1-vnext": "schemas/kilix.telemetry-vnext.schema.json",
+    "plebian.models.checkpoint-license/v1": "schemas/plebian.models.checkpoint-license-v1.schema.json",
+    "plebian.models.license-evidence-set/v1": "schemas/plebian.models.license-evidence-set-v1.schema.json",
+    "plebian.models.profiles/v1": "schemas/plebian.models.profiles-v1.schema.json",
+    "plebian.models.fit-result/v1": "schemas/plebian.models.fit-result-v1.schema.json",
+    "plebian.models.install-plan/v1": "schemas/plebian.models.install-plan-v1.schema.json",
+    "plebian.models.snapshot/v1": "schemas/plebian.models.snapshot-v1.schema.json",
+    "plebian.cli.response/v1": "schemas/plebian.cli.response-v1.schema.json",
 }
-FIXTURE_GROUPS = {
-    "plebian.hardware/v1": ROOT / "fixtures" / "hardware",
-    "plebian.hardware.privacy/v1": ROOT / "fixtures" / "privacy",
-    "kilix.telemetry/schema-1-vnext": ROOT / "fixtures" / "telemetry-vnext-additive.json",
-    "plebian.models.checkpoint-license/v1": ROOT / "fixtures" / "checkpoint-licenses",
-    "plebian.models.license-evidence-set/v1": ROOT / "fixtures" / "license-evidence",
-    "plebian.models.profiles/v1": ROOT / "fixtures" / "profiles",
-    "plebian.models.fit-result/v1": ROOT / "fixtures" / "fit",
-    "plebian.models.install-plan/v1": ROOT / "fixtures" / "plans",
-    "plebian.cli.response/v1": ROOT / "fixtures" / "responses",
+FIXTURE_GROUP_RELATIVE_PATHS = {
+    "plebian.hardware/v1": "fixtures/hardware",
+    "plebian.hardware.privacy/v1": "fixtures/privacy",
+    "kilix.telemetry/schema-1-vnext": "fixtures/telemetry-vnext-additive.json",
+    "plebian.models.checkpoint-license/v1": "fixtures/checkpoint-licenses",
+    "plebian.models.license-evidence-set/v1": "fixtures/license-evidence",
+    "plebian.models.profiles/v1": "fixtures/profiles",
+    "plebian.models.fit-result/v1": "fixtures/fit",
+    "plebian.models.install-plan/v1": "fixtures/plans",
+    "plebian.cli.response/v1": "fixtures/responses",
 }
 PROHIBITED_KEYS = {
     "asset_tag",
@@ -128,6 +131,85 @@ class ValidationFailure(ValueError):
     pass
 
 
+def configure_boundary(candidate_root: Path, site_packages: Path) -> None:
+    global ROOT, SCHEMA_PATHS, FIXTURE_GROUPS, Draft202012Validator, FormatChecker
+
+    if not sys.flags.isolated:
+        raise ValidationFailure("Python isolated mode is not active")
+    if not sys.flags.no_site:
+        raise ValidationFailure("Python no-site mode is not active")
+    if not sys.dont_write_bytecode:
+        raise ValidationFailure("Python bytecode suppression is not active")
+    if sys.version_info[:3] != (3, 12, 8):
+        raise ValidationFailure(
+            "Python version mismatch: expected 3.12.8, observed "
+            + ".".join(str(part) for part in sys.version_info[:3])
+        )
+    executable = Path(sys.executable).resolve(strict=True)
+    if hashlib.sha256(executable.read_bytes()).hexdigest() != EXPECTED_PYTHON_SHA256:
+        raise ValidationFailure("Python executable digest mismatch")
+    forbidden_environment = {
+        "BASH_ENV",
+        "ENV",
+        "LD_AUDIT",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "PYTHONHOME",
+        "PYTHONINSPECT",
+        "PYTHONPATH",
+        "PYTHONPLATLIBDIR",
+        "PYTHONSTARTUP",
+        "PYTHONUSERBASE",
+    }
+    present = sorted(forbidden_environment.intersection(os.environ))
+    if present:
+        raise ValidationFailure(
+            "forbidden startup environment variables reached the validator: "
+            + ", ".join(present)
+        )
+
+    ROOT = candidate_root.resolve(strict=True)
+    resolved_site_packages = site_packages.resolve(strict=True)
+    if not ROOT.is_dir():
+        raise ValidationFailure("candidate root is not a directory")
+    if not resolved_site_packages.is_dir():
+        raise ValidationFailure("locked site-packages path is not a directory")
+    if ROOT == resolved_site_packages or ROOT in resolved_site_packages.parents:
+        raise ValidationFailure("locked dependencies are inside the candidate root")
+
+    cwd = Path.cwd().resolve(strict=True)
+    if cwd == ROOT or ROOT in cwd.parents or cwd in ROOT.parents:
+        raise ValidationFailure("authority cwd overlaps the candidate root")
+    if any(cwd.iterdir()):
+        raise ValidationFailure("authority cwd is not empty")
+    for entry in sys.path:
+        if not entry:
+            raise ValidationFailure("an empty import-path entry reached the validator")
+        try:
+            resolved_entry = Path(entry).resolve(strict=False)
+        except OSError as error:
+            raise ValidationFailure(f"cannot resolve import-path entry: {error}") from error
+        if resolved_entry == ROOT or ROOT in resolved_entry.parents or resolved_entry in ROOT.parents:
+            raise ValidationFailure("candidate root is import-visible before validation")
+
+    sys.path.append(str(resolved_site_packages))
+    try:
+        from jsonschema import Draft202012Validator as Validator
+        from jsonschema import FormatChecker as Checker
+    except ImportError as error:
+        raise ValidationFailure(f"locked jsonschema environment is unavailable: {error}") from error
+    Draft202012Validator = Validator
+    FormatChecker = Checker
+    SCHEMA_PATHS = {
+        identity: ROOT / relative
+        for identity, relative in SCHEMA_RELATIVE_PATHS.items()
+    }
+    FIXTURE_GROUPS = {
+        identity: ROOT / relative
+        for identity, relative in FIXTURE_GROUP_RELATIVE_PATHS.items()
+    }
+
+
 def load_json(path: Path) -> Any:
     if path.stat().st_size > MAX_DOCUMENT_BYTES:
         raise ValidationFailure(f"{path}: document exceeds {MAX_DOCUMENT_BYTES} bytes")
@@ -156,8 +238,13 @@ def compact_sha256(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def verify_candidate_integrity() -> tuple[list[str], int]:
+def verify_candidate_integrity(expected_manifest_sha256: str) -> tuple[list[str], int]:
     errors: list[str] = []
+    for path in sorted(ROOT.rglob("*")):
+        if path.is_symlink():
+            errors.append(f"candidate tree contains a symlink: {path.relative_to(ROOT)}")
+        elif not path.is_file() and not path.is_dir():
+            errors.append(f"candidate tree contains a non-file entry: {path.relative_to(ROOT)}")
     for path in sorted(ROOT.rglob("*.json")):
         if path.read_bytes() != canonical_bytes(load_json(path)):
             errors.append(f"non-canonical JSON: {path.relative_to(ROOT)}")
@@ -171,10 +258,14 @@ def verify_candidate_integrity() -> tuple[list[str], int]:
         for path in files
     )
     try:
-        actual = (ROOT / "CANDIDATE-SHA256SUMS").read_text(encoding="ascii")
+        manifest_path = ROOT / "CANDIDATE-SHA256SUMS"
+        manifest_bytes = manifest_path.read_bytes()
+        actual = manifest_bytes.decode("ascii")
     except (OSError, UnicodeError) as error:
         errors.append(f"cannot read CANDIDATE-SHA256SUMS: {error}")
     else:
+        if hashlib.sha256(manifest_bytes).hexdigest() != expected_manifest_sha256:
+            errors.append("CANDIDATE-SHA256SUMS differs from the external authority pin")
         if actual != expected:
             errors.append("CANDIDATE-SHA256SUMS does not match the complete candidate tree")
     return errors, len(files)
@@ -637,12 +728,240 @@ def run_replay_checks(contract: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _control_hook(marker: Path) -> str:
+    return (
+        "from pathlib import Path\n"
+        f"Path({str(marker)!r}).write_text('executed\\n', encoding='utf-8')\n"
+        "print('FORGED-P1-PASS')\n"
+    )
+
+
+def _run_launcher(
+    launcher: Path,
+    root: Path,
+    uv: Path,
+    environment: dict[str, str],
+) -> subprocess.CompletedProcess[bytes]:
+    child_environment = dict(environment)
+    child_environment["UV"] = str(uv)
+    child_environment["PYTHONPATH"] = f":{root}"
+    return subprocess.run(
+        ["/bin/sh", str(launcher), "--startup-control-child"],
+        cwd=root,
+        env=child_environment,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=120,
+    )
+
+
+def startup_boundary_controls(launcher: Path, uv: Path) -> list[str]:
+    errors: list[str] = []
+    repository = ROOT.parents[1]
+    launcher = launcher.resolve(strict=True)
+    uv = uv.resolve(strict=True)
+    if launcher.parent != repository / "tools":
+        return ["startup-control launcher is not the repository's external tool"]
+    if launcher == ROOT or ROOT in launcher.parents:
+        return ["startup-control launcher is inside the candidate root"]
+
+    def expect_failure(
+        label: str,
+        control_launcher: Path,
+        control_root: Path,
+        expected: bytes,
+        environment: dict[str, str],
+    ) -> None:
+        completed = _run_launcher(
+            control_launcher,
+            control_root,
+            uv,
+            environment,
+        )
+        if completed.returncode == 0:
+            errors.append(f"{label}: altered launch unexpectedly passed")
+        if expected not in completed.stderr:
+            errors.append(
+                f"{label}: missing fail-closed diagnostic {expected.decode('ascii')!r}"
+            )
+        if b"FORGED-P1-PASS" in completed.stdout + completed.stderr:
+            errors.append(f"{label}: hostile startup hook forged output")
+
+    with tempfile.TemporaryDirectory(prefix="kilix-p1-startup-control-") as temporary:
+        temporary_root = Path(temporary)
+        control_root = temporary_root / "repository"
+        (control_root / "tools").mkdir(parents=True)
+        (control_root / "contracts").mkdir()
+        shutil.copy2(repository / "pyproject.toml", control_root / "pyproject.toml")
+        shutil.copy2(repository / "uv.lock", control_root / "uv.lock")
+        shutil.copy2(launcher, control_root / "tools" / "validate_candidate")
+        shutil.copy2(
+            repository / "tools" / "validate_candidate.py",
+            control_root / "tools" / "validate_candidate.py",
+        )
+        shutil.copytree(ROOT, control_root / "contracts" / "p1-candidate")
+        shutil.copytree(repository / ".venv", control_root / ".venv", symlinks=True)
+
+        root_site_marker = temporary_root / "root-site-marker"
+        root_user_marker = temporary_root / "root-user-marker"
+        (control_root / "sitecustomize.py").write_text(
+            _control_hook(root_site_marker), encoding="utf-8"
+        )
+        (control_root / "usercustomize.py").write_text(
+            _control_hook(root_user_marker), encoding="utf-8"
+        )
+        hostile_environment = dict(os.environ)
+        baseline = _run_launcher(
+            control_root / "tools" / "validate_candidate",
+            control_root,
+            uv,
+            hostile_environment,
+        )
+        if baseline.returncode != 0:
+            diagnostic = baseline.stderr.decode("utf-8", errors="replace")[-2000:]
+            errors.append(f"isolated production-shape control failed: {diagnostic}")
+        if b"FORGED-P1-PASS" in baseline.stdout + baseline.stderr:
+            errors.append("repository-root startup hook forged gate output")
+        if root_site_marker.exists() or root_user_marker.exists():
+            errors.append("repository-root startup hook executed before validation")
+
+        candidate_site_marker = temporary_root / "candidate-site-marker"
+        candidate_user_marker = temporary_root / "candidate-user-marker"
+        candidate = control_root / "contracts" / "p1-candidate"
+        (candidate / "sitecustomize.py").write_text(
+            _control_hook(candidate_site_marker), encoding="utf-8"
+        )
+        (candidate / "usercustomize.py").write_text(
+            _control_hook(candidate_user_marker), encoding="utf-8"
+        )
+        expect_failure(
+            "candidate-extra control",
+            control_root / "tools" / "validate_candidate",
+            control_root,
+            b"candidate tree file set differs from its externally pinned manifest",
+            hostile_environment,
+        )
+        if candidate_site_marker.exists() or candidate_user_marker.exists():
+            errors.append("candidate-root startup hook executed before exact-set refusal")
+        (candidate / "sitecustomize.py").unlink()
+        (candidate / "usercustomize.py").unlink()
+
+        launcher_text = (control_root / "tools" / "validate_candidate").read_text(
+            encoding="utf-8"
+        )
+        mutations = (
+            (
+                "isolated-mode control",
+                '"$python_path" -I -S -B "$validator"',
+                '"$python_path" -S -B "$validator"',
+                b"Python isolated mode is not active",
+            ),
+            (
+                "no-site control",
+                '"$python_path" -I -S -B "$validator"',
+                '"$python_path" -I -B "$validator"',
+                b"Python no-site mode is not active",
+            ),
+            (
+                "working-directory control",
+                'cd "$trusted_cwd"',
+                'cd "$root"',
+                b"authority cwd overlaps the candidate root",
+            ),
+            (
+                "environment control",
+                "/usr/bin/env -i \\\n"
+                "    HOME=/nonexistent \\\n"
+                "    LANG=C.UTF-8 \\\n"
+                "    LC_ALL=C.UTF-8 \\\n"
+                "    PATH=\"$FIXED_PATH\" \\\n"
+                "    PYTHONDONTWRITEBYTECODE=1",
+                "/usr/bin/env \\\n"
+                "    HOME=/nonexistent \\\n"
+                "    LANG=C.UTF-8 \\\n"
+                "    LC_ALL=C.UTF-8 \\\n"
+                "    PATH=\"$FIXED_PATH\" \\\n"
+                "    PYTHONDONTWRITEBYTECODE=1",
+                b"forbidden startup environment variables reached the validator",
+            ),
+        )
+        for label, old, new, expected in mutations:
+            if launcher_text.count(old) != 1:
+                errors.append(f"{label}: production launch site is not uniquely registered")
+                continue
+            mutated = control_root / "tools" / ("validate_candidate-" + label.split()[0])
+            mutated.write_text(launcher_text.replace(old, new, 1), encoding="utf-8")
+            expect_failure(label, mutated, control_root, expected, hostile_environment)
+
+    return errors
+
+
+def run_live_hardware_check(
+    candidate_root: Path,
+    site_packages: Path,
+) -> list[str]:
+    repository = ROOT.parents[1]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            str(repository / "tools" / "validate_live_hardware.py"),
+            "--candidate-root",
+            str(candidate_root.resolve(strict=True)),
+            "--site-packages",
+            str(site_packages.resolve(strict=True)),
+            "--validator",
+            str(repository / "tools" / "validate_candidate.py"),
+        ],
+        cwd=Path.cwd(),
+        env={
+            "HOME": "/nonexistent",
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONHASHSEED": "0",
+            "TZ": "UTC",
+        },
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=120,
+    )
+    if completed.returncode != 0:
+        diagnostic = completed.stderr.decode("utf-8", errors="replace")[-2000:]
+        return [f"isolated live-hardware check failed: {diagnostic}"]
+    if completed.stderr:
+        return ["isolated live-hardware check wrote stderr on success"]
+    if len(completed.stdout) > 16 * 1024:
+        return ["isolated live-hardware check exceeded its output boundary"]
+    sys.stdout.buffer.write(completed.stdout)
+    return []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--candidate-root", type=Path, required=True)
+    parser.add_argument("--site-packages", type=Path, required=True)
+    parser.add_argument("--expected-candidate-manifest-sha256", required=True)
+    parser.add_argument("--launcher", type=Path, required=True)
+    parser.add_argument("--uv", type=Path, required=True)
     parser.add_argument("--self-test", action="store_true", help="also apply invalid mutation fixtures and execute replay binaries")
+    parser.add_argument("--live-hardware", action="store_true", help="also run the isolated live D2 hardware contract check")
+    parser.add_argument("--startup-control-child", action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args()
+    if not re.fullmatch(r"[0-9a-f]{64}", arguments.expected_candidate_manifest_sha256):
+        raise ValidationFailure("candidate manifest authority pin is not a SHA-256 digest")
+    configure_boundary(arguments.candidate_root, arguments.site_packages)
     available = validators()
-    integrity_errors, hashed_count = verify_candidate_integrity()
+    integrity_errors, hashed_count = verify_candidate_integrity(
+        arguments.expected_candidate_manifest_sha256
+    )
     contract = load_json(ROOT / "invocation-contract.json")
     if contract.get("schema") != "f106.invocation-contract/v0-draft" or contract.get("candidate") is not True:
         raise ValidationFailure("invocation contract has an unexpected identity or freeze state")
@@ -686,6 +1005,12 @@ def main() -> int:
                 failures.append(f"{path.relative_to(ROOT)}: expected rejection containing {expected!r}; got {errors}")
             invalid_count += 1
         failures.extend(run_replay_checks(contract))
+        if not failures and not arguments.startup_control_child:
+            failures.extend(startup_boundary_controls(arguments.launcher, arguments.uv))
+    if arguments.live_hardware and not failures:
+        failures.extend(
+            run_live_hardware_check(arguments.candidate_root, arguments.site_packages)
+        )
 
     if failures:
         for failure in failures:
@@ -696,6 +1021,8 @@ def main() -> int:
         if arguments.self_test
         else ""
     )
+    if arguments.self_test and not arguments.startup_control_child:
+        mode += ", startup isolation controls verified"
     print(
         f"PASS: {len(available)} candidate schemas, {valid_count} valid fixtures{mode}; "
         f"{hashed_count} hashes and canonical JSON verified; no qualification claim"
@@ -706,6 +1033,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except ValidationFailure as error:
+    except (OSError, ValidationFailure, subprocess.TimeoutExpired) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         raise SystemExit(1)
