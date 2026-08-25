@@ -1022,9 +1022,10 @@ def main() -> int:
         else ""
     )
     if arguments.self_test and not arguments.startup_control_child:
-        mode += ", startup isolation controls verified"
+        mode += ", partial developer startup controls exercised; release authority blocked"
     print(
-        f"PASS: {len(available)} candidate schemas, {valid_count} valid fixtures{mode}; "
+        f"PASS (developer-only): {len(available)} candidate schemas, "
+        f"{valid_count} valid fixtures{mode}; "
         f"{hashed_count} hashes and canonical JSON verified; no qualification claim"
     )
     return 0

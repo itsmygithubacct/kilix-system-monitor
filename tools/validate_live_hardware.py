@@ -160,7 +160,8 @@ def main() -> int:
     unknown_counts = [len(document["data"]["unknowns"]) for document in observed]
     gpu_counts = [len(document["data"]["gpus"]) for document in observed]
     print(
-        "PASS: exact show/inventory/gpu argv; two live candidate-valid redacted "
+        "PASS (non-qualifying developer observation): exact show/inventory/gpu "
+        "argv; two live candidate-valid redacted "
         f"observations; unknown counts {unknown_counts}; GPU counts {gpu_counts}; "
         "privacy contract enforced; no network, privilege, or qualification claim"
     )

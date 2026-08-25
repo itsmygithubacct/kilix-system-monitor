@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from plebian_hardware import cli, probe
+from plebian_hardware import cli, probe, state
 
 
 def observation(scope: str = "inventory") -> dict[str, object]:
@@ -19,6 +19,12 @@ def observation(scope: str = "inventory") -> dict[str, object]:
         "gpus": [],
         "unknowns": ["gpu.inventory"],
     }
+
+
+def cache_observation(scope: str = "inventory") -> dict[str, object]:
+    document = probe.collect(scope)
+    document["capture"]["captured_at"] = "2026-08-25T00:00:00Z"
+    return document
 
 
 class CliTests(unittest.TestCase):
@@ -77,6 +83,138 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 70)
         self.assertEqual(stdout, b"")
         self.assertTrue(stderr.endswith(b"\n"))
+
+    def test_refresh_writes_only_a_private_canonical_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "private-state"
+            document = cache_observation()
+            status, stdout, stderr = cli.dispatch(
+                ["refresh"], lambda _: document, state_root=root
+            )
+            self.assertEqual((status, stderr), (0, b""))
+            self.assertIn(b"private 0600", stdout)
+            self.assertNotIn(str(root).encode(), stdout)
+            cached = root / state.CACHE_FILENAME
+            self.assertEqual(cached.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(root.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(state.read_snapshot(root), document)
+            payload = cached.read_bytes()
+            self.assertTrue(payload.endswith(b"\n"))
+            self.assertEqual(payload, state._canonical_bytes(document))
+
+    def test_refresh_refuses_a_symlinked_state_root_or_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            target = base / "target"
+            target.mkdir(mode=0o700)
+            alias = base / "alias"
+            alias.symlink_to(target, target_is_directory=True)
+            status, stdout, stderr = cli.dispatch(
+                ["refresh"], cache_observation, state_root=alias
+            )
+            self.assertEqual((status, stdout), (69, b""))
+            self.assertEqual(stderr, b"plebian-hardware: private state unavailable\n")
+
+            root = base / "private"
+            root.mkdir(mode=0o700)
+            outside = base / "outside"
+            outside.write_text("untouched\n", encoding="utf-8")
+            (root / state.CACHE_FILENAME).symlink_to(outside)
+            status, stdout, stderr = cli.dispatch(
+                ["refresh"], cache_observation, state_root=root
+            )
+            self.assertEqual((status, stdout), (69, b""))
+            self.assertEqual(outside.read_text(encoding="utf-8"), "untouched\n")
+
+    def test_refresh_refuses_and_preserves_an_invalid_existing_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "private"
+            root.mkdir(mode=0o700)
+            cached = root / state.CACHE_FILENAME
+            cached.write_text("not JSON\n", encoding="utf-8")
+            cached.chmod(0o600)
+            status, stdout, stderr = cli.dispatch(
+                ["refresh"], cache_observation, state_root=root
+            )
+            self.assertEqual((status, stdout), (65, b""))
+            self.assertEqual(stderr, b"plebian-hardware: snapshot input refused\n")
+            self.assertEqual(cached.read_text(encoding="utf-8"), "not JSON\n")
+
+    def test_diff_is_redacted_and_ignores_volatile_identity_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            previous = cache_observation()
+            current = json.loads(json.dumps(previous))
+            current["snapshot_id"] = "local:capability-ffffffffffffffff"
+            current["capture"]["captured_at"] = "2026-08-25T01:00:00Z"
+            current["memory"]["total_bytes"] += 1024
+            path = root / "snapshot.json"
+            path.write_bytes(state._canonical_bytes(previous))
+            path.chmod(0o600)
+            status, stdout, stderr = cli.dispatch(
+                ["diff", str(path)], lambda _: current
+            )
+            self.assertEqual((status, stderr), (0, b""))
+            self.assertIn(b"Changed fields: 1", stdout)
+            self.assertIn(b"memory.total", stdout)
+            self.assertNotIn(b"snapshot_id", stdout)
+            self.assertNotIn(b"captured_at", stdout)
+            for forbidden in state.NEVER_COLLECTED:
+                self.assertNotIn(forbidden.encode(), stdout)
+
+    def test_diff_refuses_public_or_duplicate_key_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / "snapshot.json"
+            path.write_bytes(state._canonical_bytes(cache_observation()))
+            path.chmod(0o644)
+            status, stdout, stderr = cli.dispatch(
+                ["diff", str(path)], cache_observation
+            )
+            self.assertEqual((status, stdout), (65, b""))
+            self.assertEqual(stderr, b"plebian-hardware: snapshot input refused\n")
+
+            path.write_text(
+                '{"schema":"plebian.hardware/v1","schema":"plebian.hardware/v1"}\n',
+                encoding="utf-8",
+            )
+            path.chmod(0o600)
+            status, stdout, stderr = cli.dispatch(
+                ["diff", str(path)], cache_observation
+            )
+            self.assertEqual((status, stdout), (65, b""))
+            self.assertEqual(stderr.count(b"\n"), 1)
+
+    def test_doctor_reports_absent_cache_without_exposing_a_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "not-created"
+            status, stdout, stderr = cli.dispatch(
+                ["doctor"], cache_observation, state_root=root
+            )
+            self.assertEqual((status, stderr), (0, b""))
+            self.assertIn(b"Private cache: absent", stdout)
+            self.assertIn(b"blocked pending trusted launcher", stdout)
+            self.assertNotIn(str(root).encode(), stdout)
+
+    def test_state_root_requires_absolute_private_xdg_location(self) -> None:
+        with self.assertRaises(state.StateUnavailable):
+            state.default_state_root({"XDG_STATE_HOME": "relative"})
+        with self.assertRaises(state.StateUnavailable):
+            state.default_state_root({})
+        self.assertEqual(
+            state.default_state_root({"XDG_STATE_HOME": "/private/state"}),
+            Path("/private/state/plebian-hardware"),
+        )
+
+    def test_snapshot_cache_rejects_identifiers_and_qualification(self) -> None:
+        document = cache_observation()
+        document["serial"] = "private"
+        with self.assertRaises(state.SnapshotInvalid):
+            state.validate_snapshot(document)
+        document = cache_observation()
+        document["capture"]["qualification_eligible"] = True
+        with self.assertRaises(state.SnapshotInvalid):
+            state.validate_snapshot(document)
 
 
 class ProbeBoundaryTests(unittest.TestCase):

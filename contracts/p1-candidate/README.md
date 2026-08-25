@@ -35,13 +35,18 @@ new per-artifact contract identities in a successor shape.
 The privacy proposal also requires optional command probes to resolve inside
 the fixed system path and refuses group- or world-writable executables.
 
-From the monorepo root, verify it through the external startup boundary with
+From the monorepo root, exercise the current functional developer check with
 the release-pinned uv 0.12.5 executable:
 
     make contracts-check UV=/absolute/path/to/release-pinned-uv-0.12.5
 
-Expected output names eleven candidate schemas, twenty-one valid fixtures,
+The output names eleven candidate schemas, twenty-one valid fixtures,
 eighteen rejected invalid mutations, replayed success/failure paths, the
-complete candidate file count, canonical JSON, the isolated startup controls,
-and no qualification claim. The validator is deliberately outside this
-candidate tree; `CANDIDATE-SHA256SUMS` is pinned by that external launcher.
+complete candidate file count, canonical JSON, the partial developer startup
+controls, and no qualification claim. It is not P1 freeze or release authority.
+The current repository shell path partially isolates the outer validator, but
+it does not implement the normative retained-descriptor/bootstrap/canonical-
+result contract, and both replay helpers still select site-enabled Python
+through `/usr/bin/env` and inherited `PATH`. P1 remains blocked until the shared
+trusted launcher and Track D replay-interpreter overlay pass their full causal
+mutation packet.

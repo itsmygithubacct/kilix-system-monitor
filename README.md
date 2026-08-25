@@ -40,7 +40,7 @@ staging must refuse.
 
 ## Checks
 
-Use the release-pinned uv 0.12.5:
+Use the release-pinned uv 0.12.5 for a functional developer check:
 
     /absolute/path/to/release-pinned-uv-0.12.5 sync --locked --offline \
       --no-install-project --managed-python --no-python-downloads --python 3.12.8
@@ -50,17 +50,19 @@ The locked aggregate environment includes the exact uv-build 0.12.5 backend
 needed by both component sdists, so the package gate can stay offline after the
 normal locked environment sync instead of depending on an unrelated cache hit.
 
-The P1 candidate is checked through `tools/validate_candidate`, an external
-shell boundary that refuses an unpinned uv or Python, closes the candidate's
-complete file set before Python starts, then runs the external semantic
-validator with `-I -S -B` from a private empty directory and an allowlisted
-environment. Candidate-root `sitecustomize.py` and `usercustomize.py` files are
-therefore rejected before they can execute.
+The current `tools/validate_candidate` shell path has useful partial isolation:
+it refuses an unpinned uv or Python, checks the candidate file set before
+Python, then starts the semantic validator with `-I -S -B` from a private empty
+directory. It is not release authority. The normative startup contract also
+requires an independently accepted launcher/bootstrap, a retained no-follow
+subject descriptor, exact first-process envelope checks, a canonical result
+channel and complete causal mutations. The self-test's two replay helpers still
+select Python through `/usr/bin/env` and inherited `PATH`.
 
-The aggregate check verifies contract integrity and negative fixtures, the
-imported telemetry suite, the hardware unit boundaries, live inventory/GPU
-schema and privacy rules, wheel/sdist contents, and the intentional model-sizer
-block. Hardware checks use no network and no privilege.
+The aggregate developer check exercises contract integrity and negative
+fixtures, the imported telemetry suite, the hardware unit boundaries, live
+inventory/GPU schema and privacy rules, wheel/sdist contents, and the
+intentional model-sizer block. Hardware checks use no network and no privilege.
 
 ## Current boundaries
 
@@ -73,8 +75,11 @@ virtualization. Identifier-named files and final-component symlinks are refused
 at the common read boundary. Optional command probes refuse resolved targets
 outside the fixed system path and group- or world-writable executables.
 
-Not implemented or claimed: P1 freeze, privileged DMI, SMART/NVMe and private
-cache lifecycle, device-bound ROCm/Vulkan/OpenCL success, D3 telemetry vNext,
+Implemented as non-qualifying D2 construction: a private 0600 canonical snapshot
+cache, symlink-refusing descriptor-relative replacement, redacted snapshot diff
+and cache-aware doctor primitives. Not implemented or claimed: the shared
+trusted-launcher profiles, P1 freeze, privileged DMI, SMART/NVMe,
+device-bound ROCm/Vulkan/OpenCL success, D3 telemetry vNext,
 D4 sizing, D5 consumers, or D6 hardware qualification. H3 physical inventory,
 H3 model performance, and AMD/ROCm fit/performance/support remain unqualified
 for 0.2.1.
@@ -84,3 +89,11 @@ payload conveys its required licence/notice bytes or represent different
 obligations per payload in one component. D's licence-evidence fixtures remain
 transfer-ineligible until the release authority's strict-v1/new-identity choice
 is implemented; the existing S120 source/code-provider path remains usable.
+
+Track H causally proved that the old F120 launch shape can return forged zero
+and PASS output before its real validator or tests run. Track D has the same
+shape at its staged console/test and replay boundaries. No `make check` result
+from this repository is qualification or P1-freeze evidence until Track H's
+reference trusted launcher is published and the Track D candidate-validator,
+replay-helper and authority-bearing staged-probe profiles pass the normative
+mutation packet.

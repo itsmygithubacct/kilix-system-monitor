@@ -5,14 +5,19 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
+from . import state
 from .probe import collect
 
 
 MAX_STDOUT_BYTES = 4 * 1024 * 1024
 MAX_DIAGNOSTIC_BYTES = 4096
-USAGE = "usage: plebian-hardware {show|inventory --json|gpu --json}"
+USAGE = (
+    "usage: plebian-hardware "
+    "{show|inventory --json|gpu --json|refresh|diff SNAPSHOT|doctor}"
+)
 WARNINGS = [
     {
         "code": "UNQUALIFIED_LOCAL_OBSERVATION",
@@ -74,8 +79,33 @@ def _human_summary(document: dict[str, Any]) -> str:
     )
 
 
+def _state_root(explicit: Path | None) -> Path:
+    return state.default_state_root() if explicit is None else explicit
+
+
+def _format_change(value: object) -> str:
+    return json.dumps(value, allow_nan=False, separators=(",", ":"), sort_keys=True)
+
+
+def _diff_summary(changes: list[dict[str, Any]]) -> str:
+    lines = [
+        "Hardware snapshot diff: redacted local change view",
+        f"Changed fields: {len(changes)}",
+    ]
+    for change in changes:
+        lines.append(
+            f"{change['field']}: {_format_change(change['before'])} -> "
+            f"{_format_change(change['after'])}"
+        )
+    lines.append("Qualification: unqualified local observation")
+    return "\n".join(lines)
+
+
 def dispatch(
-    arguments: Sequence[str], collector: Collector = collect
+    arguments: Sequence[str],
+    collector: Collector = collect,
+    *,
+    state_root: Path | None = None,
 ) -> tuple[int, bytes, bytes]:
     """Return exit status, stdout and stderr for an exact argv tail."""
     if list(arguments) == ["show"]:
@@ -87,6 +117,15 @@ def dispatch(
     elif list(arguments) == ["gpu", "--json"]:
         mode = "json"
         scope = "gpu"
+    elif list(arguments) == ["refresh"]:
+        mode = "refresh"
+        scope = "inventory"
+    elif len(arguments) == 2 and arguments[0] == "diff":
+        mode = "diff"
+        scope = "inventory"
+    elif list(arguments) == ["doctor"]:
+        mode = "doctor"
+        scope = "inventory"
     else:
         return 2, b"", (USAGE + "\n").encode("utf-8")
 
@@ -94,7 +133,7 @@ def dispatch(
         document = collector(scope)
         if mode == "show":
             payload = (_human_summary(document) + "\n").encode("utf-8")
-        else:
+        elif mode == "json":
             payload = (
                 json.dumps(
                     _json_response(scope, document),
@@ -104,8 +143,33 @@ def dispatch(
                 )
                 + "\n"
             ).encode("utf-8")
+        elif mode == "refresh":
+            state.write_snapshot(_state_root(state_root), document)
+            payload = (
+                "Hardware cache: refreshed private 0600 redacted snapshot\n"
+                "Qualification: unqualified local observation\n"
+            ).encode("utf-8")
+        elif mode == "diff":
+            previous = state.read_snapshot_file(Path(arguments[1]))
+            payload = (
+                _diff_summary(state.snapshot_changes(previous, document)) + "\n"
+            ).encode("utf-8")
+        else:
+            state.validate_snapshot(document)
+            cache = state.cache_status(_state_root(state_root))
+            payload = (
+                "Hardware doctor: redacted local checks\n"
+                "Probe document: valid\n"
+                f"Private cache: {cache}\n"
+                "Startup authority: blocked pending trusted launcher\n"
+                "Qualification: unqualified\n"
+            ).encode("utf-8")
         if len(payload) > MAX_STDOUT_BYTES:
             raise ValueError("output boundary exceeded")
+    except state.SnapshotInvalid:
+        return 65, b"", b"plebian-hardware: snapshot input refused\n"
+    except state.StateUnavailable:
+        return 69, b"", b"plebian-hardware: private state unavailable\n"
     except Exception:
         diagnostic = b"plebian-hardware: local hardware observation failed\n"
         return 70, b"", diagnostic[:MAX_DIAGNOSTIC_BYTES]

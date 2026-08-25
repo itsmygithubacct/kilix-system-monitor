@@ -17,12 +17,15 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
     "kilix-telemetry": {
         "path": ROOT / "components" / "kilix-telemetry",
-        "module": "kilix_telemetry/__init__.py",
+        "modules": ("kilix_telemetry/__init__.py",),
         "version": "0.1.2",
     },
     "plebian-hardware": {
         "path": ROOT / "components" / "plebian-hardware",
-        "module": "plebian_hardware/__init__.py",
+        "modules": (
+            "plebian_hardware/__init__.py",
+            "plebian_hardware/state.py",
+        ),
         "version": "0.1.0",
     },
 }
@@ -38,12 +41,15 @@ def _safe(names: list[str]) -> None:
             raise RuntimeError(f"distribution has private/build member: {name}")
 
 
-def _inspect_wheel(path: Path, module: str, name: str, version: str) -> None:
+def _inspect_wheel(
+    path: Path, modules: tuple[str, ...], name: str, version: str
+) -> None:
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         _safe(names)
-        if module not in names:
-            raise RuntimeError(f"{name} wheel lacks {module}")
+        for module in modules:
+            if module not in names:
+                raise RuntimeError(f"{name} wheel lacks {module}")
         metadata_paths = [entry for entry in names if entry.endswith(".dist-info/METADATA")]
         if len(metadata_paths) != 1:
             raise RuntimeError(f"{name} wheel has an invalid METADATA set")
@@ -54,11 +60,16 @@ def _inspect_wheel(path: Path, module: str, name: str, version: str) -> None:
             raise RuntimeError(f"{name} wheel lacks its MIT licence expression")
 
 
-def _inspect_sdist(path: Path, module: str, name: str) -> None:
+def _inspect_sdist(path: Path, modules: tuple[str, ...], name: str) -> None:
     with tarfile.open(path, "r:gz") as archive:
         names = archive.getnames()
         _safe(names)
-        suffixes = ("/LICENSE", "/README.md", "/pyproject.toml", f"/src/{module}")
+        suffixes = (
+            "/LICENSE",
+            "/README.md",
+            "/pyproject.toml",
+            *(f"/src/{module}" for module in modules),
+        )
         for suffix in suffixes:
             if not any(entry.endswith(suffix) for entry in names):
                 raise RuntimeError(f"{name} sdist lacks {suffix.removeprefix('/')}")
@@ -106,11 +117,15 @@ def main() -> int:
                 raise RuntimeError(f"{name} did not produce exactly one wheel and one sdist")
             _inspect_wheel(
                 wheels[0],
-                str(details["module"]),
+                tuple(str(module) for module in details["modules"]),
                 name,
                 str(details["version"]),
             )
-            _inspect_sdist(sdists[0], str(details["module"]), name)
+            _inspect_sdist(
+                sdists[0],
+                tuple(str(module) for module in details["modules"]),
+                name,
+            )
     print("PASS: offline wheel/sdist build and content inspection for 2 implemented components")
     return 0
 
