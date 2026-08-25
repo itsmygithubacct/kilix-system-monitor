@@ -25,9 +25,12 @@ testing, but they are not P1-frozen and they make no hardware, backend, model,
 fit or performance qualification claim. They move to a frozen root schema
 surface only after all named consumers sign identical bytes.
 
-Two additive design contracts now make privacy and checkpoint-licence admission
-machine-checkable without changing the original R2 invocation or response
-fixtures. They remain D-side proposals until the same P1 signoff occurs.
+Three additive design contracts now make privacy, checkpoint-licence admission
+and exact F104/F105 weight-evidence citation machine-checkable without changing
+the original R2 invocation or response fixtures. They remain D-side proposals
+until the same P1 signoff occurs. The weight evidence is explicitly
+digest-enumerated with no wildcard inheritance; it authorizes no selection,
+fit, staging or transfer.
 
 integration/f120-registration.json is the exact pre-repository scaffold from
 the published F120 handoff. Its zero commit and metadata sentinels are retained
@@ -66,3 +69,9 @@ cache lifecycle, device-bound ROCm/Vulkan/OpenCL success, D3 telemetry vNext,
 D4 sizing, D5 consumers, or D6 hardware qualification. H3 physical inventory,
 H3 model performance, and AMD/ROCm fit/performance/support remain unqualified
 for 0.2.1.
+
+F120-C11 also remains open: frozen F120 v1 does not prove that a staged model
+payload conveys its required licence/notice bytes or represent different
+obligations per payload in one component. D's licence-evidence fixtures remain
+transfer-ineligible until the release authority's strict-v1/new-identity choice
+is implemented; the existing S120 source/code-provider path remains usable.

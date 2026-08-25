@@ -1,0 +1,217 @@
+{
+  "$comment": "Additive Track D evidence index. It makes reviewed weight determinations citeable by exact artifact digest, but cannot select, stage, transfer, fit or qualify a model.",
+  "$defs": {
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:model-license-evidence-set:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_set_sha256": {
+      "$comment": "SHA-256 of UTF-8 JSON for the artifacts array with keys sorted, separators ',' and ':', no added whitespace/newline; entries are sorted by decision_id.",
+      "$ref": "#/$defs/sha256"
+    },
+    "artifacts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$",
+            "type": "string"
+          },
+          "content_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "decision_id": {
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "disposition": {
+            "enum": [
+              "cleared-candidate",
+              "cleared-delivery-set"
+            ]
+          },
+          "license_expressions": {
+            "items": {
+              "pattern": "^[A-Za-z0-9.+-]+$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "license_text_sha256s": {
+            "items": {
+              "$ref": "#/$defs/sha256"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "redistributable": {
+            "const": true
+          },
+          "use_restricted": {
+            "const": false
+          }
+        },
+        "required": [
+          "decision_id",
+          "artifact_id",
+          "content_sha256",
+          "license_expressions",
+          "license_text_sha256s",
+          "redistributable",
+          "use_restricted",
+          "disposition"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_document_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "authority_id": {
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+          "type": "string"
+        },
+        "code_license_inference": {
+          "const": false
+        },
+        "scope": {
+          "const": "enumerated-artifact-digests-only"
+        },
+        "stream": {
+          "enum": [
+            "f104",
+            "f105"
+          ]
+        },
+        "wildcard_inheritance": {
+          "const": false
+        }
+      },
+      "required": [
+        "authority_id",
+        "authority_document_sha256",
+        "stream",
+        "scope",
+        "code_license_inference",
+        "wildcard_inheritance"
+      ],
+      "type": "object"
+    },
+    "delivery": {
+      "additionalProperties": false,
+      "properties": {
+        "acquisition_manifest_complete": {
+          "type": "boolean"
+        },
+        "f120_gap_authority_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "notice_content_sha256s": {
+          "items": {
+            "$ref": "#/$defs/sha256"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "notice_transport": {
+          "enum": [
+            "bound-to-staged-artifacts",
+            "pending-f120-authority-disposition"
+          ]
+        },
+        "notices_required": {
+          "const": true
+        },
+        "staged_license_artifact_identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "staged_notice_paths": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "transfer_eligible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "f120_gap_authority_sha256",
+        "notices_required",
+        "notice_content_sha256s",
+        "notice_transport",
+        "staged_license_artifact_identity",
+        "staged_notice_paths",
+        "acquisition_manifest_complete",
+        "transfer_eligible"
+      ],
+      "type": "object"
+    },
+    "fit_claims_present": {
+      "const": false
+    },
+    "profile_citation_eligible": {
+      "const": true
+    },
+    "qualification_eligible": {
+      "const": false
+    },
+    "schema": {
+      "const": "plebian.models.license-evidence-set/v1"
+    },
+    "selection": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_selected": {
+          "const": false
+        },
+        "profile_selected": {
+          "const": false
+        },
+        "runtime_selected": {
+          "const": false
+        }
+      },
+      "required": [
+        "artifact_selected",
+        "profile_selected",
+        "runtime_selected"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "authority",
+    "artifacts",
+    "artifact_set_sha256",
+    "delivery",
+    "selection",
+    "profile_citation_eligible",
+    "fit_claims_present",
+    "qualification_eligible"
+  ],
+  "title": "Candidate plebian.models.license-evidence-set/v1",
+  "type": "object"
+}

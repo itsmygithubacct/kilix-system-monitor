@@ -1,0 +1,74 @@
+{
+  "artifact_set_sha256": "df50345f794a90d3baccaae0adc3804abf87da0baa5aea7d5773e21695f196cc",
+  "artifacts": [
+    {
+      "artifact_id": "ollama/granite3.2-vision:2b@sha256:3be41a661804ad72cd08269816c5a145f1df6479ad07e2b3a7e29dba575d2669",
+      "content_sha256": "3be41a661804ad72cd08269816c5a145f1df6479ad07e2b3a7e29dba575d2669",
+      "decision_id": "f105-ollama-granite3-2-vision-2b",
+      "disposition": "cleared-delivery-set",
+      "license_expressions": [
+        "Apache-2.0"
+      ],
+      "license_text_sha256s": [
+        "2e68075caee4c571d43cb9d8d636415d8fe0fe59f695370cf56bc9f872f1ff3f"
+      ],
+      "redistributable": true,
+      "use_restricted": false
+    },
+    {
+      "artifact_id": "ollama/granite4.1:3b@sha256:6fd349357287c7ffc9e38189a93b48ea175d24fc566b38f09cfc564fb7f303eb",
+      "content_sha256": "6fd349357287c7ffc9e38189a93b48ea175d24fc566b38f09cfc564fb7f303eb",
+      "decision_id": "f105-ollama-granite4-1-3b",
+      "disposition": "cleared-delivery-set",
+      "license_expressions": [
+        "Apache-2.0"
+      ],
+      "license_text_sha256s": [
+        "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"
+      ],
+      "redistributable": true,
+      "use_restricted": false
+    },
+    {
+      "artifact_id": "ollama/nomic-embed-text:v1.5@sha256:0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+      "content_sha256": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+      "decision_id": "f105-ollama-nomic-embed-text-v1-5",
+      "disposition": "cleared-delivery-set",
+      "license_expressions": [
+        "Apache-2.0"
+      ],
+      "license_text_sha256s": [
+        "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+      ],
+      "redistributable": true,
+      "use_restricted": false
+    }
+  ],
+  "authority": {
+    "authority_document_sha256": "e312ea69a4e55ca627d80dfddea6f2a03bdf41ea2eccf8872fda4b33c825b16f",
+    "authority_id": "f105-ollama-selected-weights-2026-08-25",
+    "code_license_inference": false,
+    "scope": "enumerated-artifact-digests-only",
+    "stream": "f105",
+    "wildcard_inheritance": false
+  },
+  "delivery": {
+    "acquisition_manifest_complete": false,
+    "f120_gap_authority_sha256": "f9731fffeb8a240ca05115375f36c4af1df51a8d08b0a9252d728a4b7b5e3c53",
+    "notice_content_sha256s": [],
+    "notice_transport": "pending-f120-authority-disposition",
+    "notices_required": true,
+    "staged_license_artifact_identity": null,
+    "staged_notice_paths": [],
+    "transfer_eligible": false
+  },
+  "fit_claims_present": false,
+  "profile_citation_eligible": true,
+  "qualification_eligible": false,
+  "schema": "plebian.models.license-evidence-set/v1",
+  "selection": {
+    "artifact_selected": false,
+    "profile_selected": false,
+    "runtime_selected": false
+  }
+}

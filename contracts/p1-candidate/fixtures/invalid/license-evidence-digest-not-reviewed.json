@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/license-evidence/f104-qwen-asr.json",
+  "expected": "license evidence artifact set differs from reviewed authority",
+  "path": "/artifacts/0/content_sha256",
+  "value": "0000000000000000000000000000000000000000000000000000000000000000"
+}

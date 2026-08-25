@@ -177,6 +177,18 @@ class ProbeBoundaryTests(unittest.TestCase):
         self.assertIsNone(status)
         self.assertIsNone(stdout)
 
+    def test_subprocess_receives_only_the_fixed_clean_environment(self) -> None:
+        status, stdout = probe._run_bounded(
+            sys.executable,
+            [
+                "-c",
+                "import json,os; print(json.dumps(dict(os.environ),sort_keys=True,separators=(',',':')))",
+            ],
+        )
+        self.assertEqual(status, 0)
+        self.assertIsNotNone(stdout)
+        self.assertEqual(json.loads(stdout), probe.SUBPROCESS_ENVIRONMENT)
+
     def test_battery_aggregate_stays_unknown_if_any_reading_is_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -224,6 +236,51 @@ class ProbeBoundaryTests(unittest.TestCase):
         self.assertEqual(result[0]["vendor"], "other")
         self.assertIsNone(result[0]["vendor_id"])
         self.assertEqual(result[0]["device_id"], "1234")
+
+    def test_global_backend_success_cannot_qualify_one_amd_device(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            drm = root / "drm"
+            card = drm / "card0"
+            pci = root / "0000:01:00.0"
+            card.mkdir(parents=True)
+            pci.mkdir()
+            (pci / "vendor").write_text("0x1002\n", encoding="ascii")
+            (pci / "device").write_text("0x1234\n", encoding="ascii")
+            (card / "device").symlink_to(pci, target_is_directory=True)
+            with mock.patch.object(
+                probe,
+                "_command_probe",
+                return_value=("available", "executable-probe", "1.0"),
+            ):
+                result = probe._gpu_inventory(
+                    drm, root / "missing-iommu", root / "missing-devices"
+                )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["vendor"], "amd")
+        self.assertEqual(
+            result[0]["backends"],
+            [
+                {
+                    "evidence": "contradictory",
+                    "name": "opencl",
+                    "status": "unknown",
+                    "version": None,
+                },
+                {
+                    "evidence": "contradictory",
+                    "name": "rocm",
+                    "status": "unknown",
+                    "version": None,
+                },
+                {
+                    "evidence": "contradictory",
+                    "name": "vulkan",
+                    "status": "unknown",
+                    "version": None,
+                },
+            ],
+        )
 
     def test_nvidia_result_must_bind_one_well_formed_device(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

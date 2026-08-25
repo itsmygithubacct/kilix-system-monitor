@@ -27,6 +27,7 @@ SCHEMA_PATHS = {
     "plebian.hardware.privacy/v1": ROOT / "schemas" / "plebian.hardware.privacy-v1.schema.json",
     "kilix.telemetry/schema-1-vnext": ROOT / "schemas" / "kilix.telemetry-vnext.schema.json",
     "plebian.models.checkpoint-license/v1": ROOT / "schemas" / "plebian.models.checkpoint-license-v1.schema.json",
+    "plebian.models.license-evidence-set/v1": ROOT / "schemas" / "plebian.models.license-evidence-set-v1.schema.json",
     "plebian.models.profiles/v1": ROOT / "schemas" / "plebian.models.profiles-v1.schema.json",
     "plebian.models.fit-result/v1": ROOT / "schemas" / "plebian.models.fit-result-v1.schema.json",
     "plebian.models.install-plan/v1": ROOT / "schemas" / "plebian.models.install-plan-v1.schema.json",
@@ -38,6 +39,7 @@ FIXTURE_GROUPS = {
     "plebian.hardware.privacy/v1": ROOT / "fixtures" / "privacy",
     "kilix.telemetry/schema-1-vnext": ROOT / "fixtures" / "telemetry-vnext-additive.json",
     "plebian.models.checkpoint-license/v1": ROOT / "fixtures" / "checkpoint-licenses",
+    "plebian.models.license-evidence-set/v1": ROOT / "fixtures" / "license-evidence",
     "plebian.models.profiles/v1": ROOT / "fixtures" / "profiles",
     "plebian.models.fit-result/v1": ROOT / "fixtures" / "fit",
     "plebian.models.install-plan/v1": ROOT / "fixtures" / "plans",
@@ -75,6 +77,21 @@ EXPECTED_SUBPROCESS_PRIVACY = {
 }
 CAMPP_AUTHORITY_SHA256 = "54b36539688fe450074a0105a2e43719837c321e4cf0eff8d7884a2d92ad21ad"
 APACHE_2_LICENSE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+F120_LICENSE_NOTICE_GAP_SHA256 = "f9731fffeb8a240ca05115375f36c4af1df51a8d08b0a9252d728a4b7b5e3c53"
+LICENSE_EVIDENCE_PINS = {
+    "44f5b2243328c5ba476cae3119fec348572df4190a7e67c5a2a015719edb0c47": {
+        "artifact_count": 38,
+        "artifact_set_sha256": "0f87ecd6388901210e4a19635df06c168c2131e4ad34c3a528c51da276a4a8b0",
+        "authority_id": "f104-qwen-asr-weights-2026-08-25",
+        "stream": "f104",
+    },
+    "e312ea69a4e55ca627d80dfddea6f2a03bdf41ea2eccf8872fda4b33c825b16f": {
+        "artifact_count": 3,
+        "artifact_set_sha256": "df50345f794a90d3baccaae0adc3804abf87da0baa5aea7d5773e21695f196cc",
+        "authority_id": "f105-ollama-selected-weights-2026-08-25",
+        "stream": "f105",
+    },
+}
 CAMPP_PINS = {
     "iic/speech_campplus_sv_en_voxceleb_16k": {
         "artifact": {
@@ -132,6 +149,11 @@ def load_json(path: Path) -> Any:
 
 def canonical_bytes(value: Any) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def compact_sha256(value: Any) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def verify_candidate_integrity() -> tuple[list[str], int]:
@@ -324,6 +346,57 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
             errors.append("Apache-2.0 decision carries the wrong license-text digest")
         if decision.get("disposition") in {"cleared-for-comparison", "eligible-unselected"} and decision.get("redistributable") is not True:
             errors.append("cleared checkpoint is not marked redistributable")
+        return errors
+
+    if identity == "plebian.models.license-evidence-set/v1":
+        authority = document.get("authority", {})
+        artifacts = document.get("artifacts", [])
+        delivery = document.get("delivery", {})
+        if authority.get("wildcard_inheritance") is not False:
+            errors.append("license evidence wildcard inheritance is forbidden")
+        decision_ids = [artifact.get("decision_id") for artifact in artifacts]
+        artifact_ids = [artifact.get("artifact_id") for artifact in artifacts]
+        if decision_ids != sorted(set(decision_ids)):
+            errors.append("license evidence decision IDs must be sorted and unique")
+        if len(artifact_ids) != len(set(artifact_ids)):
+            errors.append("license evidence artifact IDs must be unique")
+        for index, artifact in enumerate(artifacts):
+            for field in ("license_expressions", "license_text_sha256s"):
+                values = artifact.get(field, [])
+                if values != sorted(set(values)):
+                    errors.append(f"license evidence artifacts[{index}].{field} must be sorted and unique")
+        artifact_set_sha256 = compact_sha256(artifacts)
+        if document.get("artifact_set_sha256") != artifact_set_sha256:
+            errors.append("license evidence artifact-set self-digest is invalid")
+        pin = LICENSE_EVIDENCE_PINS.get(authority.get("authority_document_sha256"))
+        if pin is None or any(
+            (
+                authority.get("authority_id") != pin.get("authority_id"),
+                authority.get("stream") != pin.get("stream"),
+                len(artifacts) != pin.get("artifact_count"),
+                artifact_set_sha256 != pin.get("artifact_set_sha256"),
+            )
+        ):
+            errors.append("license evidence artifact set differs from reviewed authority")
+        if delivery.get("f120_gap_authority_sha256") != F120_LICENSE_NOTICE_GAP_SHA256:
+            errors.append("license evidence is not bound to the F120 conveyance finding")
+        if delivery.get("notice_transport") == "pending-f120-authority-disposition":
+            if (
+                delivery.get("staged_license_artifact_identity") is not None
+                or delivery.get("staged_notice_paths")
+            ):
+                errors.append("pending notice transport carries staged identities")
+            if delivery.get("transfer_eligible") is not False:
+                errors.append("pending notice transport cannot authorize transfer")
+        if delivery.get("transfer_eligible"):
+            if not (
+                delivery.get("acquisition_manifest_complete")
+                and delivery.get("notice_transport") == "bound-to-staged-artifacts"
+                and delivery.get("notice_content_sha256s")
+                and delivery.get("staged_license_artifact_identity")
+                and delivery.get("staged_notice_paths")
+            ):
+                errors.append("transfer eligibility lacks complete staged license and notice evidence")
         return errors
 
     if identity == "plebian.models.profiles/v1":

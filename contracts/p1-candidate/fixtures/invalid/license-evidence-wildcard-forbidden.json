@@ -1,0 +1,6 @@
+{
+  "base": "fixtures/license-evidence/f104-qwen-asr.json",
+  "expected": "license evidence wildcard inheritance is forbidden",
+  "path": "/authority/wildcard_inheritance",
+  "value": true
+}
