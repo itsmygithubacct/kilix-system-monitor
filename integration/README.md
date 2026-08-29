@@ -44,3 +44,22 @@ each component is one uniform obligation unit and every text is a matched
 same-component staged `notice` artifact, or new contract identities with
 explicit per-artifact references. This does not retract S120 for D's source and
 code-provider work.
+
+## Trusted-launcher consumer readiness
+
+`trusted-launcher-consumer-requirements.json` is a Track D requirements record,
+not a Track H launch profile, result packet, frozen interface or adoption lock.
+It preserves the ordered TD-P1 and TD-HW child surfaces while OD-13/OD-14 work
+is in flight. In particular, it does not invent profile syntax or copy the
+F120-specific launcher.
+
+Run the developer-only static readiness check from the repository root:
+
+    make launcher-consumer-readiness UV=/absolute/path/to/release-pinned-uv-0.12.5
+
+The check accounts for all required common cases, both consumer requirements,
+all intentional child specifications and all P1 invocation vectors. It also
+applies negative controls proving that an assignment cannot be promoted to a
+result, D4 cannot enter a launcher profile, and neither upstream owner can be
+silently changed. A passing readiness check consumes no returned launcher
+identity and makes no qualification claim.

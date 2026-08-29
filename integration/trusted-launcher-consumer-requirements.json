@@ -1,0 +1,163 @@
+{
+  "consumer_requirements": [
+    {
+      "campaigns": [
+        "common-matrix",
+        "CHN-01-through-CHN-06-for-each-replay-helper",
+        "python-on-PATH-replacement",
+        "startup-hooks-at-every-later-import-visible-root",
+        "seven-invocation-byte-compare"
+      ],
+      "intentional_children": [
+        {
+          "entry_kind": "bound-python-authority",
+          "entry_path": "tools/validate_candidate.py",
+          "order": 1,
+          "role": "candidate-semantic-validator"
+        },
+        {
+          "entry_kind": "bound-python-module",
+          "entry_path": "contracts/p1-candidate/tools/replay_cli.py",
+          "logical_program": "plebian-hardware",
+          "order": 2,
+          "role": "fixture-replay"
+        },
+        {
+          "entry_kind": "bound-python-module",
+          "entry_path": "contracts/p1-candidate/tools/replay_cli.py",
+          "logical_program": "plebian-model-sizer",
+          "order": 3,
+          "role": "fixture-replay"
+        }
+      ],
+      "post_child_verification": "required-after-every-child",
+      "requirement_id": "TD-P1",
+      "subject": "independent-git-archive-export",
+      "terminal_members": [
+        "candidate-semantic-validator",
+        "plebian-hardware-replay",
+        "plebian-model-sizer-replay"
+      ]
+    },
+    {
+      "campaigns": [
+        "common-matrix",
+        "CHN-01-through-CHN-06-for-installed-command",
+        "physical-hardware",
+        "virtual-machine",
+        "denied-probe",
+        "non-x86"
+      ],
+      "intentional_children": [
+        {
+          "command_tail": [
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-v"
+          ],
+          "entry_kind": "bound-python-test-suite",
+          "order": 1,
+          "source_path": "components/plebian-hardware/tests"
+        },
+        {
+          "argv": [
+            "show"
+          ],
+          "entry_kind": "staged-console",
+          "entry_point": "plebian-hardware",
+          "order": 2
+        },
+        {
+          "argv": [
+            "inventory",
+            "--json"
+          ],
+          "entry_kind": "staged-console",
+          "entry_point": "plebian-hardware",
+          "order": 3
+        },
+        {
+          "argv": [
+            "gpu",
+            "--json"
+          ],
+          "entry_kind": "staged-console",
+          "entry_point": "plebian-hardware",
+          "order": 4
+        },
+        {
+          "argv": [
+            "--json",
+            "inventory"
+          ],
+          "entry_kind": "staged-console-invalid-argv",
+          "entry_point": "plebian-hardware",
+          "expected_exit": 2,
+          "order": 5
+        }
+      ],
+      "post_child_verification": "required-after-every-child",
+      "requirement_id": "TD-HW",
+      "subject": "independent-git-archive-export-plus-staged-prefix",
+      "terminal_members": [
+        "hardware-unittest-suite",
+        "plebian-hardware-show",
+        "plebian-hardware-inventory",
+        "plebian-hardware-gpu",
+        "plebian-hardware-invalid-argv"
+      ]
+    }
+  ],
+  "schema": "kilix.track-d.trusted-launcher-consumer-requirements/v1",
+  "status": "developer-readiness-only-not-a-launch-profile",
+  "upstream_gate": {
+    "accepted_result_states": [
+      "PASS",
+      "REFUSED-AS-NAMED"
+    ],
+    "assignments": [
+      {
+        "decision_id": "OD-13",
+        "owner": "reviewer2",
+        "state": "assigned-not-returned",
+        "work": "ID-04-facility-implementation"
+      },
+      {
+        "decision_id": "OD-14",
+        "owner": "Track H",
+        "state": "assigned-not-returned-cross-family-review-required",
+        "work": "non-forking-profile-child-table-interface"
+      }
+    ],
+    "blocked_result_states": [
+      "NULL",
+      "HARNESS-FAIL"
+    ],
+    "common_case_ids": [
+      "ID-02",
+      "ID-04",
+      "SUB-04",
+      "SUB-05",
+      "SUB-06",
+      "RES-10"
+    ],
+    "independent_exports": {
+      "passing": 2,
+      "population": 2
+    },
+    "required_return_identities": [
+      "public_commit",
+      "public_tree",
+      "launcher_sha256",
+      "bootstrap_sha256",
+      "result_schema_sha256",
+      "profile_schema_sha256",
+      "td_p1_profile_sha256",
+      "td_hw_profile_sha256"
+    ],
+    "state": "blocked-pending-results"
+  }
+}

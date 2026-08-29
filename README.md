@@ -38,6 +38,14 @@ until the parent has a reviewed public install surface. An F120 development
 manifest is therefore expected to be dirty/unresolved; qualification and
 staging must refuse.
 
+integration/trusted-launcher-consumer-requirements.json records the exact
+Track D TD-P1 and TD-HW consumer requirements without defining or copying a
+launcher profile. OD-13 assigns the ID-04 implementation to reviewer2 and
+OD-14 assigns the non-forking profile/child-table interface to Track H, but the
+shared result packet and independently reviewed interface have not returned.
+The readiness check therefore validates the local child surfaces and rejects
+premature adoption while consuming none of the required returned identities.
+
 ## Checks
 
 Use the release-pinned uv 0.12.5 for a functional developer check:
@@ -61,8 +69,9 @@ select Python through `/usr/bin/env` and inherited `PATH`.
 
 The aggregate developer check exercises contract integrity and negative
 fixtures, the imported telemetry suite, the hardware unit boundaries, live
-inventory/GPU schema and privacy rules, wheel/sdist contents, and the
-intentional model-sizer block. Hardware checks use no network and no privilege.
+inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
+consumer readiness, and the intentional model-sizer block. Hardware checks use
+no network and no privilege.
 
 ## Current boundaries
 
