@@ -21,6 +21,23 @@ MAX_STDOUT_BYTES = 4 * 1024 * 1024
 MAX_DIAGNOSTIC_BYTES = 4096
 
 
+class _RejectedJSON(ValueError):
+    pass
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _RejectedJSON("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite(_value: str) -> Any:
+    raise _RejectedJSON("non-finite JSON number")
+
+
 def _candidate_module(
     validator_path: Path,
     candidate_root: Path,
@@ -77,12 +94,34 @@ def _json_document(stdout: bytes) -> dict[str, Any]:
         raise RuntimeError("successful JSON output violates its byte boundary")
     try:
         text = stdout.decode("utf-8")
-        value = json.loads(text)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, _RejectedJSON) as error:
         raise RuntimeError("successful JSON output is not one UTF-8 document") from error
     if not isinstance(value, dict):
         raise RuntimeError("successful JSON output is not an object")
     return value
+
+
+def _strict_json_parser_controls() -> int:
+    controls = {
+        "duplicate-top-level": b'{"schema":"first","schema":"second"}\n',
+        "duplicate-nested": b'{"outer":{"value":1,"value":2}}\n',
+        "not-a-number": b'{"value":NaN}\n',
+        "positive-infinity": b'{"value":Infinity}\n',
+        "trailing-document": b'{}\n{}\n',
+        "invalid-utf8": b'{"value":"\xff"}\n',
+    }
+    for name, payload in controls.items():
+        try:
+            _json_document(payload)
+        except RuntimeError:
+            continue
+        raise RuntimeError(f"strict JSON parser accepted {name} control")
+    return len(controls)
 
 
 def main() -> int:
@@ -91,6 +130,7 @@ def main() -> int:
     parser.add_argument("--site-packages", type=Path, required=True)
     parser.add_argument("--validator", type=Path, required=True)
     arguments = parser.parse_args()
+    parser_control_count = _strict_json_parser_controls()
     candidate = arguments.candidate_root.resolve(strict=True)
     validator = _candidate_module(
         arguments.validator.resolve(strict=True),
@@ -141,29 +181,43 @@ def main() -> int:
         observed.append(document)
 
     show = _invoke(["show"])
-    if show.returncode != 0 or show.stderr or not show.stdout.endswith(b"\n"):
+    if (
+        show.returncode != 0
+        or show.stderr
+        or not show.stdout.endswith(b"\n")
+        or len(show.stdout) > MAX_STDOUT_BYTES
+    ):
         raise RuntimeError("hardware.show did not obey the success stream contract")
-    if b"unqualified local observation" not in show.stdout:
+    try:
+        show_text = show.stdout.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise RuntimeError("hardware.show output is not UTF-8") from error
+    if "unqualified local observation" not in show_text:
         raise RuntimeError("hardware.show omitted the qualification exclusion")
+    if validator.privacy_errors(show_text):
+        raise RuntimeError("hardware.show violated the redacted output contract")
 
     invalid = _invoke(["--json", "inventory"])
     if invalid.returncode != 2 or invalid.stdout:
         raise RuntimeError("invalid argv did not fail with empty stdout and status 2")
+    try:
+        invalid_diagnostic = invalid.stderr.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise RuntimeError("invalid argv diagnostic is not UTF-8") from error
     if (
         not invalid.stderr.endswith(b"\n")
         or b"\n" in invalid.stderr[:-1]
         or len(invalid.stderr) > MAX_DIAGNOSTIC_BYTES
-        or validator.privacy_errors(invalid.stderr.decode("utf-8"))
+        or validator.privacy_errors(invalid_diagnostic)
     ):
         raise RuntimeError("invalid argv violated the bounded redacted stderr contract")
 
-    unknown_counts = [len(document["data"]["unknowns"]) for document in observed]
-    gpu_counts = [len(document["data"]["gpus"]) for document in observed]
     print(
-        "PASS (non-qualifying developer observation): exact show/inventory/gpu "
-        "argv; two live candidate-valid redacted "
-        f"observations; unknown counts {unknown_counts}; GPU counts {gpu_counts}; "
-        "privacy contract enforced; no network, privilege, or qualification claim"
+        "PASS (non-qualifying developer observation): 3/3 exact successful "
+        "show/inventory/gpu argv; 1/1 invalid argv rejected; 2/2 live "
+        f"candidate-valid redacted observations; {parser_control_count}/6 strict "
+        "JSON parser controls rejected; privacy contract enforced; no network, "
+        "privilege, or qualification claim"
     )
     return 0
 

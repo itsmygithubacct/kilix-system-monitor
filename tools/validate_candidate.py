@@ -218,24 +218,61 @@ def load_json(path: Path) -> Any:
         result: dict[str, Any] = {}
         for key, value in pairs:
             if key in result:
-                raise ValidationFailure(f"{path}: duplicate JSON key: {key}")
+                raise ValidationFailure(f"{path}: duplicate JSON key")
             result[key] = value
         return result
 
+    def reject_constant(_value: str) -> Any:
+        raise ValidationFailure(f"{path}: non-finite JSON number")
+
     try:
         with path.open("r", encoding="utf-8") as handle:
-            return json.load(handle, object_pairs_hook=reject_duplicates)
+            return json.load(
+                handle,
+                object_pairs_hook=reject_duplicates,
+                parse_constant=reject_constant,
+            )
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValidationFailure(f"{path}: invalid UTF-8 JSON: {error}") from error
 
 
 def canonical_bytes(value: Any) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    return (
+        json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
 
 
 def compact_sha256(value: Any) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    encoded = json.dumps(
+        value,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def strict_json_parser_controls() -> tuple[list[str], int]:
+    controls = {
+        "duplicate-top-level": b'{"schema":"first","schema":"second"}\n',
+        "duplicate-nested": b'{"outer":{"value":1,"value":2}}\n',
+        "not-a-number": b'{"value":NaN}\n',
+        "positive-infinity": b'{"value":Infinity}\n',
+        "trailing-document": b'{}\n{}\n',
+        "invalid-utf8": b'{"value":"\xff"}\n',
+    }
+    errors: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="f106-json-controls-") as directory:
+        control_root = Path(directory)
+        for name, payload in controls.items():
+            path = control_root / f"{name}.json"
+            path.write_bytes(payload)
+            try:
+                load_json(path)
+            except ValidationFailure:
+                continue
+            errors.append(f"strict JSON parser accepted {name} control")
+    return errors, len(controls)
 
 
 def verify_candidate_integrity(expected_manifest_sha256: str) -> tuple[list[str], int]:
@@ -992,8 +1029,12 @@ def main() -> int:
             valid_count += 1
 
     invalid_count = 0
+    invalid_total = 0
+    parser_control_count = 0
     if arguments.self_test:
-        for path in sorted((ROOT / "fixtures" / "invalid").glob("*.json")):
+        invalid_paths = sorted((ROOT / "fixtures" / "invalid").glob("*.json"))
+        invalid_total = len(invalid_paths)
+        for path in invalid_paths:
             mutation = load_json(path)
             base = load_json(ROOT / mutation["base"])
             mutated = copy.deepcopy(base)
@@ -1004,6 +1045,8 @@ def main() -> int:
             if not any(expected in error for error in errors):
                 failures.append(f"{path.relative_to(ROOT)}: expected rejection containing {expected!r}; got {errors}")
             invalid_count += 1
+        parser_errors, parser_control_count = strict_json_parser_controls()
+        failures.extend(parser_errors)
         failures.extend(run_replay_checks(contract))
         if not failures and not arguments.startup_control_child:
             failures.extend(startup_boundary_controls(arguments.launcher, arguments.uv))
@@ -1017,16 +1060,19 @@ def main() -> int:
             print(f"FAIL: {failure}", file=sys.stderr)
         return 1
     mode = (
-        f", {invalid_count} invalid mutations rejected, replay success/failure paths verified"
+        f", {invalid_count}/{invalid_total} invalid mutations rejected, "
+        f"{parser_control_count}/6 strict JSON parser controls rejected, "
+        "replay success/failure paths verified"
         if arguments.self_test
         else ""
     )
     if arguments.self_test and not arguments.startup_control_child:
         mode += ", partial developer startup controls exercised; release authority blocked"
     print(
-        f"PASS (developer-only): {len(available)} candidate schemas, "
-        f"{valid_count} valid fixtures{mode}; "
-        f"{hashed_count} hashes and canonical JSON verified; no qualification claim"
+        f"PASS (developer-only): {len(available)}/{len(SCHEMA_PATHS)} candidate "
+        f"schemas, {valid_count}/{valid_count} valid fixtures{mode}; "
+        f"{hashed_count}/{hashed_count} hashes and canonical JSON verified; "
+        "no qualification claim"
     )
     return 0
 
