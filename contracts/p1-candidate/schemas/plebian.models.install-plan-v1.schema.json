@@ -39,6 +39,7 @@
         ],
         "type": "object"
       },
+      "maxItems": 256,
       "type": "array"
     },
     "blockers": {
@@ -61,6 +62,7 @@
         ],
         "type": "object"
       },
+      "maxItems": 64,
       "type": "array"
     },
     "capacity_contract_status": {
@@ -122,6 +124,7 @@
         ],
         "type": "object"
       },
+      "maxItems": 256,
       "type": "array"
     },
     "operation": {

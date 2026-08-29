@@ -9,6 +9,7 @@
             "minLength": 1,
             "type": "string"
           },
+          "maxItems": 8,
           "minItems": 2,
           "type": "array"
         },
@@ -18,6 +19,8 @@
             "hardware.inventory",
             "hardware.show",
             "sizer.install",
+            "sizer.install.cancel",
+            "sizer.install.status",
             "sizer.plan.local-ai-balanced",
             "sizer.recommend.tts",
             "sizer.snapshot"
@@ -28,6 +31,7 @@
             "plebian.hardware/v1",
             "plebian.models.fit-result/v1",
             "plebian.models.install-plan/v1",
+            "plebian.models.install-transaction/v1",
             "plebian.models.snapshot/v1"
           ]
         },
@@ -38,7 +42,8 @@
         "side_effects": {
           "enum": [
             "none",
-            "none-when-blocked; provider-owned execution-after-revalidation-when-ready"
+            "none-when-blocked; provider-owned execution-after-revalidation-when-ready",
+            "request-cancellation-only; provider-owned-coordinator-preserves-completed-items"
           ]
         },
         "stdout": {
@@ -62,7 +67,7 @@
       "properties": {
         "argv": {
           "const": [
-            "plebian-hardware",
+            "/usr/bin/plebian-hardware",
             "gpu",
             "--json"
           ]
@@ -92,7 +97,7 @@
       "properties": {
         "argv": {
           "const": [
-            "plebian-hardware",
+            "/usr/bin/plebian-hardware",
             "inventory",
             "--json"
           ]
@@ -127,7 +132,7 @@
       "properties": {
         "argv": {
           "const": [
-            "plebian-hardware",
+            "/usr/bin/plebian-hardware",
             "show"
           ]
         },
@@ -150,9 +155,11 @@
       "properties": {
         "argv": {
           "const": [
-            "plebian-model-sizer",
+            "/usr/bin/plebian-model-sizer",
             "install",
             "PLAN_PATH",
+            "--expected-plan-sha256",
+            "PLAN_SHA256",
             "--json"
           ]
         },
@@ -160,7 +167,7 @@
           "const": "sizer.install"
         },
         "data_schema": {
-          "const": "plebian.models.install-plan/v1"
+          "const": "plebian.models.install-transaction/v1"
         },
         "fixture": {
           "const": "fixtures/responses/sizer-install-blocked.json"
@@ -176,12 +183,74 @@
         "data_schema"
       ]
     },
+    "sizerInstallCancel": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "/usr/bin/plebian-model-sizer",
+            "cancel",
+            "TRANSACTION_ID",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "sizer.install.cancel"
+        },
+        "data_schema": {
+          "const": "plebian.models.install-transaction/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/sizer-install-cancel-blocked.json"
+        },
+        "side_effects": {
+          "const": "request-cancellation-only; provider-owned-coordinator-preserves-completed-items"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    },
+    "sizerInstallStatus": {
+      "$ref": "#/$defs/command",
+      "properties": {
+        "argv": {
+          "const": [
+            "/usr/bin/plebian-model-sizer",
+            "install-status",
+            "TRANSACTION_ID",
+            "--json"
+          ]
+        },
+        "command_id": {
+          "const": "sizer.install.status"
+        },
+        "data_schema": {
+          "const": "plebian.models.install-transaction/v1"
+        },
+        "fixture": {
+          "const": "fixtures/responses/sizer-install-status-blocked.json"
+        },
+        "side_effects": {
+          "const": "none"
+        },
+        "stdout": {
+          "const": "plebian.cli.response/v1"
+        }
+      },
+      "required": [
+        "data_schema"
+      ]
+    },
     "sizerPlan": {
       "$ref": "#/$defs/command",
       "properties": {
         "argv": {
           "const": [
-            "plebian-model-sizer",
+            "/usr/bin/plebian-model-sizer",
             "plan",
             "local-ai-balanced",
             "--json"
@@ -212,7 +281,7 @@
       "properties": {
         "argv": {
           "const": [
-            "plebian-model-sizer",
+            "/usr/bin/plebian-model-sizer",
             "recommend",
             "tts",
             "--json"
@@ -243,7 +312,7 @@
       "properties": {
         "argv": {
           "const": [
-            "plebian-model-sizer",
+            "/usr/bin/plebian-model-sizer",
             "snapshot",
             "--json"
           ]
@@ -278,8 +347,8 @@
     },
     "commands": {
       "items": false,
-      "maxItems": 7,
-      "minItems": 7,
+      "maxItems": 9,
+      "minItems": 9,
       "prefixItems": [
         {
           "$ref": "#/$defs/hardwareShow"
@@ -300,6 +369,12 @@
           "$ref": "#/$defs/sizerInstall"
         },
         {
+          "$ref": "#/$defs/sizerInstallStatus"
+        },
+        {
+          "$ref": "#/$defs/sizerInstallCancel"
+        },
+        {
           "$ref": "#/$defs/sizerSnapshot"
         }
       ],
@@ -309,6 +384,9 @@
     "environment": {
       "additionalProperties": false,
       "properties": {
+        "executable_resolution": {
+          "const": "absolute-installed-paths-only"
+        },
         "locale": {
           "const": "C.UTF-8"
         },
@@ -320,6 +398,7 @@
         }
       },
       "required": [
+        "executable_resolution",
         "locale",
         "network",
         "stdin"
@@ -378,6 +457,46 @@
       ],
       "type": "object"
     },
+    "renderer_limits": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_receipts": {
+          "const": 256
+        },
+        "blockers": {
+          "const": 64
+        },
+        "fit_reasons": {
+          "const": 64
+        },
+        "fit_resources": {
+          "const": 4
+        },
+        "plan_items": {
+          "const": 256
+        },
+        "profile_catalog_ids": {
+          "const": 256
+        },
+        "unknowns": {
+          "const": 256
+        },
+        "warnings": {
+          "const": 64
+        }
+      },
+      "required": [
+        "warnings",
+        "fit_reasons",
+        "fit_resources",
+        "blockers",
+        "plan_items",
+        "authorization_receipts",
+        "profile_catalog_ids",
+        "unknowns"
+      ],
+      "type": "object"
+    },
     "schema": {
       "const": "f106.invocation-contract/v0-draft"
     },
@@ -422,6 +541,61 @@
         "nonzero"
       ],
       "type": "object"
+    },
+    "transaction_lifecycle": {
+      "additionalProperties": false,
+      "properties": {
+        "cancellation": {
+          "const": "idempotent-request-stop-before-next-item-preserve-completed-item-receipts"
+        },
+        "confirmation_binding": {
+          "const": "consumer-confirmation-and-resume-state-carry-the-reviewed-plan-sha256"
+        },
+        "idempotency_key": {
+          "const": "plan-sha256-plus-sorted-authorization-receipt-sha256s"
+        },
+        "plan_binding": {
+          "const": "provider-compares-sha256-of-exact-canonical-reviewed-plan-bytes-before-any-mutation"
+        },
+        "retry": {
+          "const": "same-plan-and-receipts-resume-or-return-terminal"
+        },
+        "revalidation": {
+          "const": "execution-start-and-before-each-item"
+        },
+        "states": {
+          "const": [
+            "blocked",
+            "queued",
+            "running",
+            "interrupted",
+            "cancelling",
+            "cancelled",
+            "succeeded",
+            "failed",
+            "unknown"
+          ]
+        },
+        "terminal_states": {
+          "const": [
+            "blocked",
+            "cancelled",
+            "succeeded",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "plan_binding",
+        "confirmation_binding",
+        "idempotency_key",
+        "states",
+        "terminal_states",
+        "retry",
+        "cancellation",
+        "revalidation"
+      ],
+      "type": "object"
     }
   },
   "required": [
@@ -429,7 +603,9 @@
     "candidate",
     "environment",
     "limits",
+    "renderer_limits",
     "streams",
+    "transaction_lifecycle",
     "exit_statuses",
     "commands"
   ],

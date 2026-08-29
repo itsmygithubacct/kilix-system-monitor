@@ -6,17 +6,20 @@ schema, fixture, invocation and replay assets needed for atomic provider and
 consumer checks. Research-only migration drafts, probe matrices, handoff notes
 and release-wording drafts are deliberately excluded from this repository.
 
-The original eight schema files, invocation contract, 26 fixture files and two
-replay binaries retain their exact R2 bytes. Three additive D-side schema
-designs, five valid fixtures and nine invalid mutations cover the default
-privacy boundary and digest-specific model-weight licence admission. The
-checkpoint decision explicitly forbids wildcard clearance, and separate
-mutations reject both an unlisted `iic/speech_campplus_*` sibling and any
-attempt to set a wildcard grant. They do not alter the R2 command surface and
-are not frozen. The locally generated
-CANDIDATE-SHA256SUMS binds the complete installed tree, including its validator
-and this status notice; it is intentionally distinct from the 46-file
-research-side R2 bundle manifest.
+This successor contains **12/12 schemas**, **23/23 valid fixtures**, **18/18
+invalid fixture mutations** and **2/2 replay binaries**. It dispositions the
+F107-B R2 return's **4/4 findings**: all **9/9 invocations** use frozen absolute
+installed paths; install binds the SHA-256 of the exact canonical reviewed plan
+bytes; status and cancellation are **2/2 explicit lifecycle calls** with the
+same plan identity in resume state; and every F107-rendered population has a
+schema `maxItems`. The locally generated `CANDIDATE-SHA256SUMS` binds all
+**59/59 payload members**, including this status notice. This is a successor
+candidate, not an R2 signature or a freeze.
+
+The additive D-side privacy and digest-specific model-weight licence designs
+remain present. The checkpoint decision explicitly forbids wildcard clearance,
+and separate mutations reject both an unlisted `iic/speech_campplus_*` sibling
+and any attempt to set a wildcard grant. These records are not frozen.
 
 `plebian.models.license-evidence-set/v1` adds exact citation IDs for 38 unique
 F104 Qwen/transcription/VAD artifact digests and the three selected F105 Ollama
@@ -40,10 +43,10 @@ the release-pinned uv 0.12.5 executable:
 
     make contracts-check UV=/absolute/path/to/release-pinned-uv-0.12.5
 
-The output names eleven candidate schemas, twenty-one valid fixtures,
-eighteen rejected invalid mutations, replayed success/failure paths, the
-complete candidate file count, canonical JSON, the partial developer startup
-controls, and no qualification claim. It is not P1 freeze or release authority.
+The output names **12/12 candidate schemas**, **23/23 valid fixtures**, **18/18
+rejected invalid mutations**, all replayed success/failure paths, **59/59
+candidate payload files**, canonical JSON, the partial developer startup controls and
+no qualification claim. It is not P1 freeze or release authority.
 The current repository shell path partially isolates the outer validator, but
 it does not implement the normative retained-descriptor/bootstrap/canonical-
 result contract, and both replay helpers still select site-enabled Python

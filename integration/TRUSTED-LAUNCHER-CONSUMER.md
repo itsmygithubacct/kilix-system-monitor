@@ -55,7 +55,7 @@ and its nested candidate manifest. Its ordered child population is **3/3**:
 
 The profile rechecks subject, runtime and dependency closure after **3/3
 children**, waits for every descendant, and emits **1/1 terminal record** whose
-terminal set covers **3/3 children**. Success compares **7/7 invocation/fixture
+terminal set covers **3/3 children**. Success compares **9/9 invocation/fixture
 pairs** byte-for-byte and preserves blocked, unknown and null semantics. It is
 still not P1 freeze: identical product tree, candidate manifest, profile,
 result and signatory bytes remain prerequisites.

@@ -1,0 +1,201 @@
+{
+  "$comment": "Track D P1 candidate only; lifecycle shape without D4 execution authority.",
+  "$defs": {
+    "issue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z0-9_]+$",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "shaOrNull": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:model-install-transaction:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authorization_receipt_sha256s": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxItems": 256,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "blockers": {
+      "items": {
+        "$ref": "#/$defs/issue"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "cancelable": {
+      "type": "boolean"
+    },
+    "item_results": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receipt_sha256": {
+            "$ref": "#/$defs/shaOrNull"
+          },
+          "status": {
+            "enum": [
+              "cancelled",
+              "failed",
+              "pending",
+              "succeeded"
+            ]
+          }
+        },
+        "required": [
+          "artifact_id",
+          "status",
+          "receipt_sha256",
+          "message"
+        ],
+        "type": "object"
+      },
+      "maxItems": 256,
+      "type": "array"
+    },
+    "operation": {
+      "enum": [
+        "cancel",
+        "install",
+        "status"
+      ]
+    },
+    "plan_id": {
+      "pattern": "^[a-z0-9]+(?:[._:-][a-z0-9]+)*$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/shaOrNull"
+    },
+    "progress": {
+      "additionalProperties": false,
+      "properties": {
+        "active_artifact_id": {
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "completed_items": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "phase": {
+          "enum": [
+            "complete",
+            "download",
+            "install",
+            "none",
+            "revalidate",
+            "verify"
+          ]
+        },
+        "total_items": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "completed_items",
+        "total_items",
+        "active_artifact_id"
+      ],
+      "type": "object"
+    },
+    "resumable": {
+      "type": "boolean"
+    },
+    "retry_policy": {
+      "const": "same-plan-and-receipts-resume-or-return-terminal"
+    },
+    "schema": {
+      "const": "plebian.models.install-transaction/v1"
+    },
+    "state": {
+      "enum": [
+        "blocked",
+        "cancelled",
+        "cancelling",
+        "failed",
+        "interrupted",
+        "queued",
+        "running",
+        "succeeded",
+        "unknown"
+      ]
+    },
+    "terminal": {
+      "type": "boolean"
+    },
+    "transaction_id": {
+      "pattern": "^[a-z0-9]+(?:[._:-][a-z0-9]+)*$",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "operation",
+    "transaction_id",
+    "plan_id",
+    "plan_sha256",
+    "authorization_receipt_sha256s",
+    "state",
+    "terminal",
+    "resumable",
+    "cancelable",
+    "retry_policy",
+    "progress",
+    "item_results",
+    "blockers"
+  ],
+  "title": "Candidate plebian.models.install-transaction/v1",
+  "type": "object"
+}

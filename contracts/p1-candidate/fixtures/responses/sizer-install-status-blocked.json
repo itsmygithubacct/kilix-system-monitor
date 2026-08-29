@@ -1,0 +1,32 @@
+{
+  "command": "sizer.install.status",
+  "data": {
+    "authorization_receipt_sha256s": [],
+    "blockers": [
+      {
+        "code": "TRANSACTION_NOT_FOUND",
+        "message": "No install transaction exists for this synthetic contract fixture."
+      }
+    ],
+    "cancelable": false,
+    "item_results": [],
+    "operation": "status",
+    "plan_id": null,
+    "plan_sha256": null,
+    "progress": {
+      "active_artifact_id": null,
+      "completed_items": 0,
+      "phase": "none",
+      "total_items": null
+    },
+    "resumable": false,
+    "retry_policy": "same-plan-and-receipts-resume-or-return-terminal",
+    "schema": "plebian.models.install-transaction/v1",
+    "state": "unknown",
+    "terminal": false,
+    "transaction_id": "fixture:unavailable-transaction"
+  },
+  "schema": "plebian.cli.response/v1",
+  "status": "unknown",
+  "warnings": []
+}

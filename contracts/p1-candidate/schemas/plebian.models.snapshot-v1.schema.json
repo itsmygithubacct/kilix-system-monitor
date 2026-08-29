@@ -37,11 +37,61 @@
       "pattern": "^(fixture|local|redacted):[a-z0-9][a-z0-9._:-]{0,127}$",
       "type": "string"
     },
+    "install_resume": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_receipt_sha256s": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 256,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "plan_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "enum": [
+            "blocked",
+            "cancelled",
+            "cancelling",
+            "failed",
+            "interrupted",
+            "none",
+            "queued",
+            "running",
+            "succeeded",
+            "unknown"
+          ]
+        },
+        "transaction_id": {
+          "pattern": "^[a-z0-9]+(?:[._:-][a-z0-9]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "transaction_id",
+        "plan_sha256",
+        "authorization_receipt_sha256s"
+      ],
+      "type": "object"
+    },
     "profile_catalog_ids": {
       "items": {
         "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
         "type": "string"
       },
+      "maxItems": 256,
       "type": "array",
       "uniqueItems": true
     },
@@ -75,6 +125,7 @@
         "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
         "type": "string"
       },
+      "maxItems": 256,
       "type": "array",
       "uniqueItems": true
     }
@@ -83,6 +134,7 @@
     "schema",
     "generated_at",
     "hardware_snapshot_id",
+    "install_resume",
     "capacity_contract",
     "profile_catalog_ids",
     "telemetry",

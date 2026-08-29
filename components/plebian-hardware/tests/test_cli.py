@@ -472,6 +472,16 @@ class ProbeBoundaryTests(unittest.TestCase):
         self.assertIsNone(result["battery_percent"])
         self.assertEqual([item["index"] for item in result["batteries"]], [0, 1])
 
+    def test_unreadable_supply_type_cannot_prove_battery_absence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            supply = root / "unknown-supply"
+            supply.mkdir()
+            (supply / "type").write_bytes(b"\xff")
+            result = probe._power(root)
+        self.assertIsNone(result["battery_present"])
+        self.assertEqual(result["batteries"], [])
+
     def test_network_absence_is_unknown_not_offline(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -480,6 +490,39 @@ class ProbeBoundaryTests(unittest.TestCase):
             loopback_only = root / "net"
             (loopback_only / "lo").mkdir(parents=True)
             self.assertTrue(probe._network(loopback_only)["offline"])
+
+    def test_zero_network_speed_is_unavailable_not_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            interface = root / "eth-test"
+            interface.mkdir()
+            (interface / "type").write_text("1\n", encoding="ascii")
+            (interface / "operstate").write_text("up\n", encoding="ascii")
+            (interface / "speed").write_text("0\n", encoding="ascii")
+            result = probe._network(root)
+        self.assertEqual(len(result["interfaces"]), 1)
+        self.assertIsNone(result["interfaces"][0]["link_mbps"])
+
+    def test_thermal_zones_precede_anonymous_hwmon_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            thermal_root = root / "thermal"
+            hwmon_root = root / "hwmon"
+            zone = thermal_root / "thermal_zone0"
+            monitor = hwmon_root / "hwmon0"
+            zone.mkdir(parents=True)
+            monitor.mkdir(parents=True)
+            (zone / "temp").write_text("42000\n", encoding="ascii")
+            (monitor / "temp1_input").write_text("90000\n", encoding="ascii")
+            (monitor / "fan1_input").write_text("1200\n", encoding="ascii")
+            preferred = probe._thermal(thermal_root, hwmon_root)
+            (zone / "temp").write_text("invalid\n", encoding="ascii")
+            fallback = probe._thermal(thermal_root, hwmon_root)
+        self.assertEqual(preferred["sensor_count"], 1)
+        self.assertEqual(preferred["maximum_celsius"], 42.0)
+        self.assertEqual(preferred["fan_count"], 1)
+        self.assertEqual(fallback["sensor_count"], 1)
+        self.assertEqual(fallback["maximum_celsius"], 90.0)
 
     def test_gpu_identifiers_are_normalized_or_null(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

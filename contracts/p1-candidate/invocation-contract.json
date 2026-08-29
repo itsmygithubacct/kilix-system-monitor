@@ -3,7 +3,7 @@
   "commands": [
     {
       "argv": [
-        "plebian-hardware",
+        "/usr/bin/plebian-hardware",
         "show"
       ],
       "command_id": "hardware.show",
@@ -13,7 +13,7 @@
     },
     {
       "argv": [
-        "plebian-hardware",
+        "/usr/bin/plebian-hardware",
         "inventory",
         "--json"
       ],
@@ -25,7 +25,7 @@
     },
     {
       "argv": [
-        "plebian-hardware",
+        "/usr/bin/plebian-hardware",
         "gpu",
         "--json"
       ],
@@ -37,7 +37,7 @@
     },
     {
       "argv": [
-        "plebian-model-sizer",
+        "/usr/bin/plebian-model-sizer",
         "recommend",
         "tts",
         "--json"
@@ -50,7 +50,7 @@
     },
     {
       "argv": [
-        "plebian-model-sizer",
+        "/usr/bin/plebian-model-sizer",
         "plan",
         "local-ai-balanced",
         "--json"
@@ -63,20 +63,48 @@
     },
     {
       "argv": [
-        "plebian-model-sizer",
+        "/usr/bin/plebian-model-sizer",
         "install",
         "PLAN_PATH",
+        "--expected-plan-sha256",
+        "PLAN_SHA256",
         "--json"
       ],
       "command_id": "sizer.install",
-      "data_schema": "plebian.models.install-plan/v1",
+      "data_schema": "plebian.models.install-transaction/v1",
       "fixture": "fixtures/responses/sizer-install-blocked.json",
       "side_effects": "none-when-blocked; provider-owned execution-after-revalidation-when-ready",
       "stdout": "plebian.cli.response/v1"
     },
     {
       "argv": [
-        "plebian-model-sizer",
+        "/usr/bin/plebian-model-sizer",
+        "install-status",
+        "TRANSACTION_ID",
+        "--json"
+      ],
+      "command_id": "sizer.install.status",
+      "data_schema": "plebian.models.install-transaction/v1",
+      "fixture": "fixtures/responses/sizer-install-status-blocked.json",
+      "side_effects": "none",
+      "stdout": "plebian.cli.response/v1"
+    },
+    {
+      "argv": [
+        "/usr/bin/plebian-model-sizer",
+        "cancel",
+        "TRANSACTION_ID",
+        "--json"
+      ],
+      "command_id": "sizer.install.cancel",
+      "data_schema": "plebian.models.install-transaction/v1",
+      "fixture": "fixtures/responses/sizer-install-cancel-blocked.json",
+      "side_effects": "request-cancellation-only; provider-owned-coordinator-preserves-completed-items",
+      "stdout": "plebian.cli.response/v1"
+    },
+    {
+      "argv": [
+        "/usr/bin/plebian-model-sizer",
         "snapshot",
         "--json"
       ],
@@ -88,6 +116,7 @@
     }
   ],
   "environment": {
+    "executable_resolution": "absolute-installed-paths-only",
     "locale": "C.UTF-8",
     "network": "not-required",
     "stdin": "dev-null"
@@ -105,6 +134,16 @@
     "read_only_timeout_seconds": 15,
     "stdout_bytes": 4194304
   },
+  "renderer_limits": {
+    "authorization_receipts": 256,
+    "blockers": 64,
+    "fit_reasons": 64,
+    "fit_resources": 4,
+    "plan_items": 256,
+    "profile_catalog_ids": 256,
+    "unknowns": 256,
+    "warnings": 64
+  },
   "schema": "f106.invocation-contract/v0-draft",
   "streams": {
     "nonzero": {
@@ -115,5 +154,30 @@
       "stderr": "empty",
       "stdout": "one document followed by LF"
     }
+  },
+  "transaction_lifecycle": {
+    "cancellation": "idempotent-request-stop-before-next-item-preserve-completed-item-receipts",
+    "confirmation_binding": "consumer-confirmation-and-resume-state-carry-the-reviewed-plan-sha256",
+    "idempotency_key": "plan-sha256-plus-sorted-authorization-receipt-sha256s",
+    "plan_binding": "provider-compares-sha256-of-exact-canonical-reviewed-plan-bytes-before-any-mutation",
+    "retry": "same-plan-and-receipts-resume-or-return-terminal",
+    "revalidation": "execution-start-and-before-each-item",
+    "states": [
+      "blocked",
+      "queued",
+      "running",
+      "interrupted",
+      "cancelling",
+      "cancelled",
+      "succeeded",
+      "failed",
+      "unknown"
+    ],
+    "terminal_states": [
+      "blocked",
+      "cancelled",
+      "succeeded",
+      "failed"
+    ]
   }
 }

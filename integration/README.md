@@ -59,7 +59,7 @@ Run the developer-only static readiness check from the repository root:
     make launcher-consumer-readiness UV=/absolute/path/to/release-pinned-uv-0.12.5
 
 The check accounts for **20/20** interface capabilities, **2/2** consumer
-requirements, **8/8** intentional child specifications, **7/7** P1 invocation
+requirements, **8/8** intentional child specifications, **9/9** P1 invocation
 vectors, **316/316** case-family target definitions and **632/632** required
 case-family target-export rows across **2/2** independent exports. Each row
 must freeze and completely account for its inner mutation variants. The check

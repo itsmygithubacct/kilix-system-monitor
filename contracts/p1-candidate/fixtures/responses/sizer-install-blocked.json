@@ -1,7 +1,7 @@
 {
   "command": "sizer.install",
   "data": {
-    "authorization_receipts": [],
+    "authorization_receipt_sha256s": [],
     "blockers": [
       {
         "code": "F100_C0_MISSING",
@@ -12,24 +12,23 @@
         "message": "No qualified model profile is selected by this fixture."
       }
     ],
-    "capacity_contract_status": "missing",
-    "confirmation": {
-      "granted": false,
-      "required": true
-    },
-    "executable": false,
-    "items": [],
+    "cancelable": false,
+    "item_results": [],
     "operation": "install",
     "plan_id": "fixture:blocked-plan",
-    "preset": "local-ai-balanced",
-    "schema": "plebian.models.install-plan/v1",
-    "status": "blocked",
-    "totals": {
-      "download_bytes": null,
-      "installed_bytes": null,
-      "shared_bytes": null,
-      "temporary_bytes": null
-    }
+    "plan_sha256": "bdf8e8d9afb0fac85b252a5d63f78507bc03b2ef9ed25cac9926ef7641d7a317",
+    "progress": {
+      "active_artifact_id": null,
+      "completed_items": 0,
+      "phase": "none",
+      "total_items": 0
+    },
+    "resumable": false,
+    "retry_policy": "same-plan-and-receipts-resume-or-return-terminal",
+    "schema": "plebian.models.install-transaction/v1",
+    "state": "blocked",
+    "terminal": true,
+    "transaction_id": null
   },
   "schema": "plebian.cli.response/v1",
   "status": "blocked",

@@ -608,8 +608,12 @@ def _power(power_root: Path = Path("/sys/class/power_supply")) -> dict[str, Any]
     ac_values: list[bool] = []
     batteries: list[dict[str, Any]] = []
     root_accessible = power_root.is_dir()
+    unreadable_supply_types = False
     for supply in sorted(power_root.glob("*")):
         kind = _read_text(supply / "type")
+        if kind is None:
+            unreadable_supply_types = True
+            continue
         if kind in {"Mains", "USB", "USB_C", "USB_PD"}:
             raw = _read_text(supply / "online")
             if raw in {"0", "1"}:
@@ -647,7 +651,13 @@ def _power(power_root: Path = Path("/sys/class/power_supply")) -> dict[str, Any]
     )
     return {
         "ac_online": any(ac_values) if ac_values else None,
-        "battery_present": bool(batteries) if root_accessible else None,
+        "battery_present": (
+            True
+            if batteries
+            else False
+            if root_accessible and not unreadable_supply_types
+            else None
+        ),
         "battery_percent": battery_percent,
         "batteries": batteries,
     }
@@ -733,7 +743,7 @@ def _network(network_root: Path = Path("/sys/class/net")) -> dict[str, Any]:
             interface_type = "other"
         raw_state = (_read_text(interface / "operstate") or "").lower()
         online = True if raw_state == "up" else False if raw_state in {"down", "dormant"} else None
-        speed = _read_int(interface / "speed", minimum=0, maximum=1_000_000)
+        speed = _read_int(interface / "speed", minimum=1, maximum=1_000_000)
         device = interface / "device"
         try:
             driver = _safe_token((device / "driver").resolve(strict=True).name)
@@ -775,8 +785,10 @@ def _network(network_root: Path = Path("/sys/class/net")) -> dict[str, Any]:
     return {"interfaces": interfaces, "offline": offline}
 
 
-def _thermal() -> dict[str, int | float | str | None]:
-    thermal_root = Path("/sys/class/thermal")
+def _thermal(
+    thermal_root: Path = Path("/sys/class/thermal"),
+    hwmon_root: Path = Path("/sys/class/hwmon"),
+) -> dict[str, int | float | str | None]:
     temperatures: list[float] = []
     temperature_zones = 0
     for zone in sorted(thermal_root.glob("thermal_zone*")):
@@ -786,9 +798,18 @@ def _thermal() -> dict[str, int | float | str | None]:
         raw = _read_int(zone / "temp", minimum=-100_000, maximum=250_000)
         if raw is not None:
             temperatures.append(raw / 1000.0)
+    hwmon_temperature_inputs = 0
+    if not temperatures:
+        for sensor in sorted(hwmon_root.glob("hwmon*/temp*_input")):
+            if re.fullmatch(r"temp[0-9]+_input", sensor.name) is None:
+                continue
+            hwmon_temperature_inputs += 1
+            raw = _read_int(sensor, minimum=-100_000, maximum=250_000)
+            if raw is not None:
+                temperatures.append(raw / 1000.0)
     fan_count = 0
     fan_observed = False
-    for fan in sorted(Path("/sys/class/hwmon").glob("hwmon*/fan*_input")):
+    for fan in sorted(hwmon_root.glob("hwmon*/fan*_input")):
         if re.fullmatch(r"fan[0-9]+_input", fan.name) is None:
             continue
         if _read_int(fan, minimum=0, maximum=200_000) is not None:
@@ -796,7 +817,11 @@ def _thermal() -> dict[str, int | float | str | None]:
             fan_observed = True
     return {
         "sensor_count": len(temperatures)
-        if temperatures or (thermal_root.is_dir() and temperature_zones == 0)
+        if temperatures
+        else 0
+        if (thermal_root.is_dir() or hwmon_root.is_dir())
+        and temperature_zones == 0
+        and hwmon_temperature_inputs == 0
         else None,
         "maximum_celsius": max(temperatures) if temperatures else None,
         "fan_count": fan_count if fan_observed else None,

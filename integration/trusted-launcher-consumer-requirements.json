@@ -6,7 +6,7 @@
         "CHN-01-through-CHN-06-for-each-replay-helper",
         "python-on-PATH-replacement",
         "startup-hooks-at-every-later-import-visible-root",
-        "seven-invocation-byte-compare"
+        "nine-invocation-byte-compare"
       ],
       "freeze_boundary": "identical-product-tree-candidate-manifest-profile-result-and-signatory-bytes",
       "intentional_children": [
@@ -62,6 +62,8 @@
         "sizer.recommend.tts",
         "sizer.plan.local-ai-balanced",
         "sizer.install",
+        "sizer.install.status",
+        "sizer.install.cancel",
         "sizer.snapshot"
       ],
       "terminal_members": [

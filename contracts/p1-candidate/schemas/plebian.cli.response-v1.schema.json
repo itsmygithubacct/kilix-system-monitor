@@ -9,6 +9,8 @@
         "hardware.gpu",
         "hardware.inventory",
         "sizer.install",
+        "sizer.install.cancel",
+        "sizer.install.status",
         "sizer.plan.local-ai-balanced",
         "sizer.recommend.tts",
         "sizer.snapshot"
@@ -47,6 +49,7 @@
         ],
         "type": "object"
       },
+      "maxItems": 64,
       "type": "array"
     }
   },

@@ -25,10 +25,13 @@ testing, but they are not P1-frozen and they make no hardware, backend, model,
 fit or performance qualification claim. They move to a frozen root schema
 surface only after all named consumers sign identical bytes.
 
-Three additive design contracts now make privacy, checkpoint-licence admission
-and exact F104/F105 weight-evidence citation machine-checkable without changing
-the original R2 invocation or response fixtures. They remain D-side proposals
-until the same P1 signoff occurs. The weight evidence is explicitly
+The successor candidate retains the additive privacy, checkpoint-licence and
+exact F104/F105 weight-evidence designs, and closes the F107-B R2 return's
+**4/4 contract findings**. Its **9/9 invocations** use absolute installed
+executables; install binds exact reviewed plan bytes by SHA-256; **2/2** status
+and cancellation calls share a bounded resumable transaction schema; and
+renderer populations carry explicit schema maxima. These remain D-side
+proposals until the same P1 signoff occurs. The weight evidence is explicitly
 digest-enumerated with no wildcard inheritance; it authorizes no selection,
 fit, staging or transfer.
 

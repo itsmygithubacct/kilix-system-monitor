@@ -31,13 +31,22 @@ RETURN_IDENTITIES = (
     "td_hw_profile_sha256",
 )
 P1_INVOCATIONS = (
-    ("plebian-hardware", "show"),
-    ("plebian-hardware", "inventory", "--json"),
-    ("plebian-hardware", "gpu", "--json"),
-    ("plebian-model-sizer", "recommend", "tts", "--json"),
-    ("plebian-model-sizer", "plan", "local-ai-balanced", "--json"),
-    ("plebian-model-sizer", "install", "PLAN_PATH", "--json"),
-    ("plebian-model-sizer", "snapshot", "--json"),
+    ("/usr/bin/plebian-hardware", "show"),
+    ("/usr/bin/plebian-hardware", "inventory", "--json"),
+    ("/usr/bin/plebian-hardware", "gpu", "--json"),
+    ("/usr/bin/plebian-model-sizer", "recommend", "tts", "--json"),
+    ("/usr/bin/plebian-model-sizer", "plan", "local-ai-balanced", "--json"),
+    (
+        "/usr/bin/plebian-model-sizer",
+        "install",
+        "PLAN_PATH",
+        "--expected-plan-sha256",
+        "PLAN_SHA256",
+        "--json",
+    ),
+    ("/usr/bin/plebian-model-sizer", "install-status", "TRANSACTION_ID", "--json"),
+    ("/usr/bin/plebian-model-sizer", "cancel", "TRANSACTION_ID", "--json"),
+    ("/usr/bin/plebian-model-sizer", "snapshot", "--json"),
 )
 INTERFACE_REQUIREMENT_IDS = tuple(f"TLIF-{index:02d}" for index in range(1, 21))
 EVIDENCE_REQUIREMENT_IDS = tuple(f"TDE-{index:02d}" for index in range(1, 12))
@@ -179,7 +188,7 @@ def _expected_consumers() -> list[dict[str, Any]]:
                 "CHN-01-through-CHN-06-for-each-replay-helper",
                 "python-on-PATH-replacement",
                 "startup-hooks-at-every-later-import-visible-root",
-                "seven-invocation-byte-compare",
+                "nine-invocation-byte-compare",
             ],
             "freeze_boundary": "identical-product-tree-candidate-manifest-profile-result-and-signatory-bytes",
             "intentional_children": [
@@ -226,6 +235,8 @@ def _expected_consumers() -> list[dict[str, Any]]:
                 "sizer.recommend.tts",
                 "sizer.plan.local-ai-balanced",
                 "sizer.install",
+                "sizer.install.status",
+                "sizer.install.cancel",
                 "sizer.snapshot",
             ],
             "terminal_members": [
@@ -440,7 +451,7 @@ def _validate_invocations() -> None:
         raise ReadinessFailure("TD-P1: invocation contract has no command population")
     observed = tuple(tuple(command.get("argv", [])) for command in commands)
     if observed != P1_INVOCATIONS:
-        raise ReadinessFailure("TD-P1: seven-command invocation population changed")
+        raise ReadinessFailure("TD-P1: nine-command invocation population changed")
     candidate_root = contract_path.parent
     for command in commands:
         fixture = command.get("fixture")

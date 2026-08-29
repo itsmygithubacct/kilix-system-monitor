@@ -34,6 +34,7 @@ SCHEMA_RELATIVE_PATHS = {
     "plebian.models.profiles/v1": "schemas/plebian.models.profiles-v1.schema.json",
     "plebian.models.fit-result/v1": "schemas/plebian.models.fit-result-v1.schema.json",
     "plebian.models.install-plan/v1": "schemas/plebian.models.install-plan-v1.schema.json",
+    "plebian.models.install-transaction/v1": "schemas/plebian.models.install-transaction-v1.schema.json",
     "plebian.models.snapshot/v1": "schemas/plebian.models.snapshot-v1.schema.json",
     "plebian.cli.response/v1": "schemas/plebian.cli.response-v1.schema.json",
 }
@@ -77,6 +78,47 @@ EXPECTED_SUBPROCESS_PRIVACY = {
     "stdin": "dev-null",
     "stdout_bytes": 65536,
     "timeout_seconds": 5,
+}
+F107_COMMAND_IDS = (
+    "hardware.show",
+    "hardware.inventory",
+    "hardware.gpu",
+    "sizer.recommend.tts",
+    "sizer.plan.local-ai-balanced",
+    "sizer.install",
+    "sizer.install.status",
+    "sizer.install.cancel",
+    "sizer.snapshot",
+)
+F107_RENDERER_LIMITS = {
+    "authorization_receipts": 256,
+    "blockers": 64,
+    "fit_reasons": 64,
+    "fit_resources": 4,
+    "plan_items": 256,
+    "profile_catalog_ids": 256,
+    "unknowns": 256,
+    "warnings": 64,
+}
+F107_TRANSACTION_LIFECYCLE = {
+    "cancellation": "idempotent-request-stop-before-next-item-preserve-completed-item-receipts",
+    "confirmation_binding": "consumer-confirmation-and-resume-state-carry-the-reviewed-plan-sha256",
+    "idempotency_key": "plan-sha256-plus-sorted-authorization-receipt-sha256s",
+    "plan_binding": "provider-compares-sha256-of-exact-canonical-reviewed-plan-bytes-before-any-mutation",
+    "revalidation": "execution-start-and-before-each-item",
+    "retry": "same-plan-and-receipts-resume-or-return-terminal",
+    "states": [
+        "blocked",
+        "queued",
+        "running",
+        "interrupted",
+        "cancelling",
+        "cancelled",
+        "succeeded",
+        "failed",
+        "unknown",
+    ],
+    "terminal_states": ["blocked", "cancelled", "succeeded", "failed"],
 }
 CAMPP_AUTHORITY_SHA256 = "54b36539688fe450074a0105a2e43719837c321e4cf0eff8d7884a2d92ad21ad"
 APACHE_2_LICENSE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
@@ -482,6 +524,8 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
     if identity == "f106.invocation-contract/v0-draft":
         commands = document.get("commands", [])
         command_ids = [command.get("command_id") for command in commands]
+        if tuple(command_ids) != F107_COMMAND_IDS:
+            errors.append("invocation lifecycle command population differs from the frozen order")
         if len(command_ids) != len(set(command_ids)):
             errors.append("duplicate invocation command_id")
         argv_vectors = [tuple(command.get("argv", [])) for command in commands]
@@ -489,8 +533,21 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
             errors.append("duplicate invocation argv")
         for index, command in enumerate(commands):
             argv = command.get("argv", [])
-            if not argv or "/" in argv[0]:
-                errors.append(f"commands[{index}] must invoke a PATH-resolved program without a shell")
+            expected_executable = (
+                "/usr/bin/plebian-hardware"
+                if str(command.get("command_id", "")).startswith("hardware.")
+                else "/usr/bin/plebian-model-sizer"
+            )
+            if not argv or argv[0] != expected_executable:
+                errors.append(
+                    f"commands[{index}] executable differs from the frozen absolute installed path"
+                )
+            if command.get("command_id") == "sizer.install" and (
+                len(argv) != 6
+                or argv[1:3] != ["install", "PLAN_PATH"]
+                or argv[3:] != ["--expected-plan-sha256", "PLAN_SHA256", "--json"]
+            ):
+                errors.append("install invocation lacks reviewed-plan SHA-256 binding")
             fixture_value = command.get("fixture")
             if not isinstance(fixture_value, str):
                 continue
@@ -505,6 +562,13 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
                 errors.append(f"commands[{index}] text output cannot declare a data schema")
             if command.get("stdout") == "plebian.cli.response/v1" and command.get("data_schema") is None:
                 errors.append(f"commands[{index}] JSON output has no data schema")
+        environment = document.get("environment", {})
+        if environment.get("executable_resolution") != "absolute-installed-paths-only":
+            errors.append("invocation executable resolution is not frozen to absolute paths")
+        if document.get("renderer_limits") != F107_RENDERER_LIMITS:
+            errors.append("renderer limits differ from the bounded F107 surface")
+        if document.get("transaction_lifecycle") != F107_TRANSACTION_LIFECYCLE:
+            errors.append("install lifecycle differs from the frozen resumable transaction contract")
         return errors
 
     if identity == "plebian.hardware/v1":
@@ -514,6 +578,8 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
         if "privacy" in document and document.get("privacy") != EXPECTED_OBSERVATION_PRIVACY:
             errors.append("hardware privacy projection differs from the default privacy contract")
         capture = document.get("capture", {})
+        if capture.get("qualification_eligible") is not False:
+            errors.append("hardware observation cannot self-assert qualification eligibility")
         if capture.get("source") in {"synthetic-contract", "redacted-observation"} and capture.get("qualification_eligible"):
             errors.append("synthetic or redacted fixture cannot qualify hardware")
         if capture.get("qualification_eligible") and any(
@@ -731,12 +797,74 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
             errors.append("plan document must not synthesize user confirmation")
         return errors
 
+    if identity == "plebian.models.install-transaction/v1":
+        state = document.get("state")
+        operation = document.get("operation")
+        transaction_id = document.get("transaction_id")
+        plan_id = document.get("plan_id")
+        plan_sha256 = document.get("plan_sha256")
+        terminal_states = {"blocked", "cancelled", "failed", "succeeded"}
+        if document.get("terminal") != (state in terminal_states):
+            errors.append("install transaction terminal flag differs from its state")
+        if document.get("cancelable") != (
+            state in {"interrupted", "queued", "running"}
+        ):
+            errors.append("install transaction cancelable flag differs from its state")
+        if document.get("resumable") != (state == "interrupted"):
+            errors.append("install transaction resumable flag differs from its state")
+        if operation == "install" and (plan_id is None or plan_sha256 is None):
+            errors.append("install transaction is not bound to reviewed plan bytes")
+        if state == "blocked" and transaction_id is not None:
+            errors.append("blocked install attempt invented a transaction identity")
+        if state not in {"blocked", "unknown"} and (
+            transaction_id is None or plan_id is None or plan_sha256 is None
+        ):
+            errors.append("active or completed install transaction lacks resume identities")
+        progress = document.get("progress", {})
+        completed = progress.get("completed_items")
+        total = progress.get("total_items")
+        if isinstance(completed, int) and isinstance(total, int) and completed > total:
+            errors.append("install transaction progress exceeds its item population")
+        item_results = document.get("item_results", [])
+        item_ids = [item.get("artifact_id") for item in item_results]
+        if len(item_ids) != len(set(item_ids)):
+            errors.append("install transaction item results are not unique")
+        receipts = document.get("authorization_receipt_sha256s", [])
+        if receipts != sorted(set(receipts)):
+            errors.append("install transaction receipt identities must be sorted and unique")
+        if isinstance(total, int) and len(item_results) != total:
+            errors.append("install transaction item-result population differs from total items")
+        completed_results = sum(
+            item.get("status") in {"cancelled", "failed", "succeeded"}
+            for item in item_results
+        )
+        if isinstance(completed, int) and completed_results != completed:
+            errors.append("install transaction completed count differs from item results")
+        if state in {"blocked", "unknown"} and not document.get("blockers"):
+            errors.append("blocked or unknown install transaction lacks an explicit blocker")
+        return errors
+
     if identity == "plebian.models.snapshot/v1":
         if document.get("capacity_contract", {}).get("status") == "missing" and document.get("qualification_eligible"):
             errors.append("snapshot without F100-C0 cannot qualify")
         unknowns = document.get("unknowns", [])
         if unknowns != sorted(set(unknowns)):
             errors.append("snapshot unknowns must be sorted and unique")
+        resume = document.get("install_resume", {})
+        resume_state = resume.get("state")
+        resume_transaction = resume.get("transaction_id")
+        resume_plan = resume.get("plan_sha256")
+        resume_receipts = resume.get("authorization_receipt_sha256s", [])
+        if resume_receipts != sorted(set(resume_receipts)):
+            errors.append("snapshot resume receipt identities must be sorted and unique")
+        if resume_state == "none" and any(
+            (resume_transaction is not None, resume_plan is not None, bool(resume_receipts))
+        ):
+            errors.append("empty snapshot resume state carries invented install identities")
+        if resume_state not in {"none", "unknown"} and (
+            resume_transaction is None or resume_plan is None
+        ):
+            errors.append("snapshot resume state lacks transaction and reviewed-plan identities")
         return errors
 
     return errors
@@ -782,8 +910,23 @@ def validate_response(document: dict[str, Any], contract_by_command: dict[str, d
         return errors
     if command.startswith("sizer.plan") and document.get("status") != data.get("status"):
         errors.append("plan response status does not match plan status")
-    if command == "sizer.install" and data.get("operation") != "install":
-        errors.append("install response does not identify install operation")
+    transaction_operations = {
+        "sizer.install": "install",
+        "sizer.install.cancel": "cancel",
+        "sizer.install.status": "status",
+    }
+    if command in transaction_operations:
+        if data.get("operation") != transaction_operations[command]:
+            errors.append("install lifecycle response does not identify its operation")
+        transaction_status = (
+            "blocked"
+            if data.get("state") == "blocked"
+            else "unknown"
+            if data.get("state") == "unknown"
+            else "ok"
+        )
+        if document.get("status") != transaction_status:
+            errors.append("install lifecycle response status does not match transaction state")
     if command in {"hardware.gpu", "hardware.inventory"}:
         if command == "hardware.gpu" and data.get("capture", {}).get("scope") != "gpu":
             errors.append("GPU response does not carry GPU scope")
@@ -814,6 +957,153 @@ def hardware_response_status_controls(
                 f"hardware response-status control {label} did not reject causally"
             )
     return failures, len(controls)
+
+
+def f107_return_controls(
+    contract: dict[str, Any],
+    available: dict[str, Draft202012Validator],
+) -> tuple[list[str], int]:
+    """Prove each returned F107-B finding has a load-bearing rejection."""
+    controls: list[tuple[str, dict[str, Any], str]] = []
+
+    missing_binding = copy.deepcopy(contract)
+    install = next(
+        command
+        for command in missing_binding["commands"]
+        if command["command_id"] == "sizer.install"
+    )
+    install["argv"] = [
+        "/usr/bin/plebian-model-sizer",
+        "install",
+        "PLAN_PATH",
+        "--json",
+    ]
+    controls.append(
+        (
+            "reviewed-plan-binding",
+            missing_binding,
+            "install invocation lacks reviewed-plan SHA-256 binding",
+        )
+    )
+
+    missing_lifecycle = copy.deepcopy(contract)
+    missing_lifecycle["commands"] = [
+        command
+        for command in missing_lifecycle["commands"]
+        if command["command_id"] != "sizer.install.status"
+    ]
+    controls.append(
+        (
+            "resumable-lifecycle",
+            missing_lifecycle,
+            "invocation lifecycle command population differs from the frozen order",
+        )
+    )
+
+    ambient_executable = copy.deepcopy(contract)
+    ambient_executable["commands"][0]["argv"][0] = "plebian-hardware"
+    controls.append(
+        (
+            "absolute-executable",
+            ambient_executable,
+            "executable differs from the frozen absolute installed path",
+        )
+    )
+
+    unbounded_renderer = copy.deepcopy(contract)
+    unbounded_renderer["renderer_limits"]["warnings"] = 65
+    controls.append(
+        (
+            "renderer-cardinality",
+            unbounded_renderer,
+            "renderer limits differ from the bounded F107 surface",
+        )
+    )
+
+    failures: list[str] = []
+    for label, mutated, expected in controls:
+        errors = validate_document(
+            "f106.invocation-contract/v0-draft", mutated, available
+        )
+        if not any(expected in error for error in errors):
+            failures.append(f"F107-B control {label} did not reject causally")
+    return failures, len(controls)
+
+
+def renderer_limit_errors(
+    contract: dict[str, Any],
+    available: dict[str, Draft202012Validator],
+) -> list[str]:
+    schemas = {identity: validator.schema for identity, validator in available.items()}
+    observed = {
+        "authorization_receipts": schemas["plebian.models.install-plan/v1"]["properties"]["authorization_receipts"].get("maxItems"),
+        "blockers": schemas["plebian.models.install-plan/v1"]["properties"]["blockers"].get("maxItems"),
+        "fit_reasons": schemas["plebian.models.fit-result/v1"]["properties"]["reasons"].get("maxItems"),
+        "fit_resources": schemas["plebian.models.fit-result/v1"]["properties"]["resources"].get("maxItems"),
+        "plan_items": schemas["plebian.models.install-plan/v1"]["properties"]["items"].get("maxItems"),
+        "profile_catalog_ids": schemas["plebian.models.snapshot/v1"]["properties"]["profile_catalog_ids"].get("maxItems"),
+        "unknowns": schemas["plebian.models.snapshot/v1"]["properties"]["unknowns"].get("maxItems"),
+        "warnings": schemas["plebian.cli.response/v1"]["properties"]["warnings"].get("maxItems"),
+    }
+    return [] if contract.get("renderer_limits") == observed else [
+        "invocation renderer limits do not match their schema maxItems"
+    ]
+
+
+def install_transaction_controls(
+    available: dict[str, Draft202012Validator],
+) -> tuple[list[str], int]:
+    base = load_json(ROOT / "fixtures" / "responses" / "sizer-install-blocked.json")["data"]
+    mutations = (
+        (
+            "terminal-state",
+            "/terminal",
+            False,
+            "install transaction terminal flag differs from its state",
+        ),
+        (
+            "plan-binding",
+            "/plan_sha256",
+            None,
+            "install transaction is not bound to reviewed plan bytes",
+        ),
+        (
+            "blocked-identity",
+            "/transaction_id",
+            "fixture:invented-transaction",
+            "blocked install attempt invented a transaction identity",
+        ),
+        (
+            "progress-population",
+            "/progress/completed_items",
+            1,
+            "install transaction progress exceeds its item population",
+        ),
+    )
+    failures: list[str] = []
+    for label, pointer, value, expected in mutations:
+        mutated = copy.deepcopy(base)
+        set_pointer(mutated, pointer, value)
+        errors = validate_document(
+            "plebian.models.install-transaction/v1", mutated, available
+        )
+        if expected not in errors:
+            failures.append(
+                f"install transaction control {label} did not reject causally"
+            )
+    return failures, len(mutations)
+
+
+def hardware_qualification_control(
+    available: dict[str, Draft202012Validator],
+) -> tuple[list[str], int]:
+    mutated = load_json(ROOT / "fixtures" / "hardware" / "current-host-redacted.json")
+    mutated["capture"]["qualification_eligible"] = True
+    expected = "hardware observation cannot self-assert qualification eligibility"
+    errors = validate_document("plebian.hardware/v1", mutated, available)
+    return ([] if expected in errors else [
+        "hardware qualification control did not reject causally"
+    ]), 1
 
 
 def set_pointer(document: Any, pointer: str, value: Any) -> None:
@@ -876,9 +1166,18 @@ def run_replay_checks(contract: dict[str, Any]) -> list[str]:
     timeout = contract["limits"]["read_only_timeout_seconds"]
     stdout_limit = contract["limits"]["stdout_bytes"]
     diagnostic_limit = contract["limits"]["diagnostic_bytes"]
+    plan_sha256 = hashlib.sha256(plan.read_bytes()).hexdigest()
     for command in contract["commands"]:
-        argv = [str(replay / command["argv"][0]), *command["argv"][1:]]
-        argv = [str(plan) if value == "PLAN_PATH" else value for value in argv]
+        program = Path(command["argv"][0]).name
+        argv = [str(replay / program), *command["argv"][1:]]
+        argv = [
+            str(plan)
+            if value == "PLAN_PATH"
+            else plan_sha256
+            if value == "PLAN_SHA256"
+            else value
+            for value in argv
+        ]
         completed = subprocess.run(
             argv,
             stdin=subprocess.DEVNULL,
@@ -954,6 +1253,15 @@ def run_replay_checks(contract: dict[str, Any]) -> list[str]:
             encoding="utf-8",
         )
         wrong_schema.write_text('{"schema":"unsupported/v1"}\n', encoding="utf-8")
+        noncanonical = temporary_root / "noncanonical-plan.json"
+        noncanonical.write_text(
+            '{"schema": "plebian.models.install-plan/v1"}\n', encoding="utf-8"
+        )
+        nonfinite = temporary_root / "nonfinite-plan.json"
+        nonfinite.write_text(
+            '{"schema":"plebian.models.install-plan/v1","value":NaN}\n',
+            encoding="utf-8",
+        )
         with oversized.open("wb") as handle:
             handle.truncate(MAX_DOCUMENT_BYTES + 1)
         for label, path in (
@@ -961,13 +1269,34 @@ def run_replay_checks(contract: dict[str, Any]) -> list[str]:
             ("malformed-plan", malformed),
             ("duplicate-key-plan", duplicate),
             ("wrong-schema-plan", wrong_schema),
+            ("noncanonical-plan", noncanonical),
+            ("nonfinite-plan", nonfinite),
             ("oversized-plan", oversized),
         ):
             check_failure(
                 label,
-                [str(replay / "plebian-model-sizer"), "install", str(path), "--json"],
+                [
+                    str(replay / "plebian-model-sizer"),
+                    "install",
+                    str(path),
+                    "--expected-plan-sha256",
+                    "0" * 64,
+                    "--json",
+                ],
                 65,
             )
+        check_failure(
+            "reviewed-plan-digest-mismatch",
+            [
+                str(replay / "plebian-model-sizer"),
+                "install",
+                str(plan),
+                "--expected-plan-sha256",
+                "0" * 64,
+                "--json",
+            ],
+            65,
+        )
     return errors
 
 
@@ -1221,6 +1550,7 @@ def main() -> int:
     failures: list[str] = list(integrity_errors)
     if contract_errors:
         failures.append("invocation-contract.json: " + "; ".join(contract_errors))
+    failures.extend(renderer_limit_errors(contract, available))
     valid_count = 0
     for identity, group in FIXTURE_GROUPS.items():
         for path in fixture_paths(group):
@@ -1239,6 +1569,9 @@ def main() -> int:
     parser_control_count = 0
     unknown_control_count = 0
     response_status_control_count = 0
+    f107_control_count = 0
+    transaction_control_count = 0
+    qualification_control_count = 0
     if arguments.self_test:
         invalid_paths = sorted((ROOT / "fixtures" / "invalid").glob("*.json"))
         invalid_total = len(invalid_paths)
@@ -1264,6 +1597,16 @@ def main() -> int:
             available,
         )
         failures.extend(response_errors)
+        f107_errors, f107_control_count = f107_return_controls(contract, available)
+        failures.extend(f107_errors)
+        transaction_errors, transaction_control_count = install_transaction_controls(
+            available
+        )
+        failures.extend(transaction_errors)
+        qualification_errors, qualification_control_count = hardware_qualification_control(
+            available
+        )
+        failures.extend(qualification_errors)
         failures.extend(run_replay_checks(contract))
         if not failures and not arguments.startup_control_child:
             failures.extend(startup_boundary_controls(arguments.launcher, arguments.uv))
@@ -1281,6 +1624,9 @@ def main() -> int:
         f"{parser_control_count}/6 strict JSON parser controls rejected, "
         f"{unknown_control_count}/10 hardware unknown-projection controls rejected, "
         f"{response_status_control_count}/2 hardware response-status controls rejected, "
+        f"{f107_control_count}/4 F107-B return controls rejected, "
+        f"{transaction_control_count}/4 install transaction controls rejected, "
+        f"{qualification_control_count}/1 hardware qualification controls rejected, "
         "replay success/failure paths verified"
         if arguments.self_test
         else ""
