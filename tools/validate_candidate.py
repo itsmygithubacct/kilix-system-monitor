@@ -341,6 +341,142 @@ def privacy_errors(value: Any, trail: str = "$") -> list[str]:
     return errors
 
 
+def required_hardware_unknown_markers(document: dict[str, Any]) -> set[str]:
+    """Independently derive explicit unknown markers for live/redacted facts."""
+    markers: set[str] = set()
+
+    def object_value(value: Any) -> dict[str, Any]:
+        return value if isinstance(value, dict) else {}
+
+    def array_value(value: Any) -> list[Any]:
+        return value if isinstance(value, list) else []
+
+    def mark(name: str, unresolved: bool) -> None:
+        if unresolved:
+            markers.add(name)
+
+    cpu = object_value(document.get("cpu"))
+    mark("cpu.architecture", cpu.get("architecture") == "unknown")
+    mark("cpu.model-bucket", cpu.get("model_bucket") == "unknown")
+    for field, suffix in (
+        ("logical_cpus", "logical"),
+        ("online_cpus", "online"),
+        ("affinity_cpus", "affinity"),
+        ("cpuset_cpus", "cpuset"),
+        ("effective_cpus", "effective"),
+        ("physical_cores", "physical-cores"),
+        ("packages", "packages"),
+        ("numa_nodes", "numa"),
+    ):
+        mark(f"cpu.{suffix}", cpu.get(field) is None)
+    mark("cpu.isa", not cpu.get("isa_features"))
+    for field, value in object_value(cpu.get("frequency_hz")).items():
+        mark(
+            "cpu.frequency." + field.removesuffix("_hz").replace("_", "-"),
+            value is None,
+        )
+    for field, value in object_value(cpu.get("cache_bytes")).items():
+        mark(
+            "cpu.cache." + field.removesuffix("_bytes").replace("_", "-"),
+            value is None,
+        )
+    mark("cpu.smt", cpu.get("smt") == "unknown")
+
+    memory = object_value(document.get("memory"))
+    for field, suffix in (
+        ("total_bytes", "total"),
+        ("available_bytes", "available"),
+        ("swap_total_bytes", "swap-total"),
+        ("swap_free_bytes", "swap-free"),
+        ("hugepage_size_bytes", "hugepage-size"),
+        ("hugepage_total_bytes", "hugepage-total"),
+        ("hugepage_free_bytes", "hugepage-free"),
+        ("numa_nodes", "numa-nodes"),
+    ):
+        mark(f"memory.{suffix}", memory.get(field) is None)
+
+    gpus = array_value(document.get("gpus"))
+    mark("gpu.inventory", not gpus)
+    for raw_gpu in gpus:
+        gpu = object_value(raw_gpu)
+        prefix = f"gpu.{gpu.get('index')}"
+        mark(f"{prefix}.vendor", gpu.get("vendor") == "unknown")
+        for field in ("vendor_id", "device_id", "kernel_driver"):
+            mark(f"{prefix}.{field.replace('_', '-')}", gpu.get(field) is None)
+        mark(f"{prefix}.class", gpu.get("device_class") == "unknown")
+        mark(f"{prefix}.render-access", gpu.get("render_access") is None)
+        mark(f"{prefix}.vram", gpu.get("vram_bytes") is None)
+        mark(f"{prefix}.memory-kind", gpu.get("memory_kind") == "unknown")
+        mark(f"{prefix}.shared-memory", gpu.get("shared_memory_bytes") is None)
+        mark(f"{prefix}.numa", gpu.get("numa_node") is None)
+        mark(f"{prefix}.iommu", gpu.get("iommu_group_present") is None)
+        pcie = object_value(gpu.get("pcie"))
+        mark(f"{prefix}.pcie", bool(pcie) and any(value is None for value in pcie.values()))
+        for raw_backend in array_value(gpu.get("backends")):
+            backend = object_value(raw_backend)
+            name = backend.get("name")
+            if isinstance(name, str):
+                mark(f"{prefix}.{name}", backend.get("status") == "unknown")
+
+    power = object_value(document.get("power"))
+    mark("power.ac", power.get("ac_online") is None)
+    mark("power.battery-present", power.get("battery_present") is None)
+    mark(
+        "power.battery-percent",
+        power.get("battery_present") is True and power.get("battery_percent") is None,
+    )
+    for raw_battery in array_value(power.get("batteries")):
+        battery = object_value(raw_battery)
+        prefix = f"power.battery.{battery.get('index')}"
+        for field in (
+            "percent",
+            "energy_full_wh",
+            "energy_design_wh",
+            "power_watts",
+            "wear_percent",
+        ):
+            mark(f"{prefix}.{field.replace('_', '-')}", battery.get(field) is None)
+        mark(f"{prefix}.status", battery.get("status") == "unknown")
+
+    platform_state = object_value(document.get("platform"))
+    for field in ("firmware_mode", "secure_boot", "iommu"):
+        mark(
+            "platform." + field.replace("_", "-"),
+            platform_state.get(field) == "unknown",
+        )
+    mark("platform.dmi", platform_state.get("dmi_access") != "available")
+    for field, value in object_value(document.get("buses")).items():
+        mark(
+            "buses." + field.removesuffix("_count").replace("_", "-"),
+            value is None,
+        )
+
+    network = object_value(document.get("network"))
+    for raw_interface in array_value(network.get("interfaces")):
+        interface = object_value(raw_interface)
+        prefix = f"network.{interface.get('index')}"
+        for field in ("online", "link_mbps", "driver"):
+            mark(f"{prefix}.{field.replace('_', '-')}", interface.get(field) is None)
+        mark(f"{prefix}.type", interface.get("type") == "unknown")
+        mark(f"{prefix}.bus", interface.get("bus") == "unknown")
+    mark("network.offline", network.get("offline") is None)
+
+    thermal = object_value(document.get("thermal"))
+    for field in ("sensor_count", "maximum_celsius", "fan_count"):
+        mark("thermal." + field.replace("_", "-"), thermal.get(field) is None)
+    mark("thermal.throttle", thermal.get("throttle") == "unknown")
+    storage = object_value(document.get("storage"))
+    for field, suffix in (
+        ("filesystem_type", "filesystem-type"),
+        ("free_bytes", "free"),
+        ("read_only", "read-only"),
+        ("total_bytes", "total"),
+    ):
+        mark(f"storage.{suffix}", storage.get(field) is None)
+    mark("virtualization", document.get("virtualization") == "unknown")
+    return markers
+
+
 def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
     errors = privacy_errors(document)
     if identity == "f106.invocation-contract/v0-draft":
@@ -413,6 +549,16 @@ def semantic_errors(identity: str, document: dict[str, Any]) -> list[str]:
             for field in ("cache_bytes", "frequency_hz"):
                 if field not in cpu:
                     errors.append(f"observed hardware CPU lacks {field}")
+            observed_unknowns = {
+                item for item in unknowns if isinstance(item, str)
+            }
+            for marker in sorted(
+                required_hardware_unknown_markers(document) - observed_unknowns
+            ):
+                errors.append(
+                    "observed hardware is missing explicit unknown marker: "
+                    + marker
+                )
         gpu_indices = [gpu.get("index") for gpu in document.get("gpus", [])]
         if gpu_indices != list(range(len(gpu_indices))):
             errors.append("hardware GPU indexes must be contiguous")
@@ -638,9 +784,36 @@ def validate_response(document: dict[str, Any], contract_by_command: dict[str, d
         errors.append("plan response status does not match plan status")
     if command == "sizer.install" and data.get("operation") != "install":
         errors.append("install response does not identify install operation")
-    if command == "hardware.gpu" and data.get("capture", {}).get("scope") != "gpu":
-        errors.append("GPU response does not carry GPU scope")
+    if command in {"hardware.gpu", "hardware.inventory"}:
+        if command == "hardware.gpu" and data.get("capture", {}).get("scope") != "gpu":
+            errors.append("GPU response does not carry GPU scope")
+        expected_status = "unknown" if data.get("unknowns") else "ok"
+        if document.get("status") != expected_status:
+            errors.append("hardware response status does not match explicit unknowns")
     return errors
+
+
+def hardware_response_status_controls(
+    contract_by_command: dict[str, dict[str, Any]],
+    available: dict[str, Draft202012Validator],
+) -> tuple[list[str], int]:
+    base = load_json(ROOT / "fixtures" / "responses" / "hardware-inventory.json")
+    controls = (
+        ("unknowns-present-as-ok", "ok", base["data"]["unknowns"]),
+        ("unknowns-absent-as-unknown", "unknown", []),
+    )
+    failures: list[str] = []
+    expected = "hardware response status does not match explicit unknowns"
+    for label, status, unknowns in controls:
+        mutated = copy.deepcopy(base)
+        mutated["status"] = status
+        mutated["data"]["unknowns"] = unknowns
+        errors = validate_response(mutated, contract_by_command, available)
+        if expected not in errors:
+            failures.append(
+                f"hardware response-status control {label} did not reject causally"
+            )
+    return failures, len(controls)
 
 
 def set_pointer(document: Any, pointer: str, value: Any) -> None:
@@ -655,6 +828,39 @@ def set_pointer(document: Any, pointer: str, value: Any) -> None:
         target[int(final)] = value
     else:
         target[final] = value
+
+
+def hardware_unknown_projection_controls(
+    available: dict[str, Draft202012Validator],
+) -> tuple[list[str], int]:
+    base = load_json(ROOT / "fixtures" / "hardware" / "current-host-redacted.json")
+    controls = (
+        ("cpu-architecture", "/cpu/architecture", "unknown", "cpu.architecture"),
+        ("memory-total", "/memory/total_bytes", None, "memory.total"),
+        ("gpu-class", None, None, "gpu.0.class"),
+        ("gpu-backend", None, None, "gpu.0.cuda"),
+        ("storage-free", None, None, "storage.free"),
+        ("network-link", None, None, "network.0.link-mbps"),
+        ("power-ac", "/power/ac_online", None, "power.ac"),
+        ("thermal-throttle", None, None, "thermal.throttle"),
+        ("platform-dmi", None, None, "platform.dmi"),
+        ("virtualization", "/virtualization", "unknown", "virtualization"),
+    )
+    failures: list[str] = []
+    for label, pointer, value, marker in controls:
+        mutated = copy.deepcopy(base)
+        if pointer is not None:
+            set_pointer(mutated, pointer, value)
+        mutated["unknowns"] = [
+            item for item in mutated["unknowns"] if item != marker
+        ]
+        expected = "observed hardware is missing explicit unknown marker: " + marker
+        errors = validate_document("plebian.hardware/v1", mutated, available)
+        if expected not in errors:
+            failures.append(
+                f"hardware unknown-projection control {label} did not reject causally"
+            )
+    return failures, len(controls)
 
 
 def run_replay_checks(contract: dict[str, Any]) -> list[str]:
@@ -1031,6 +1237,8 @@ def main() -> int:
     invalid_count = 0
     invalid_total = 0
     parser_control_count = 0
+    unknown_control_count = 0
+    response_status_control_count = 0
     if arguments.self_test:
         invalid_paths = sorted((ROOT / "fixtures" / "invalid").glob("*.json"))
         invalid_total = len(invalid_paths)
@@ -1047,6 +1255,15 @@ def main() -> int:
             invalid_count += 1
         parser_errors, parser_control_count = strict_json_parser_controls()
         failures.extend(parser_errors)
+        unknown_errors, unknown_control_count = hardware_unknown_projection_controls(
+            available
+        )
+        failures.extend(unknown_errors)
+        response_errors, response_status_control_count = hardware_response_status_controls(
+            command_by_id,
+            available,
+        )
+        failures.extend(response_errors)
         failures.extend(run_replay_checks(contract))
         if not failures and not arguments.startup_control_child:
             failures.extend(startup_boundary_controls(arguments.launcher, arguments.uv))
@@ -1062,6 +1279,8 @@ def main() -> int:
     mode = (
         f", {invalid_count}/{invalid_total} invalid mutations rejected, "
         f"{parser_control_count}/6 strict JSON parser controls rejected, "
+        f"{unknown_control_count}/10 hardware unknown-projection controls rejected, "
+        f"{response_status_control_count}/2 hardware response-status controls rejected, "
         "replay success/failure paths verified"
         if arguments.self_test
         else ""

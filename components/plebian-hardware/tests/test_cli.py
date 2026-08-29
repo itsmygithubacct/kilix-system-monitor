@@ -40,6 +40,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(response["command"], "hardware.inventory")
         self.assertEqual(response["status"], "unknown")
         self.assertEqual(response["data"]["capture"]["scope"], "inventory")
+        complete = observation()
+        complete["unknowns"] = []
+        status, stdout, stderr = cli.dispatch(
+            ["inventory", "--json"], lambda _: complete
+        )
+        self.assertEqual((status, stderr), (0, b""))
+        self.assertEqual(json.loads(stdout)["status"], "ok")
 
     def test_gpu_scope_is_not_inferred_from_option_order(self) -> None:
         status, stdout, stderr = cli.dispatch(
@@ -296,6 +303,129 @@ class ProbeBoundaryTests(unittest.TestCase):
         self.assertEqual(probe._pci_id("0x10DE"), "10de")
         self.assertIsNone(probe._pci_id("0x123"))
         self.assertIsNone(probe._pci_id("0xzzzz"))
+
+    def test_unresolved_observation_families_have_explicit_unknown_markers(self) -> None:
+        document = {
+            "virtualization": "unknown",
+            "cpu": {
+                "architecture": "unknown",
+                "model_bucket": "desktop-x86",
+                "logical_cpus": 1,
+                "online_cpus": 1,
+                "affinity_cpus": 1,
+                "cpuset_cpus": 1,
+                "effective_cpus": 1,
+                "physical_cores": 1,
+                "packages": 1,
+                "numa_nodes": 1,
+                "isa_features": ["avx"],
+                "frequency_hz": {
+                    "current_min_hz": 1,
+                    "current_max_hz": 1,
+                    "hardware_min_hz": 1,
+                    "hardware_max_hz": 1,
+                },
+                "cache_bytes": {
+                    "l1_data_bytes": 1,
+                    "l1_instruction_bytes": 1,
+                    "l2_bytes": 1,
+                    "l3_bytes": 1,
+                },
+                "smt": "enabled",
+            },
+            "memory": {
+                "total_bytes": None,
+                "available_bytes": 1,
+                "swap_total_bytes": 0,
+                "swap_free_bytes": 0,
+                "hugepage_size_bytes": 1,
+                "hugepage_total_bytes": 0,
+                "hugepage_free_bytes": 0,
+                "numa_nodes": 1,
+            },
+            "gpus": [
+                {
+                    "index": 0,
+                    "vendor": "intel",
+                    "vendor_id": "8086",
+                    "device_id": "1234",
+                    "kernel_driver": "i915",
+                    "device_class": "unknown",
+                    "render_access": True,
+                    "vram_bytes": 0,
+                    "memory_kind": "shared",
+                    "shared_memory_bytes": 0,
+                    "numa_node": -1,
+                    "iommu_group_present": True,
+                    "pcie": {
+                        "current_width": 1,
+                        "maximum_width": 1,
+                        "current_gtps": 1.0,
+                        "maximum_gtps": 1.0,
+                    },
+                    "backends": [
+                        {"name": "opencl", "status": "unknown"},
+                    ],
+                }
+            ],
+            "power": {
+                "ac_online": None,
+                "battery_present": False,
+                "battery_percent": None,
+                "batteries": [],
+            },
+            "platform": {
+                "firmware_mode": "uefi",
+                "secure_boot": "enabled",
+                "iommu": "enabled",
+                "dmi_access": "not-probed",
+            },
+            "buses": {
+                "pci_devices_count": 0,
+                "usb_devices_count": 0,
+                "storage_controllers_count": 0,
+            },
+            "network": {
+                "interfaces": [
+                    {
+                        "index": 0,
+                        "type": "ethernet",
+                        "online": True,
+                        "link_mbps": None,
+                        "driver": "e1000e",
+                        "bus": "pci",
+                    }
+                ],
+                "offline": False,
+            },
+            "thermal": {
+                "sensor_count": 0,
+                "maximum_celsius": 0.0,
+                "fan_count": 0,
+                "throttle": "unknown",
+            },
+            "storage": {
+                "filesystem_type": "ext4",
+                "free_bytes": None,
+                "read_only": False,
+                "total_bytes": 1,
+            },
+        }
+        self.assertEqual(
+            probe._required_unknown_markers(document),
+            {
+                "cpu.architecture",
+                "gpu.0.class",
+                "gpu.0.opencl",
+                "memory.total",
+                "network.0.link-mbps",
+                "platform.dmi",
+                "power.ac",
+                "storage.free",
+                "thermal.throttle",
+                "virtualization",
+            },
+        )
 
     def test_effective_compute_uses_the_smallest_positive_limit(self) -> None:
         self.assertEqual(probe._effective_cpus(16, 8, 3.5), 3.5)

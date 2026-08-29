@@ -823,6 +823,131 @@ def _virtualization() -> str:
     return _systemd_virtualization(executable) if executable else "unknown"
 
 
+def _required_unknown_markers(document: dict[str, Any]) -> set[str]:
+    """Project unresolved observation facts into stable, non-identifying markers."""
+    markers: set[str] = set()
+
+    def mark(name: str, unresolved: bool) -> None:
+        if unresolved:
+            markers.add(name)
+
+    cpu = document.get("cpu", {})
+    mark("cpu.architecture", cpu.get("architecture") == "unknown")
+    mark("cpu.model-bucket", cpu.get("model_bucket") == "unknown")
+    for field, suffix in (
+        ("logical_cpus", "logical"),
+        ("online_cpus", "online"),
+        ("affinity_cpus", "affinity"),
+        ("cpuset_cpus", "cpuset"),
+        ("effective_cpus", "effective"),
+        ("physical_cores", "physical-cores"),
+        ("packages", "packages"),
+        ("numa_nodes", "numa"),
+    ):
+        mark(f"cpu.{suffix}", cpu.get(field) is None)
+    mark("cpu.isa", not cpu.get("isa_features"))
+    for field, value in cpu.get("frequency_hz", {}).items():
+        mark(
+            "cpu.frequency." + field.removesuffix("_hz").replace("_", "-"),
+            value is None,
+        )
+    for field, value in cpu.get("cache_bytes", {}).items():
+        mark(
+            "cpu.cache." + field.removesuffix("_bytes").replace("_", "-"),
+            value is None,
+        )
+    mark("cpu.smt", cpu.get("smt") == "unknown")
+
+    memory = document.get("memory", {})
+    for field, suffix in (
+        ("total_bytes", "total"),
+        ("available_bytes", "available"),
+        ("swap_total_bytes", "swap-total"),
+        ("swap_free_bytes", "swap-free"),
+        ("hugepage_size_bytes", "hugepage-size"),
+        ("hugepage_total_bytes", "hugepage-total"),
+        ("hugepage_free_bytes", "hugepage-free"),
+        ("numa_nodes", "numa-nodes"),
+    ):
+        mark(f"memory.{suffix}", memory.get(field) is None)
+
+    gpus = document.get("gpus", [])
+    mark("gpu.inventory", not gpus)
+    for gpu in gpus:
+        prefix = f"gpu.{gpu.get('index')}"
+        mark(f"{prefix}.vendor", gpu.get("vendor") == "unknown")
+        for field in ("vendor_id", "device_id", "kernel_driver"):
+            mark(f"{prefix}.{field.replace('_', '-')}", gpu.get(field) is None)
+        mark(f"{prefix}.class", gpu.get("device_class") == "unknown")
+        mark(f"{prefix}.render-access", gpu.get("render_access") is None)
+        mark(f"{prefix}.vram", gpu.get("vram_bytes") is None)
+        mark(f"{prefix}.memory-kind", gpu.get("memory_kind") == "unknown")
+        mark(f"{prefix}.shared-memory", gpu.get("shared_memory_bytes") is None)
+        mark(f"{prefix}.numa", gpu.get("numa_node") is None)
+        mark(f"{prefix}.iommu", gpu.get("iommu_group_present") is None)
+        mark(f"{prefix}.pcie", any(value is None for value in gpu.get("pcie", {}).values()))
+        for backend in gpu.get("backends", []):
+            name = backend.get("name")
+            if isinstance(name, str):
+                mark(f"{prefix}.{name}", backend.get("status") == "unknown")
+
+    power = document.get("power", {})
+    mark("power.ac", power.get("ac_online") is None)
+    mark("power.battery-present", power.get("battery_present") is None)
+    mark(
+        "power.battery-percent",
+        power.get("battery_present") is True and power.get("battery_percent") is None,
+    )
+    for battery in power.get("batteries", []):
+        prefix = f"power.battery.{battery.get('index')}"
+        for field in (
+            "percent",
+            "energy_full_wh",
+            "energy_design_wh",
+            "power_watts",
+            "wear_percent",
+        ):
+            mark(f"{prefix}.{field.replace('_', '-')}", battery.get(field) is None)
+        mark(f"{prefix}.status", battery.get("status") == "unknown")
+
+    platform_state = document.get("platform", {})
+    for field in ("firmware_mode", "secure_boot", "iommu"):
+        mark(
+            "platform." + field.replace("_", "-"),
+            platform_state.get(field) == "unknown",
+        )
+    mark("platform.dmi", platform_state.get("dmi_access") != "available")
+
+    for field, value in document.get("buses", {}).items():
+        mark(
+            "buses." + field.removesuffix("_count").replace("_", "-"),
+            value is None,
+        )
+    network = document.get("network", {})
+    for interface in network.get("interfaces", []):
+        prefix = f"network.{interface.get('index')}"
+        for field in ("online", "link_mbps", "driver"):
+            mark(f"{prefix}.{field.replace('_', '-')}", interface.get(field) is None)
+        mark(f"{prefix}.type", interface.get("type") == "unknown")
+        mark(f"{prefix}.bus", interface.get("bus") == "unknown")
+    mark("network.offline", network.get("offline") is None)
+
+    thermal = document.get("thermal", {})
+    for field in ("sensor_count", "maximum_celsius", "fan_count"):
+        mark("thermal." + field.replace("_", "-"), thermal.get(field) is None)
+    mark("thermal.throttle", thermal.get("throttle") == "unknown")
+    storage = document.get("storage", {})
+    for field, suffix in (
+        ("filesystem_type", "filesystem-type"),
+        ("free_bytes", "free"),
+        ("read_only", "read-only"),
+        ("total_bytes", "total"),
+    ):
+        mark(f"storage.{suffix}", storage.get(field) is None)
+    mark("virtualization", document.get("virtualization") == "unknown")
+    return markers
+
+
 def _capability_id(document: dict[str, Any]) -> str:
     total = document["memory"]["total_bytes"]
     memory_bucket = None if total is None else total // (4 * 1024**3)
@@ -1050,16 +1175,9 @@ def collect(scope: str) -> dict[str, Any]:
             {"field_prefix": "thermal", "source": "sysfs", "status": "partial", "confidence": "observed"},
             {"field_prefix": "virtualization", "source": "command", "status": "observed", "confidence": "observed"},
         ],
-        "unknowns": sorted(
-            unknowns
-            | {
-                "cpu.model-bucket",
-                "storage.filesystem-type",
-                "storage.free",
-                "storage.read-only",
-                "storage.total",
-            }
-        ),
+        "unknowns": [],
     }
+    unknowns.update(_required_unknown_markers(document))
+    document["unknowns"] = sorted(unknowns)
     document["snapshot_id"] = _capability_id(document)
     return document

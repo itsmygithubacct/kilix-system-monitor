@@ -52,6 +52,14 @@ SMART/NVMe inspection and device-bound ROCm/Vulkan/OpenCL probes are not
 implemented by this component yet. Missing evidence remains null with an
 explicit unknown rather than becoming zero or a guessed pass.
 
+For live and redacted observations, the collector projects unresolved facts
+into stable non-identifying `unknowns` markers. The external P1 validator
+independently derives the required projection and rejects missing markers;
+its self-test exercises 10/10 CPU, memory, GPU, backend, storage, network,
+power, thermal, platform and virtualization field-family controls plus 2/2
+envelope-status controls. This keeps a nested null or unknown from being
+presented as an otherwise successful observation.
+
 The current Python console script, component-root `uv run` tests and P1 replay
 helper are exposed to Python startup hooks when run against a staged/provider
 tree. They are operator/developer functionality only, not release authority.
