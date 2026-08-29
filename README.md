@@ -38,13 +38,17 @@ until the parent has a reviewed public install surface. An F120 development
 manifest is therefore expected to be dirty/unresolved; qualification and
 staging must refuse.
 
-integration/trusted-launcher-consumer-requirements.json records the exact
-Track D TD-P1 and TD-HW consumer requirements without defining or copying a
-launcher profile. OD-13 assigns the ID-04 implementation to reviewer2 and
-OD-14 assigns the non-forking profile/child-table interface to Track H, but the
-shared result packet and independently reviewed interface have not returned.
-The readiness check therefore validates the local child surfaces and rejects
-premature adoption while consuming none of the required returned identities.
+integration/trusted-launcher-consumer-requirements.json records the final Track
+D TD-P1 and TD-HW capability/child-table requirements without defining or
+copying a launcher profile. The companion consumer campaign fixes the complete
+case-family, inner-variant, evidence and verdict population, and
+integration/TRUSTED-LAUNCHER-CONSUMER.md is the human-readable contract for
+Track H. OD-13 assigns the ID-04 implementation to reviewer2 and OD-14 assigns
+the non-forking interface to Track H, but the shared result packet and
+independently reviewed interface have not returned. The readiness check
+therefore validates the complete consumer input while accepting **0/20**
+interface mappings and **0/2** upstream exports and consuming **0/8** required
+returned identities.
 
 ## Checks
 

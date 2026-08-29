@@ -1,0 +1,477 @@
+{
+  "accepted_grade_states": [
+    "PASS",
+    "REFUSED-AS-NAMED"
+  ],
+  "chain_cases": [
+    {
+      "case_id": "CHN-01",
+      "expected_outcomes": [
+        "TL-EXECUTION-CHAIN"
+      ]
+    },
+    {
+      "case_id": "CHN-02",
+      "expected_outcomes": [
+        "TL-EXECUTION-CHAIN"
+      ]
+    },
+    {
+      "case_id": "CHN-03",
+      "expected_outcomes": [
+        "TL-LAUNCH-ENVIRONMENT"
+      ]
+    },
+    {
+      "case_id": "CHN-04",
+      "expected_outcomes": [
+        "TL-EXECUTION-CHAIN",
+        "TL-SUBJECT-DRIFT"
+      ]
+    },
+    {
+      "case_id": "CHN-05",
+      "expected_outcomes": [
+        "TL-RESULT-NONTERMINAL",
+        "AC-TL-MUTANT-SURVIVED"
+      ]
+    },
+    {
+      "case_id": "CHN-06",
+      "expected_outcomes": [
+        "AC-TL-MARKER-EXECUTED"
+      ]
+    }
+  ],
+  "common_cases": [
+    {
+      "case_id": "CAL-01",
+      "expected_outcomes": [
+        "CONTROL-MARKER-FORGED-TEXT-RC0-OBSERVED"
+      ]
+    },
+    {
+      "case_id": "CAL-02",
+      "expected_outcomes": [
+        "CONTROL-EVERY-REACHABLE-LOCATION-FIRED"
+      ]
+    },
+    {
+      "case_id": "CAL-03",
+      "expected_outcomes": [
+        "BASELINE-BODY-ONCE-PRECLOSURE-ZERO"
+      ]
+    },
+    {
+      "case_id": "CAL-04",
+      "expected_outcomes": [
+        "TL-SUBJECT-CLOSURE",
+        "TL-RESERVED-STARTUP"
+      ]
+    },
+    {
+      "case_id": "CAL-05",
+      "expected_outcomes": [
+        "AC-TL-FIRST-PROCESS-UNOBSERVED"
+      ]
+    },
+    {
+      "case_id": "CAL-06",
+      "expected_outcomes": [
+        "AC-TL-MUTATION-NOT-LIVE"
+      ]
+    },
+    {
+      "case_id": "ENV-01",
+      "expected_outcomes": [
+        "TL-LAUNCH-ARGV",
+        "AC-TL-MUTANT-SURVIVED"
+      ]
+    },
+    {
+      "case_id": "ENV-02",
+      "expected_outcomes": [
+        "TL-LAUNCH-ENVIRONMENT"
+      ]
+    },
+    {
+      "case_id": "ENV-03",
+      "expected_outcomes": [
+        "TL-LAUNCH-ENVIRONMENT"
+      ]
+    },
+    {
+      "case_id": "ENV-04",
+      "expected_outcomes": [
+        "TL-LAUNCH-ENVIRONMENT"
+      ]
+    },
+    {
+      "case_id": "ENV-05",
+      "expected_outcomes": [
+        "TL-LAUNCH-CWD"
+      ]
+    },
+    {
+      "case_id": "ENV-06",
+      "expected_outcomes": [
+        "TL-LAUNCH-PATH"
+      ]
+    },
+    {
+      "case_id": "ENV-07",
+      "expected_outcomes": [
+        "TL-LAUNCH-MODULE-STATE"
+      ]
+    },
+    {
+      "case_id": "ID-01",
+      "expected_outcomes": [
+        "TL-INTERPRETER-IDENTITY"
+      ]
+    },
+    {
+      "case_id": "ID-02",
+      "expected_outcomes": [
+        "TL-INTERPRETER-IDENTITY"
+      ]
+    },
+    {
+      "case_id": "ID-03",
+      "expected_outcomes": [
+        "TL-INTERPRETER-IDENTITY"
+      ]
+    },
+    {
+      "case_id": "ID-04",
+      "expected_outcomes": [
+        "TL-INTERPRETER-IDENTITY"
+      ]
+    },
+    {
+      "case_id": "ID-05",
+      "expected_outcomes": [
+        "TL-BOOTSTRAP-IDENTITY",
+        "TL-AUTHORITY-SOURCE"
+      ]
+    },
+    {
+      "case_id": "ID-06",
+      "expected_outcomes": [
+        "TL-AUTHORITY-SOURCE"
+      ]
+    },
+    {
+      "case_id": "DEP-01",
+      "expected_outcomes": [
+        "TL-DEPENDENCY-CLOSURE"
+      ]
+    },
+    {
+      "case_id": "ORD-01",
+      "expected_outcomes": [
+        "TL-AUTHORITY-SOURCE"
+      ]
+    },
+    {
+      "case_id": "ORD-02",
+      "expected_outcomes": [
+        "AC-TL-MARKER-EXECUTED"
+      ]
+    },
+    {
+      "case_id": "SUB-01",
+      "expected_outcomes": [
+        "TL-SUBJECT-CLOSURE"
+      ]
+    },
+    {
+      "case_id": "SUB-02",
+      "expected_outcomes": [
+        "TL-SUBJECT-CLOSURE"
+      ]
+    },
+    {
+      "case_id": "SUB-03",
+      "expected_outcomes": [
+        "TL-SUBJECT-CLOSURE"
+      ]
+    },
+    {
+      "case_id": "SUB-04",
+      "expected_outcomes": [
+        "TL-SUBJECT-ROOT"
+      ]
+    },
+    {
+      "case_id": "SUB-05",
+      "expected_outcomes": [
+        "TL-SUBJECT-DRIFT"
+      ]
+    },
+    {
+      "case_id": "SUB-06",
+      "expected_outcomes": [
+        "TL-SUBJECT-DRIFT",
+        "TL-AUTHORITY-SOURCE",
+        "TL-BOOTSTRAP-IDENTITY",
+        "TL-DEPENDENCY-CLOSURE"
+      ]
+    },
+    {
+      "case_id": "SUB-07",
+      "expected_outcomes": [
+        "TL-SUBJECT-CLOSURE"
+      ]
+    },
+    {
+      "case_id": "SUB-08",
+      "expected_outcomes": [
+        "TL-RESERVED-STARTUP"
+      ]
+    },
+    {
+      "case_id": "SUB-09",
+      "expected_outcomes": [
+        "TL-SUBJECT-DRIFT"
+      ]
+    },
+    {
+      "case_id": "RES-01",
+      "expected_outcomes": [
+        "TL-RESULT-MISSING"
+      ]
+    },
+    {
+      "case_id": "RES-02",
+      "expected_outcomes": [
+        "TL-RESULT-SHAPE"
+      ]
+    },
+    {
+      "case_id": "RES-03",
+      "expected_outcomes": [
+        "TL-RESULT-IDENTITY"
+      ]
+    },
+    {
+      "case_id": "RES-04",
+      "expected_outcomes": [
+        "TL-RESULT-SHAPE",
+        "TL-RESULT-MISSING",
+        "TL-RESULT-LIFECYCLE"
+      ]
+    },
+    {
+      "case_id": "RES-05",
+      "expected_outcomes": [
+        "TL-RESULT-NONTERMINAL",
+        "TL-RESULT-LIFECYCLE"
+      ]
+    },
+    {
+      "case_id": "RES-06",
+      "expected_outcomes": [
+        "TL-RESULT-LIFECYCLE",
+        "TL-RESULT-NONTERMINAL"
+      ]
+    },
+    {
+      "case_id": "RES-07",
+      "expected_outcomes": [
+        "TL-RESULT-NONTERMINAL"
+      ]
+    },
+    {
+      "case_id": "RES-08",
+      "expected_outcomes": [
+        "TL-RESULT-IDENTITY",
+        "TL-RESULT-SHAPE"
+      ]
+    },
+    {
+      "case_id": "RES-09",
+      "expected_outcomes": [
+        "TL-RESULT-MISSING"
+      ]
+    },
+    {
+      "case_id": "RES-10",
+      "expected_outcomes": [
+        "TL-CANCELLED"
+      ]
+    }
+  ],
+  "evidence_requirements": [
+    {
+      "requirement_id": "TDE-01",
+      "text": "frozen-input manifest and exact production commands"
+    },
+    {
+      "requirement_id": "TDE-02",
+      "text": "implementation-independent harness and parser hashes"
+    },
+    {
+      "requirement_id": "TDE-03",
+      "text": "per-case mutation delta and reachability proof"
+    },
+    {
+      "requirement_id": "TDE-04",
+      "text": "first-process PID kernel argv live executable cwd and environment identity"
+    },
+    {
+      "requirement_id": "TDE-05",
+      "text": "marker and body-marker counts plus canonical record bytes"
+    },
+    {
+      "requirement_id": "TDE-06",
+      "text": "expected and observed refusal codes"
+    },
+    {
+      "requirement_id": "TDE-07",
+      "text": "child descendant and result-channel lifecycle evidence"
+    },
+    {
+      "requirement_id": "TDE-08",
+      "text": "subject and evidence pre-run and post-run manifests"
+    },
+    {
+      "requirement_id": "TDE-09",
+      "text": "null probes listed separately from passes"
+    },
+    {
+      "requirement_id": "TDE-10",
+      "text": "two-export reproduction results"
+    },
+    {
+      "requirement_id": "TDE-11",
+      "text": "zero open Critical High Medium or Low findings"
+    }
+  ],
+  "exports": {
+    "independent": true,
+    "population": 2,
+    "required": 2
+  },
+  "family_row_completion": {
+    "aggregation": "one-row-per-case-family-target-export",
+    "required_result_fields": [
+      "case_id",
+      "target_id",
+      "export_id",
+      "grade",
+      "variants_required",
+      "variants_executed",
+      "variants_pass",
+      "variants_refused_as_named",
+      "variants_null",
+      "variants_harness_fail",
+      "variant_manifest_sha256",
+      "evidence_manifest_sha256"
+    ],
+    "variant_coverage": {
+      "enumeration": "complete-one-change-and-required-combination-population-for-the-case-family",
+      "population": "derived-and-frozen-per-case-target-export-before-execution",
+      "reachability": "every-required-variant-proves-mutation-delta-and-production-reachability"
+    },
+    "verdict": "variants-required-equals-variants-executed-equals-variants-pass-plus-variants-refused-as-named-and-variants-null-plus-variants-harness-fail-equals-zero"
+  },
+  "profile_targets": [
+    {
+      "baseline_case_ids": [
+        "TD-P1-BASELINE"
+      ],
+      "chain_targets": [
+        "td-p1-hardware-replay",
+        "td-p1-model-sizer-replay"
+      ],
+      "common_targets": [
+        "td-p1-candidate-validator"
+      ],
+      "profile_id": "TD-P1",
+      "replay_startup_targets": [
+        "td-p1-hardware-replay",
+        "td-p1-model-sizer-replay"
+      ]
+    },
+    {
+      "baseline_case_ids": [
+        "TD-HW-BASELINE"
+      ],
+      "chain_targets": [
+        "td-hw-unittest",
+        "td-hw-staged-show",
+        "td-hw-staged-inventory",
+        "td-hw-staged-gpu",
+        "td-hw-staged-invalid-argv"
+      ],
+      "common_targets": [
+        "td-hw-make-hardware-check",
+        "td-hw-staged-show",
+        "td-hw-staged-inventory",
+        "td-hw-staged-gpu",
+        "td-hw-staged-invalid-argv"
+      ],
+      "profile_id": "TD-HW",
+      "replay_startup_targets": []
+    }
+  ],
+  "rejecting_grade_states": [
+    "NULL",
+    "HARNESS-FAIL"
+  ],
+  "replay_startup_matrix": {
+    "additional_mutations": [
+      {
+        "expected_outcomes": [
+          "TL-EXECUTION-CHAIN"
+        ],
+        "mutation_id": "replace-python3-on-PATH"
+      }
+    ],
+    "membership_modes": [
+      {
+        "expected_outcomes": [
+          "TL-SUBJECT-CLOSURE"
+        ],
+        "mode": "unlisted"
+      },
+      {
+        "expected_outcomes": [
+          "TL-RESERVED-STARTUP"
+        ],
+        "mode": "listed-in-regenerated-manifest"
+      }
+    ],
+    "mutation_kinds": [
+      "sitecustomize.py",
+      "usercustomize.py",
+      "executable.pth"
+    ],
+    "population_per_target": 13,
+    "roots": [
+      "contracts/p1-candidate/tools/replay-bin",
+      "contracts/p1-candidate/tools"
+    ]
+  },
+  "row_population": {
+    "aggregation_unit": "case-family-target-export",
+    "case_family_target_definitions": 316,
+    "independent_exports": 2,
+    "required_case_family_target_export_rows": 632,
+    "required_nonrejecting_rows": 632
+  },
+  "schema": "kilix.track-d.trusted-launcher-consumer-campaign/v1",
+  "status": "final-campaign-specification-no-results",
+  "verdict_rules": [
+    "every-required-row-is-PASS-or-REFUSED-AS-NAMED",
+    "every-case-family-row-carries-a-complete-frozen-variant-manifest",
+    "every-required-variant-is-executed-and-nonrejecting",
+    "zero-required-row-is-NULL-or-HARNESS-FAIL",
+    "every-mutation-proves-delta-and-production-reachability",
+    "every-profile-preserves-subject-evidence-runtime-and-dependency-bytes",
+    "both-independent-exports-bind-identical-product-profile-and-interface-identities",
+    "zero-open-finding-at-every-severity",
+    "launcher-integrity-does-not-promote-hardware-coverage-or-P1-freeze"
+  ]
+}

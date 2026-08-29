@@ -8,6 +8,7 @@
         "startup-hooks-at-every-later-import-visible-root",
         "seven-invocation-byte-compare"
       ],
+      "freeze_boundary": "identical-product-tree-candidate-manifest-profile-result-and-signatory-bytes",
       "intentional_children": [
         {
           "entry_kind": "bound-python-authority",
@@ -31,8 +32,38 @@
         }
       ],
       "post_child_verification": "required-after-every-child",
+      "profile_constraints": {
+        "authority_and_dependencies": "separately-retained-validator-and-external-dependency-closures",
+        "child_launch": "shared-bootstrap-bound-interpreter-no-shebang",
+        "environment": "exact-returned-allowlist",
+        "result": "one-canonical-terminal-record-after-all-descendants",
+        "subject_closure": "nested-candidate-root-within-whole-export-preservation-root"
+      },
       "requirement_id": "TD-P1",
-      "subject": "independent-git-archive-export",
+      "retained_roots": [
+        {
+          "path": ".",
+          "role": "preservation-root"
+        },
+        {
+          "path": "contracts/p1-candidate",
+          "role": "subject-root"
+        },
+        {
+          "path": "tools/validate_candidate.py",
+          "role": "validator-authority"
+        }
+      ],
+      "subject": "candidate-root-within-independent-git-archive-export",
+      "success_assertions": [
+        "hardware.show",
+        "hardware.inventory",
+        "hardware.gpu",
+        "sizer.recommend.tts",
+        "sizer.plan.local-ai-balanced",
+        "sizer.install",
+        "sizer.snapshot"
+      ],
       "terminal_members": [
         "candidate-semantic-validator",
         "plebian-hardware-replay",
@@ -43,6 +74,12 @@
       "campaigns": [
         "common-matrix",
         "CHN-01-through-CHN-06-for-installed-command",
+        "physical-hardware",
+        "virtual-machine",
+        "denied-probe",
+        "non-x86"
+      ],
+      "coverage_prerequisites": [
         "physical-hardware",
         "virtual-machine",
         "denied-probe",
@@ -100,8 +137,34 @@
         }
       ],
       "post_child_verification": "required-after-every-child",
+      "profile_constraints": {
+        "authority_and_dependencies": "separately-retained-test-authority-and-external-dependency-closures",
+        "child_launch": "shared-bootstrap-bound-interpreter-no-generated-shebang-authority",
+        "environment": "exact-returned-allowlist",
+        "result": "one-canonical-terminal-record-after-all-descendants",
+        "subject_closure": "separate-source-and-staged-roots-within-whole-export-preservation"
+      },
+      "qualification_boundary": "launcher-integrity-does-not-qualify-hardware-coverage",
       "requirement_id": "TD-HW",
-      "subject": "independent-git-archive-export-plus-staged-prefix",
+      "retained_roots": [
+        {
+          "path": ".",
+          "role": "preservation-root"
+        },
+        {
+          "path": "components/plebian-hardware/src",
+          "role": "source-subject"
+        },
+        {
+          "path": "components/plebian-hardware/tests",
+          "role": "test-authority"
+        },
+        {
+          "path_kind": "returned-staged-prefix",
+          "role": "staged-subject"
+        }
+      ],
+      "subject": "separate-source-and-staged-roots-within-independent-export",
       "terminal_members": [
         "hardware-unittest-suite",
         "plebian-hardware-show",
@@ -111,8 +174,112 @@
       ]
     }
   ],
-  "schema": "kilix.track-d.trusted-launcher-consumer-requirements/v1",
-  "status": "developer-readiness-only-not-a-launch-profile",
+  "interface_contract": {
+    "conformance_return": {
+      "required_rows": {
+        "accepted": 0,
+        "population": 20,
+        "required": 20
+      },
+      "row_fields": [
+        "requirement_id",
+        "interface_field_or_mechanism",
+        "evidence_sha256"
+      ]
+    },
+    "must_not": [
+      "consumer-specific-native-launcher",
+      "consumer-wrapper-before-native-launcher",
+      "env-shebang-or-PATH-selected-authority",
+      "subject-authored-identity-or-terminal-result",
+      "child-result-promotion-without-post-descendant-verification"
+    ],
+    "requirements": [
+      {
+        "requirement_id": "TLIF-01",
+        "text": "canonical profile bytes have a frozen schema identity and SHA-256"
+      },
+      {
+        "requirement_id": "TLIF-02",
+        "text": "the ordered child table is profile data and has an independently recomputed terminal-set digest"
+      },
+      {
+        "requirement_id": "TLIF-03",
+        "text": "each subject preservation and authority root is separately retained with an exact no-follow manifest and no pathname reopen"
+      },
+      {
+        "requirement_id": "TLIF-04",
+        "text": "launcher bootstrap result-schema and profile-schema identities are exact frozen inputs"
+      },
+      {
+        "requirement_id": "TLIF-05",
+        "text": "the live interpreter binds path device inode and bytes rather than Python-reported strings alone"
+      },
+      {
+        "requirement_id": "TLIF-06",
+        "text": "the native launcher enforces one exact environment allowlist before subject code"
+      },
+      {
+        "requirement_id": "TLIF-07",
+        "text": "the native launcher starts from an empty external working directory"
+      },
+      {
+        "requirement_id": "TLIF-08",
+        "text": "initial module state and import path are checked before any subject authority import"
+      },
+      {
+        "requirement_id": "TLIF-09",
+        "text": "each child binds its entry kind path or module ordered argv and logical program"
+      },
+      {
+        "requirement_id": "TLIF-10",
+        "text": "each child authority and dependency root has a separately retained frozen no-follow closure"
+      },
+      {
+        "requirement_id": "TLIF-11",
+        "text": "bound interpreter bootstrap starts Python children without env shebang PATH or generated-console interpreter selection"
+      },
+      {
+        "requirement_id": "TLIF-12",
+        "text": "each child binds cwd environment stdin stdout stderr timeout and diagnostic limits"
+      },
+      {
+        "requirement_id": "TLIF-13",
+        "text": "subject runtime dependency and result closures are reverified after every child"
+      },
+      {
+        "requirement_id": "TLIF-14",
+        "text": "all child and descendant processes terminate before terminal promotion"
+      },
+      {
+        "requirement_id": "TLIF-15",
+        "text": "the result channel is unique bounded and unavailable to unintended descendants"
+      },
+      {
+        "requirement_id": "TLIF-16",
+        "text": "launcher and bootstrap independently compute the exact ordered terminal-check-set digest"
+      },
+      {
+        "requirement_id": "TLIF-17",
+        "text": "the canonical result binds run case profile subject authority launcher bootstrap interpreter and first-process identities"
+      },
+      {
+        "requirement_id": "TLIF-18",
+        "text": "cancellation kills every descendant and cannot publish or promote success"
+      },
+      {
+        "requirement_id": "TLIF-19",
+        "text": "pre-run and post-run preservation manifests prove subject and evidence bytes unchanged"
+      },
+      {
+        "requirement_id": "TLIF-20",
+        "text": "case and profile selection reach the native operator-facing launcher with no consumer pre-launch wrapper"
+      }
+    ],
+    "scope": "capability-contract-not-track-h-interface-syntax"
+  },
+  "schema": "kilix.track-d.trusted-launcher-consumer-requirements/v2",
+  "status": "final-track-d-consumer-input-not-a-launch-profile",
   "upstream_gate": {
     "accepted_result_states": [
       "PASS",
@@ -145,8 +312,9 @@
       "RES-10"
     ],
     "independent_exports": {
-      "passing": 2,
-      "population": 2
+      "accepted": 0,
+      "population": 2,
+      "required": 2
     },
     "required_return_identities": [
       "public_commit",

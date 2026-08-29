@@ -47,19 +47,24 @@ code-provider work.
 
 ## Trusted-launcher consumer readiness
 
-`trusted-launcher-consumer-requirements.json` is a Track D requirements record,
-not a Track H launch profile, result packet, frozen interface or adoption lock.
-It preserves the ordered TD-P1 and TD-HW child surfaces while OD-13/OD-14 work
-is in flight. In particular, it does not invent profile syntax or copy the
-F120-specific launcher.
+`TRUSTED-LAUNCHER-CONSUMER.md` is the normative human-readable index.
+`trusted-launcher-consumer-requirements.json` is Track D's final capability and
+child-table input to Track H, and `trusted-launcher-consumer-campaign.json`
+defines the complete consumer case/evidence population. None is a Track H
+launch profile, result packet, frozen interface or adoption lock. They do not
+invent profile syntax or copy the F120-specific launcher.
 
 Run the developer-only static readiness check from the repository root:
 
     make launcher-consumer-readiness UV=/absolute/path/to/release-pinned-uv-0.12.5
 
-The check accounts for all required common cases, both consumer requirements,
-all intentional child specifications and all P1 invocation vectors. It also
-applies negative controls proving that an assignment cannot be promoted to a
-result, D4 cannot enter a launcher profile, and neither upstream owner can be
-silently changed. A passing readiness check consumes no returned launcher
-identity and makes no qualification claim.
+The check accounts for **20/20** interface capabilities, **2/2** consumer
+requirements, **8/8** intentional child specifications, **7/7** P1 invocation
+vectors, **316/316** case-family target definitions and **632/632** required
+case-family target-export rows across **2/2** independent exports. Each row
+must freeze and completely account for its inner mutation variants. The check
+applies omission and premature-adoption controls proving that assignments
+cannot be promoted, populations cannot be shrunk and D4 cannot enter a launcher
+profile. A passing readiness check still contains **0/632** result rows, accepts
+**0/20** interface mappings and **0/2** upstream independent exports, consumes
+**0/8** returned launcher identities and makes no qualification claim.
