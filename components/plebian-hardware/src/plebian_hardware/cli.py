@@ -131,6 +131,7 @@ def dispatch(
 
     try:
         document = collector(scope)
+        state.validate_redaction(document)
         if mode == "show":
             payload = (_human_summary(document) + "\n").encode("utf-8")
         elif mode == "json":

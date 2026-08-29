@@ -7,6 +7,7 @@ the exact directory without teaching this module about a user or machine ID.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -37,6 +38,10 @@ FORBIDDEN_SNAPSHOT_KEYS = {
     "serial",
     "uuid",
 }
+IPV4 = re.compile(r"(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])")
+MAC = re.compile(
+    r"(?i)(?<![0-9a-f])(?:[0-9a-f]{2}:){5}[0-9a-f]{2}(?![0-9a-f])"
+)
 EXPECTED_PRIVACY = {
     "cache_mode": "0600",
     "classification": "fingerprinting-grade-local",
@@ -59,6 +64,10 @@ class StateMissing(StateUnavailable):
 
 class SnapshotInvalid(StateError):
     """A snapshot is malformed or violates the privacy boundary."""
+
+
+class RedactionViolation(StateError):
+    """An in-memory observation contains identifier-bearing material."""
 
 
 class _DuplicateKey(ValueError):
@@ -137,15 +146,38 @@ def _duplicate_safe_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return value
 
 
-def _forbidden_key(value: Any) -> bool:
+def _contains_identifier(value: Any) -> bool:
     if isinstance(value, dict):
         return any(
-            key.lower() in FORBIDDEN_SNAPSHOT_KEYS or _forbidden_key(item)
+            not isinstance(key, str)
+            or key.lower().replace("-", "_") in FORBIDDEN_SNAPSHOT_KEYS
+            or _contains_identifier(item)
             for key, item in value.items()
         )
     if isinstance(value, list):
-        return any(_forbidden_key(item) for item in value)
+        return any(_contains_identifier(item) for item in value)
+    if isinstance(value, str):
+        if "/home/" in value or IPV4.search(value) or MAC.search(value):
+            return True
+        try:
+            ipaddress.ip_address(value.removeprefix("[").removesuffix("]"))
+        except ValueError:
+            return False
+        return True
     return False
+
+
+def validate_redaction(document: Any) -> dict[str, Any]:
+    """Reject identifier-bearing material before output or persistence."""
+    if not isinstance(document, dict):
+        raise RedactionViolation("observation is not an object")
+    try:
+        forbidden = _contains_identifier(document)
+    except RecursionError as error:
+        raise RedactionViolation("observation nesting boundary violated") from error
+    if forbidden:
+        raise RedactionViolation("observation contains identifier-bearing material")
+    return document
 
 
 def validate_snapshot(document: Any) -> dict[str, Any]:
@@ -170,8 +202,10 @@ def validate_snapshot(document: Any) -> dict[str, Any]:
         raise SnapshotInvalid("snapshot privacy projection is not exact")
     if document.get("never_collected") != NEVER_COLLECTED:
         raise SnapshotInvalid("snapshot denylist is not exact")
-    if _forbidden_key(document):
-        raise SnapshotInvalid("snapshot contains a forbidden identifier field")
+    try:
+        validate_redaction(document)
+    except RedactionViolation as error:
+        raise SnapshotInvalid("snapshot contains identifier-bearing material") from error
     try:
         _canonical_bytes(document)
     except (RecursionError, TypeError, ValueError) as error:

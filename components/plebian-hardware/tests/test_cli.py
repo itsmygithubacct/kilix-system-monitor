@@ -223,6 +223,93 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(state.SnapshotInvalid):
             state.validate_snapshot(document)
 
+    def test_default_outputs_and_cache_reject_identifier_key_spellings(self) -> None:
+        keys = (
+            "asset_tag",
+            "asset-tag",
+            "hostname",
+            "ip_address",
+            "ip-address",
+            "mac_address",
+            "mac-address",
+            "machine_id",
+            "machine-id",
+            "serial_number",
+            "serial-number",
+            "system_uuid",
+            "system-uuid",
+            "username",
+        )
+        sentinel = "PRIVATE-IDENTIFIER-SENTINEL"
+        expected = (
+            70,
+            b"",
+            b"plebian-hardware: local hardware observation failed\n",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            for index, key in enumerate(keys):
+                document = cache_observation()
+                document[key] = sentinel
+                for arguments in (
+                    ["show"],
+                    ["inventory", "--json"],
+                    ["gpu", "--json"],
+                ):
+                    self.assertEqual(
+                        cli.dispatch(
+                            arguments,
+                            lambda _scope, value=document: value,
+                        ),
+                        expected,
+                    )
+                self.assertEqual(
+                    cli.dispatch(
+                        ["refresh"],
+                        lambda _scope, value=document: value,
+                        state_root=base / f"key-{index}",
+                    ),
+                    expected,
+                )
+
+    def test_default_outputs_and_cache_reject_identifier_shaped_values(self) -> None:
+        values = (
+            "/home/private-sentinel",
+            "198.51.100.42",
+            "2001:db8::42",
+            "02:00:5e:10:00:00",
+        )
+        expected = (
+            70,
+            b"",
+            b"plebian-hardware: local hardware observation failed\n",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            for index, sentinel in enumerate(values):
+                document = cache_observation()
+                document["synthetic_value_control"] = sentinel
+                for arguments in (
+                    ["show"],
+                    ["inventory", "--json"],
+                    ["gpu", "--json"],
+                ):
+                    self.assertEqual(
+                        cli.dispatch(
+                            arguments,
+                            lambda _scope, value=document: value,
+                        ),
+                        expected,
+                    )
+                self.assertEqual(
+                    cli.dispatch(
+                        ["refresh"],
+                        lambda _scope, value=document: value,
+                        state_root=base / f"value-{index}",
+                    ),
+                    expected,
+                )
+
 
 class ProbeBoundaryTests(unittest.TestCase):
     def test_cpu_list_parser_counts_without_emitting_ranges(self) -> None:
