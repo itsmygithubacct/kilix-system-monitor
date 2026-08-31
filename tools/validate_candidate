@@ -7,7 +7,7 @@ readonly EXPECTED_UV_SHA256="b65f23a420c4acc96427efb30e5ed9bc0f7e25d2d712000f6ed
 readonly EXPECTED_PYTHON_SHA256="0dc3a692fa85fcdb7f1a5877d2adf179809ac417a07ffde2373c832863800a15"
 readonly EXPECTED_PROJECT_SHA256="1e9f6cc39eba2daf442138caa833d4463df97f00df016dcb78c526354d16ce0d"
 readonly EXPECTED_LOCK_SHA256="26e317988dca9d10ab17744a54d0a9e9ded7a415b200b3d2ec7d0badb74073b4"
-readonly EXPECTED_VALIDATOR_SHA256="237366ec1dbaf39a0bb353ca3c52c98477e08149bd169a117b81d182e9ef60c1"
+readonly EXPECTED_VALIDATOR_SHA256="42e403968261367f08d7309d08c3f09d3dd1d52746a04e6406f77e5f2a85d30e"
 readonly EXPECTED_LIVE_VALIDATOR_SHA256="3fa0e53a0c34318d7dbd3ff040ad0e15272cb94b2cab783f865097c581e190f7"
 readonly EXPECTED_CANDIDATE_MANIFEST_SHA256="a21897870cdbc980dff0f611033848f489ac8cc3dec568560a275640188eb6ab"
 readonly FIXED_PATH="/usr/bin:/bin"
@@ -36,10 +36,20 @@ case "${UV-}" in
     *) fail "UV must name the absolute release-pinned uv 0.12.5 executable" ;;
 esac
 
-case "${TMPDIR-}" in
-    /home/pleb/scratch-workers|/home/pleb/scratch-workers/*) ;;
+scratch_root=$(/usr/bin/realpath -e -- /home/pleb/scratch-workers) \
+    || fail "TMPDIR must stay beneath /home/pleb/scratch-workers"
+[ "$scratch_root" = /home/pleb/scratch-workers ] \
+    || fail "TMPDIR must stay beneath /home/pleb/scratch-workers"
+tmpdir_path=$(/usr/bin/realpath -e -- "${TMPDIR-}") \
+    || fail "TMPDIR must stay beneath /home/pleb/scratch-workers"
+[ -d "$tmpdir_path" ] \
+    || fail "TMPDIR must stay beneath /home/pleb/scratch-workers"
+case "$tmpdir_path" in
+    "$scratch_root"|"$scratch_root"/*) ;;
     *) fail "TMPDIR must stay beneath /home/pleb/scratch-workers" ;;
 esac
+TMPDIR=$tmpdir_path
+export TMPDIR
 
 script_path=$(/usr/bin/readlink -f -- "$0") || fail "cannot resolve launcher path"
 tools_root=$(/usr/bin/dirname -- "$script_path")

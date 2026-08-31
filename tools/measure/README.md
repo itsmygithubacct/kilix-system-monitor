@@ -9,13 +9,14 @@ full schema, semantic denylist, and privacy controls.
 Successful intake atomically commits **1/1** new mode-0700 bundle containing
 **2/2** exact-mode-0600 files: a schema-valid intake receipt and a schema-valid
 `plebian.models.profiles/v1` catalog. A Linux `renameat2(RENAME_NOREPLACE)` is
-the single visibility event. Before that event the final bundle is **0/1**;
-after it, both files are visible **2/2**. Existing bundles are never replaced,
-and symlinked path components are refused. Concurrent mutation by another
-same-UID process can leave an empty private temporary directory after a refused
-commit, but cannot expose a partial final bundle or a receipt claiming commit.
-The protocol does not claim persistence of a caller-owned pathname against a
-same-UID process that can rename that path before or after the final check.
+the tool's single visibility event. Before that event the final bundle is
+**0/1**. Before reporting success, retained directory and file descriptors are
+used to verify the committed pathname and exact file bytes **2/2**. Existing
+bundles are never replaced, and symlinked path components are refused.
+Concurrent mutation detected during that check causes refusal and best-effort
+cleanup. The protocol makes no persistence or partial-visibility security claim
+against another same-UID process, which can mutate caller-owned paths before,
+during, or after verification.
 
 Intake records but does not accept provider claims. The generated profile is
 always `qualification_eligible: false`, `qualification: unqualified`, and

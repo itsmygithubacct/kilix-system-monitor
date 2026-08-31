@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import io
 import os
 import stat
 import subprocess
@@ -219,15 +220,22 @@ class ProfileIntakeTests(unittest.TestCase):
             self.assertEqual(profile.main(arguments), 2)
             self.assertFalse(paths["bundle"].exists())
 
-    def test_prefixed_ipv6_identifier_is_refused(self) -> None:
-        hardware = json.loads(HARDWARE_FIXTURE.read_bytes())
-        hardware["snapshot_id"] = "local:2001:db8::1"
-        self.assertTrue(profile._contains_ipv6(hardware["snapshot_id"]))
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            arguments, paths, _record = prepare(root, hardware)
-            self.assertEqual(profile.main(arguments), 2)
-            self.assertFalse(paths["bundle"].exists())
+    def test_prefixed_and_adjacent_hex_ipv6_identifiers_are_refused(self) -> None:
+        identifiers = (
+            "local:2001:db8::1",
+            "local:a2001:db8::1",
+            "local:dead2001:db8::1",
+        )
+        for identifier in identifiers:
+            with self.subTest(identifier=identifier):
+                hardware = json.loads(HARDWARE_FIXTURE.read_bytes())
+                hardware["snapshot_id"] = identifier
+                self.assertTrue(profile._contains_ipv6(identifier))
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    arguments, paths, _record = prepare(root, hardware)
+                    self.assertEqual(profile.main(arguments), 2)
+                    self.assertFalse(paths["bundle"].exists())
 
     def test_duplicate_noncanonical_and_deep_json_are_handled_refusals(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -334,6 +342,41 @@ class ProfileIntakeTests(unittest.TestCase):
             for residue in root.iterdir():
                 self.assertTrue(residue.is_dir())
                 self.assertEqual(list(residue.iterdir()), [])
+
+    def test_same_uid_removal_before_rename_return_is_a_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            arguments, paths, _record = prepare(root)
+            original_rename = profile._rename_noreplace
+
+            def remove_then_rename(
+                parent_fd: int,
+                source: str,
+                destination: str,
+            ) -> None:
+                flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY
+                staged_fd = os.open(source, flags, dir_fd=parent_fd)
+                try:
+                    os.unlink(profile.BUNDLE_PROFILE_NAME, dir_fd=staged_fd)
+                finally:
+                    os.close(staged_fd)
+                original_rename(parent_fd, source, destination)
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(
+                    profile,
+                    "_rename_noreplace",
+                    side_effect=remove_then_rename,
+                ),
+                mock.patch.object(profile.sys, "stdout", stdout),
+                mock.patch.object(profile.sys, "stderr", stderr),
+            ):
+                self.assertEqual(profile.main(arguments), 2)
+            self.assertEqual(stdout.getvalue(), "")
+            self.assertEqual(stderr.getvalue().count("\n"), 1)
+            self.assertFalse(paths["bundle"].exists())
 
     def test_bundle_race_is_preserved_and_never_replaced(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

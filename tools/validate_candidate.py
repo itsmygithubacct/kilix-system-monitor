@@ -23,6 +23,7 @@ FIXTURE_GROUPS: dict[str, Path]
 Draft202012Validator: Any
 FormatChecker: Any
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
+MAX_PRIVACY_VALUE_CHARS = 4096
 EXPECTED_PYTHON_SHA256 = "0dc3a692fa85fcdb7f1a5877d2adf179809ac417a07ffde2373c832863800a15"
 SCHEMA_RELATIVE_PATHS = {
     "f106.invocation-contract/v0-draft": "schemas/f106.invocation-contract-v0-draft.schema.json",
@@ -319,21 +320,18 @@ def strict_json_parser_controls() -> tuple[list[str], int]:
 
 def _contains_ipv6_address(value: str) -> bool:
     for token in re.findall(r"[0-9A-Fa-f:.]+", value):
-        candidates = {token}
-        if token.startswith(":") and not token.startswith("::"):
-            candidates.add(token[1:])
-        if token.endswith(":") and not token.endswith("::"):
-            candidates.add(token[:-1])
-        if token.startswith(":") and token.endswith(":") and len(token) > 2:
-            candidates.add(token[1:-1])
-        for candidate in candidates:
-            if candidate.count(":") < 2:
-                continue
-            try:
-                if ipaddress.ip_address(candidate).version == 6:
-                    return True
-            except ValueError:
-                continue
+        if token.count(":") < 2:
+            continue
+        for start in range(len(token)):
+            for end in range(start + 2, min(len(token), start + 45) + 1):
+                candidate = token[start:end]
+                if candidate.count(":") < 2:
+                    continue
+                try:
+                    if ipaddress.ip_address(candidate).version == 6:
+                        return True
+                except ValueError:
+                    continue
     return False
 
 
@@ -341,6 +339,8 @@ def privacy_value_controls() -> tuple[list[str], int]:
     rejected = {
         "prefixed-ipv6": "local:2001:db8::1",
         "embedded-bracketed-ipv6": "node=[2001:db8::2]",
+        "adjacent-one-hex-ipv6": "local:a2001:db8::1",
+        "adjacent-four-hex-ipv6": "local:dead2001:db8::1",
     }
     allowed = {
         "timestamp": "2026-08-31T12:00:00Z",
@@ -410,6 +410,9 @@ def privacy_errors(value: Any, trail: str = "$") -> list[str]:
         for index, item in enumerate(value):
             errors.extend(privacy_errors(item, f"{trail}[{index}]"))
     elif isinstance(value, str):
+        if len(value) > MAX_PRIVACY_VALUE_CHARS:
+            errors.append(f"privacy value exceeds its scan boundary at {trail}")
+            return errors
         if "/home/" in value or IPV4.search(value) or MAC.search(value):
             errors.append(f"identifier-shaped value at {trail}")
         elif _contains_ipv6_address(value):
@@ -1440,6 +1443,27 @@ def startup_boundary_controls(launcher: Path, uv: Path) -> list[str]:
         if root_site_marker.exists() or root_user_marker.exists():
             errors.append("repository-root startup hook executed before validation")
 
+        traversal_environment = dict(hostile_environment)
+        traversal_environment["TMPDIR"] = "/home/pleb/scratch-workers/.."
+        expect_failure(
+            "TMPDIR traversal control",
+            control_root / "tools" / "validate_candidate",
+            control_root,
+            b"TMPDIR must stay beneath /home/pleb/scratch-workers",
+            traversal_environment,
+        )
+        outside_link = temporary_root / "tmpdir-outside"
+        outside_link.symlink_to("/home/pleb", target_is_directory=True)
+        symlink_environment = dict(hostile_environment)
+        symlink_environment["TMPDIR"] = str(outside_link)
+        expect_failure(
+            "TMPDIR symlink control",
+            control_root / "tools" / "validate_candidate",
+            control_root,
+            b"TMPDIR must stay beneath /home/pleb/scratch-workers",
+            symlink_environment,
+        )
+
         candidate_site_marker = temporary_root / "candidate-site-marker"
         candidate_user_marker = temporary_root / "candidate-user-marker"
         candidate = control_root / "contracts" / "p1-candidate"
@@ -1667,7 +1691,7 @@ def main() -> int:
     mode = (
         f", {invalid_count}/{invalid_total} invalid mutations rejected, "
         f"{parser_control_count}/6 strict JSON parser controls rejected, "
-        f"{privacy_control_count}/4 privacy value controls exercised, "
+        f"{privacy_control_count}/6 privacy value controls exercised, "
         f"{unknown_control_count}/10 hardware unknown-projection controls rejected, "
         f"{response_status_control_count}/2 hardware response-status controls rejected, "
         f"{f107_control_count}/4 F107-B return controls rejected, "

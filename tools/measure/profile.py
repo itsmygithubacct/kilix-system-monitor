@@ -32,6 +32,7 @@ PROFILE_SCHEMA = ROOT / "contracts/p1-candidate/schemas/plebian.models.profiles-
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 MAX_JSON_DEPTH = 64
 MAX_JSON_NODES = 100_000
+MAX_PRIVACY_VALUE_CHARS = 4096
 BUNDLE_PROFILE_NAME = "profile-catalog.json"
 BUNDLE_RECEIPT_NAME = "intake-receipt.json"
 RENAME_NOREPLACE = 1
@@ -268,21 +269,18 @@ def _schema_errors(document: dict[str, Any], schema_path: Path) -> list[str]:
 
 def _contains_ipv6(value: str) -> bool:
     for token in re.findall(r"[0-9A-Fa-f:.]+", value):
-        candidates = {token}
-        if token.startswith(":") and not token.startswith("::"):
-            candidates.add(token[1:])
-        if token.endswith(":") and not token.endswith("::"):
-            candidates.add(token[:-1])
-        if token.startswith(":") and token.endswith(":") and len(token) > 2:
-            candidates.add(token[1:-1])
-        for candidate in candidates:
-            if candidate.count(":") < 2:
-                continue
-            try:
-                if ipaddress.ip_address(candidate).version == 6:
-                    return True
-            except ValueError:
-                continue
+        if token.count(":") < 2:
+            continue
+        for start in range(len(token)):
+            for end in range(start + 2, min(len(token), start + 45) + 1):
+                candidate = token[start:end]
+                if candidate.count(":") < 2:
+                    continue
+                try:
+                    if ipaddress.ip_address(candidate).version == 6:
+                        return True
+                except ValueError:
+                    continue
     return False
 
 
@@ -298,6 +296,9 @@ def _privacy_errors(value: Any, trail: str = "$") -> list[str]:
         for index, item in enumerate(value):
             errors.extend(_privacy_errors(item, f"{trail}[{index}]"))
     elif isinstance(value, str):
+        if len(value) > MAX_PRIVACY_VALUE_CHARS:
+            errors.append(f"privacy value exceeds its scan boundary at {trail}")
+            return errors
         lowered = value.lower()
         if "/home/" in value or "/users/" in lowered or "c:\\users\\" in lowered:
             errors.append(f"home-directory value at {trail}")
@@ -394,8 +395,8 @@ def _write_all(descriptor: int, payload: bytes) -> None:
         position += written
 
 
-def _write_private_file(parent_fd: int, name: str, payload: bytes) -> None:
-    flags = os.O_WRONLY | os.O_CLOEXEC | os.O_CREAT | os.O_EXCL
+def _write_private_file(parent_fd: int, name: str, payload: bytes) -> int:
+    flags = os.O_RDWR | os.O_CLOEXEC | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     descriptor = os.open(name, flags, 0o600, dir_fd=parent_fd)
@@ -404,10 +405,106 @@ def _write_private_file(parent_fd: int, name: str, payload: bytes) -> None:
         _write_all(descriptor, payload)
         os.fsync(descriptor)
         metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600:
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
             raise OSError("output mode verification failed")
-    finally:
+    except Exception:
         os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _stable_file_metadata(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _verify_committed_bundle(
+    target: BundleTarget,
+    bundle_fd: int,
+    files: dict[str, tuple[int, bytes]],
+) -> None:
+    if not _target_still_safe(target):
+        raise IntakeRefused("the output parent changed after bundle commit")
+    try:
+        path_metadata = os.stat(
+            target.name,
+            dir_fd=target.parent_fd,
+            follow_symlinks=False,
+        )
+    except OSError as error:
+        raise IntakeRefused("the committed bundle pathname is unavailable") from error
+    directory_metadata = os.fstat(bundle_fd)
+    if (
+        not stat.S_ISDIR(path_metadata.st_mode)
+        or (path_metadata.st_dev, path_metadata.st_ino)
+        != (directory_metadata.st_dev, directory_metadata.st_ino)
+        or directory_metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(directory_metadata.st_mode) != 0o700
+    ):
+        raise IntakeRefused("the committed bundle pathname changed before verification")
+    if set(os.listdir(bundle_fd)) != set(files):
+        raise IntakeRefused("the committed output bundle does not contain exactly 2/2 files")
+    for name, (descriptor, payload) in files.items():
+        descriptor_metadata = os.fstat(descriptor)
+        try:
+            named_metadata = os.stat(name, dir_fd=bundle_fd, follow_symlinks=False)
+        except OSError as error:
+            raise IntakeRefused(
+                "a committed output file is unavailable during verification"
+            ) from error
+        if (
+            not stat.S_ISREG(descriptor_metadata.st_mode)
+            or descriptor_metadata.st_uid != os.geteuid()
+            or descriptor_metadata.st_nlink != 1
+            or stat.S_IMODE(descriptor_metadata.st_mode) != 0o600
+            or (named_metadata.st_dev, named_metadata.st_ino)
+            != (descriptor_metadata.st_dev, descriptor_metadata.st_ino)
+            or named_metadata.st_uid != descriptor_metadata.st_uid
+            or named_metadata.st_nlink != descriptor_metadata.st_nlink
+            or stat.S_IMODE(named_metadata.st_mode) != 0o600
+            or named_metadata.st_size != len(payload)
+        ):
+            raise IntakeRefused("a committed output file changed before verification")
+        observed = bytearray()
+        offset = 0
+        while len(observed) < len(payload):
+            block = os.pread(descriptor, len(payload) - len(observed), offset)
+            if not block:
+                break
+            observed.extend(block)
+            offset += len(block)
+        try:
+            final_named_metadata = os.stat(
+                name,
+                dir_fd=bundle_fd,
+                follow_symlinks=False,
+            )
+        except OSError as error:
+            raise IntakeRefused(
+                "a committed output file disappeared during verification"
+            ) from error
+        if (
+            bytes(observed) != payload
+            or _stable_file_metadata(os.fstat(descriptor))
+            != _stable_file_metadata(descriptor_metadata)
+            or (final_named_metadata.st_dev, final_named_metadata.st_ino)
+            != (descriptor_metadata.st_dev, descriptor_metadata.st_ino)
+        ):
+            raise IntakeRefused("a committed output file changed during verification")
 
 
 def _rename_noreplace(parent_fd: int, source: str, destination: str) -> None:
@@ -445,7 +542,9 @@ def _write_bundle(
     temporary = f".{target.name}.intake-{secrets.token_hex(16)}"
     temporary_fd = -1
     temporary_created = False
-    committed = False
+    renamed = False
+    verified = False
+    file_descriptors: dict[str, tuple[int, bytes]] = {}
     directory_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY
     if hasattr(os, "O_NOFOLLOW"):
         directory_flags |= os.O_NOFOLLOW
@@ -469,8 +568,14 @@ def _write_bundle(
             or stat.S_IMODE(directory_metadata.st_mode) != 0o700
         ):
             raise IntakeRefused("temporary output bundle is not private")
-        _write_private_file(temporary_fd, BUNDLE_PROFILE_NAME, profile_payload)
-        _write_private_file(temporary_fd, BUNDLE_RECEIPT_NAME, receipt_payload)
+        file_descriptors[BUNDLE_PROFILE_NAME] = (
+            _write_private_file(temporary_fd, BUNDLE_PROFILE_NAME, profile_payload),
+            profile_payload,
+        )
+        file_descriptors[BUNDLE_RECEIPT_NAME] = (
+            _write_private_file(temporary_fd, BUNDLE_RECEIPT_NAME, receipt_payload),
+            receipt_payload,
+        )
         if set(os.listdir(temporary_fd)) != {BUNDLE_PROFILE_NAME, BUNDLE_RECEIPT_NAME}:
             raise IntakeRefused("temporary output bundle does not contain exactly 2/2 files")
         os.fsync(temporary_fd)
@@ -483,13 +588,16 @@ def _write_bundle(
         else:
             raise IntakeRefused("output bundle appeared after preflight")
         _rename_noreplace(target.parent_fd, temporary, target.name)
-        committed = True
+        renamed = True
+        _verify_committed_bundle(target, temporary_fd, file_descriptors)
+        os.fsync(target.parent_fd)
+        verified = True
     except IntakeRefused:
         raise
     except OSError as error:
         raise IntakeRefused("the 1/1 atomic output-bundle commit failed") from error
     finally:
-        if not committed and temporary_fd >= 0:
+        if not verified and temporary_fd >= 0:
             try:
                 os.fchmod(temporary_fd, 0o700)
             except OSError:
@@ -501,11 +609,19 @@ def _write_bundle(
                     pass
                 except OSError:
                     pass
+        for descriptor, _payload in file_descriptors.values():
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
         if temporary_fd >= 0:
             os.close(temporary_fd)
-        if not committed and temporary_created:
+        if not verified and temporary_created:
             try:
-                os.rmdir(temporary, dir_fd=target.parent_fd)
+                os.rmdir(
+                    target.name if renamed else temporary,
+                    dir_fd=target.parent_fd,
+                )
             except FileNotFoundError:
                 pass
             except OSError:
@@ -724,7 +840,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             target.close()
     print(
         "profile-intake: provider records 1/1 recorded, byte identities 3/3, "
-        "output bundles 1/1 with files 2/2, measurement evidence 0/1 accepted, "
+        "output bundles 1/1 with post-commit verified files 2/2, "
+        "measurement evidence 0/1 accepted, "
         "qualified profiles 0/1"
     )
     return 0
