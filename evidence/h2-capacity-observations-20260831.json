@@ -1,0 +1,107 @@
+{
+  "disposition": {
+    "capacity_fixture_observation": "measured",
+    "installer_media_evidence": "not-measured",
+    "model_performance_evidence": "not-measured",
+    "qualification_eligible": false,
+    "windows_with_load_pair": {
+      "measured": 4,
+      "total": 4
+    }
+  },
+  "fixture_id": "redacted:f100-c0-h2",
+  "measurement_windows": [
+    {
+      "ended_at": "2026-08-31T20:15:33Z",
+      "loadavg_end": "1.52 1.30 1.48 2/671 1494506",
+      "loadavg_start": "1.52 1.30 1.48 2/671 1494474",
+      "observations": {
+        "architecture": "x86_64",
+        "frequency_policy": {
+          "governor": "performance",
+          "governor_cpus": {
+            "observed": 16,
+            "total": 16
+          },
+          "no_turbo": true
+        },
+        "gpu": {
+          "device": "NVIDIA GeForce RTX 3070",
+          "driver_version": "550.163.01",
+          "vram_bytes": 8589934592
+        },
+        "logical_cpus": 16,
+        "memory_bytes": 49576329216,
+        "os_release": "Debian GNU/Linux 13 (trixie)",
+        "storage_available_bytes": 292612673536
+      },
+      "source": {
+        "commit": null,
+        "probe_sha256": null,
+        "type": "fixed-read-only-system-probes"
+      },
+      "started_at": "2026-08-31T20:15:33Z",
+      "window_id": "capacity-revalidation"
+    },
+    {
+      "ended_at": "2026-08-31T20:16:56Z",
+      "loadavg_end": "1.20 1.25 1.44 2/672 1494979",
+      "loadavg_start": "1.20 1.25 1.44 2/672 1494974",
+      "observations": {
+        "cuda_evidence": "command-unavailable",
+        "cuda_status": "unknown",
+        "vram_bytes": null
+      },
+      "source": {
+        "commit": "64938708214f6836473c9c84769b4a66139ef1a1",
+        "probe_sha256": "b071132ee5c7e1e121106e1dd3c04275e0dd9086caa7236fd7b83c1792cf8e0f",
+        "type": "plebian-hardware-inventory"
+      },
+      "started_at": "2026-08-31T20:16:56Z",
+      "window_id": "pre-fix-inventory"
+    },
+    {
+      "ended_at": "2026-08-31T20:21:11Z",
+      "loadavg_end": "1.12 1.15 1.35 1/680 1496445",
+      "loadavg_start": "1.12 1.15 1.35 1/680 1496439",
+      "observations": {
+        "cuda_evidence": "executable-probe",
+        "cuda_status": "available",
+        "driver_version": "550.163.01",
+        "vram_bytes": 8589934592
+      },
+      "source": {
+        "commit": null,
+        "probe_sha256": "f9806b8ef9c24d20a0b3845f8c994743257e75e33da2ba34bc89f48e0ee6254b",
+        "type": "plebian-hardware-inventory"
+      },
+      "started_at": "2026-08-31T20:21:11Z",
+      "window_id": "post-fix-worktree-control"
+    },
+    {
+      "ended_at": "2026-08-31T20:23:56Z",
+      "loadavg_end": "1.16 1.20 1.34 2/677 1497313",
+      "loadavg_start": "1.16 1.20 1.34 1/677 1497306",
+      "observations": {
+        "cpu_current_max_hz": 2902223000,
+        "cpu_hardware_max_hz": 2900000000,
+        "cuda_evidence": "executable-probe",
+        "cuda_status": "available",
+        "driver_version": "550.163.01",
+        "network_used": false,
+        "privileged": false,
+        "qualification_eligible": false,
+        "vram_bytes": 8589934592
+      },
+      "source": {
+        "commit": "327f959d0d84154f8ca7d73ab97c4a197f383c28",
+        "probe_sha256": "f9806b8ef9c24d20a0b3845f8c994743257e75e33da2ba34bc89f48e0ee6254b",
+        "type": "plebian-hardware-inventory"
+      },
+      "started_at": "2026-08-31T20:23:56Z",
+      "window_id": "committed-candidate-inventory"
+    }
+  ],
+  "schema": "f106.h2-capacity-observation/v1",
+  "tier": "H2"
+}

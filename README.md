@@ -9,8 +9,8 @@ that couple them:
 - components/plebian-hardware implements the currently open, unprivileged D2
   observation surface.
 - components/plebian-model-sizer is an intentionally non-executable skeleton.
-  Fit, recommendation and planning code is blocked until F100 passes U5 and
-  F100-C0 freezes real reserve policy.
+  The F100-C0 capacity fixtures are frozen **3/3**; fit, recommendation and
+  planning code remains blocked until F100 passes U5 **0/1**.
 
 The parent is public at `refs/heads/work/0.2.1-f106`. Its telemetry history was
 imported from the exact public source with a prefix-only rewrite; MIGRATION.md
@@ -86,6 +86,12 @@ privilege. `tools/measure/profile.py` records **1/1** provider-owned evidence
 record against **3/3** exact input-byte identities, promotes **0/9** provider
 measurement fields, and keeps qualification acceptance at **0/1**. Provider
 execution is outside this validator.
+
+The public H2 capacity observation under `evidence/` carries the exact
+`/proc/loadavg` values at both ends of **4/4** measurement windows. It records
+the causal Debian `nvidia-smi` repair and one exact committed-source observation
+without naming the host. The validator keeps installer-media evidence at
+**0/1**, model-performance evidence at **0/1**, and qualification at **0/1**.
 
 ## Current boundaries
 
