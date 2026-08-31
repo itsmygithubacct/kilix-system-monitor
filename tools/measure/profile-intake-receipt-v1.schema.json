@@ -57,8 +57,8 @@
       ],
       "type": "object"
     },
-    "outputs": {
-      "$ref": "#/$defs/twoOfTwo"
+    "bundle_files": {
+      "$ref": "#/$defs/twoPreparedOfTwo"
     },
     "profile_catalog_sha256": {
       "$ref": "#/$defs/sha256"
@@ -167,7 +167,7 @@
     "reported_fields",
     "promotion",
     "measurement_boundary",
-    "outputs",
+    "bundle_files",
     "provider_evidence_sha256",
     "profile_catalog_sha256",
     "disposition"
@@ -230,10 +230,10 @@
       ],
       "type": "object"
     },
-    "twoOfTwo": {
+    "twoPreparedOfTwo": {
       "additionalProperties": false,
       "properties": {
-        "committed": {
+        "prepared": {
           "const": 2
         },
         "total": {
@@ -241,7 +241,7 @@
         }
       },
       "required": [
-        "committed",
+        "prepared",
         "total"
       ],
       "type": "object"

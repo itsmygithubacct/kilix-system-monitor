@@ -7,7 +7,7 @@ readonly EXPECTED_UV_SHA256="b65f23a420c4acc96427efb30e5ed9bc0f7e25d2d712000f6ed
 readonly EXPECTED_PYTHON_SHA256="0dc3a692fa85fcdb7f1a5877d2adf179809ac417a07ffde2373c832863800a15"
 readonly EXPECTED_PROJECT_SHA256="1e9f6cc39eba2daf442138caa833d4463df97f00df016dcb78c526354d16ce0d"
 readonly EXPECTED_LOCK_SHA256="26e317988dca9d10ab17744a54d0a9e9ded7a415b200b3d2ec7d0badb74073b4"
-readonly EXPECTED_VALIDATOR_SHA256="7b33a3dd6a30d30beb442b33db0b3272f3f7a1b71159a269194b4f7746bf84c5"
+readonly EXPECTED_VALIDATOR_SHA256="237366ec1dbaf39a0bb353ca3c52c98477e08149bd169a117b81d182e9ef60c1"
 readonly EXPECTED_LIVE_VALIDATOR_SHA256="3fa0e53a0c34318d7dbd3ff040ad0e15272cb94b2cab783f865097c581e190f7"
 readonly EXPECTED_CANDIDATE_MANIFEST_SHA256="a21897870cdbc980dff0f611033848f489ac8cc3dec568560a275640188eb6ab"
 readonly FIXED_PATH="/usr/bin:/bin"
@@ -34,6 +34,11 @@ check_digest() {
 case "${UV-}" in
     /*) ;;
     *) fail "UV must name the absolute release-pinned uv 0.12.5 executable" ;;
+esac
+
+case "${TMPDIR-}" in
+    /home/pleb/scratch-workers|/home/pleb/scratch-workers/*) ;;
+    *) fail "TMPDIR must stay beneath /home/pleb/scratch-workers" ;;
 esac
 
 script_path=$(/usr/bin/readlink -f -- "$0") || fail "cannot resolve launcher path"
@@ -70,7 +75,7 @@ done
 unexpected=$(/usr/bin/find "$candidate" ! -type d ! -type f -print -quit)
 [ -z "$unexpected" ] || fail "candidate tree contains a symlink or non-file entry"
 
-control_root=$(/usr/bin/mktemp -d "/tmp/kilix-p1-gate.XXXXXXXX") \
+control_root=$(/usr/bin/mktemp -d "$TMPDIR/kilix-p1-gate.XXXXXXXX") \
     || fail "cannot create private control directory"
 cleanup() {
     /usr/bin/rm -rf -- "$control_root"
@@ -102,6 +107,7 @@ uv_version=$(
         LANG=C.UTF-8 \
         LC_ALL=C.UTF-8 \
         PATH="$FIXED_PATH" \
+        TMPDIR="$TMPDIR" \
         TZ=UTC \
         UV_OFFLINE=1 \
         UV_PYTHON_DOWNLOADS=never \
@@ -115,6 +121,7 @@ uv_version=$(
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PATH="$FIXED_PATH" \
+    TMPDIR="$TMPDIR" \
     TZ=UTC \
     UV_CACHE_DIR="$control_root/uv-cache" \
     UV_OFFLINE=1 \
@@ -130,6 +137,7 @@ uv_version=$(
     PATH="$FIXED_PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONHASHSEED=0 \
+    TMPDIR="$TMPDIR" \
     TZ=UTC \
     "$python_path" -I -S -B "$validator" \
         --candidate-root "$candidate" \

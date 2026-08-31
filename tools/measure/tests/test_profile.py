@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import os
 import stat
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 from tools.measure import profile
 
@@ -80,13 +83,15 @@ def provider_record(root: Path, hardware: dict[str, Any]) -> dict[str, Any]:
 def prepare(
     root: Path, hardware: dict[str, Any] | None = None
 ) -> tuple[list[str], dict[str, Path], dict[str, Any]]:
+    bundle = root / "intake-bundle"
     paths = {
         "artifact": root / "artifact.bin",
         "fixture": root / "fixture.bin",
         "hardware": root / "hardware.json",
         "provider": root / "provider.json",
-        "receipt": root / "receipt.json",
-        "profile": root / "profile.json",
+        "bundle": bundle,
+        "receipt": bundle / profile.BUNDLE_RECEIPT_NAME,
+        "profile": bundle / profile.BUNDLE_PROFILE_NAME,
     }
     paths["artifact"].write_bytes(b"artifact-bytes")
     paths["fixture"].write_bytes(b"fixture-bytes")
@@ -104,16 +109,14 @@ def prepare(
         str(paths["fixture"]),
         "--hardware-snapshot",
         str(paths["hardware"]),
-        "--intake-receipt",
-        str(paths["receipt"]),
-        "--profile-catalog",
-        str(paths["profile"]),
+        "--output-bundle",
+        str(paths["bundle"]),
     ]
     return arguments, paths, record
 
 
 class ProfileIntakeTests(unittest.TestCase):
-    def test_success_records_but_does_not_promote_provider_claims(self) -> None:
+    def test_success_atomically_records_but_does_not_promote_claims(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             arguments, paths, _record = prepare(root)
@@ -123,40 +126,48 @@ class ProfileIntakeTests(unittest.TestCase):
             finally:
                 os.umask(previous_umask)
             self.assertEqual(status, 0)
+            self.assertEqual(stat.S_IMODE(paths["bundle"].stat().st_mode), 0o700)
+            self.assertEqual(
+                sorted(path.name for path in paths["bundle"].iterdir()),
+                [profile.BUNDLE_RECEIPT_NAME, profile.BUNDLE_PROFILE_NAME],
+            )
             self.assertEqual(stat.S_IMODE(paths["receipt"].stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE(paths["profile"].stat().st_mode), 0o600)
 
             receipt = json.loads(paths["receipt"].read_bytes())
             catalog = json.loads(paths["profile"].read_bytes())
             generated = catalog["profiles"][0]
-            self.assertEqual(receipt["provider_records"], {
-                "accepted_as_measurement": 0,
-                "recorded": 1,
-                "total": 1,
-            })
+            self.assertEqual(
+                receipt["provider_records"],
+                {"accepted_as_measurement": 0, "recorded": 1, "total": 1},
+            )
             self.assertEqual(receipt["byte_identities"]["matched"], 3)
             self.assertEqual(receipt["byte_identities"]["total"], 3)
             self.assertEqual(
                 receipt["promotion"]["provider_measurements"],
                 {"promoted": 0, "total": 9},
             )
-            self.assertEqual(receipt["outputs"], {"committed": 2, "total": 2})
+            self.assertEqual(
+                receipt["bundle_files"], {"prepared": 2, "total": 2}
+            )
+            self.assertNotIn("outputs", receipt)
             self.assertFalse(catalog["qualification_eligible"])
             self.assertEqual(generated["qualification"], "unqualified")
             self.assertEqual(generated["evidence"]["confidence"], "unknown")
-            self.assertIsNone(generated["evidence"]["command"])
-            self.assertIsNone(generated["evidence"]["fixture"])
-            self.assertIsNone(generated["evidence"]["measured_at"])
-            self.assertIsNone(generated["evidence"]["reference_hardware_class"])
+            for key in ("command", "fixture", "measured_at", "reference_hardware_class"):
+                self.assertIsNone(generated["evidence"][key])
             self.assertIsNone(generated["artifact"]["license_decision_id"])
             self.assertEqual(
-                [generated["requirements"][key] for key in (
-                    "download_bytes",
-                    "disk_installed_bytes",
-                    "temporary_bytes",
-                    "ram_peak_bytes",
-                    "vram_peak_bytes",
-                )],
+                [
+                    generated["requirements"][key]
+                    for key in (
+                        "download_bytes",
+                        "disk_installed_bytes",
+                        "temporary_bytes",
+                        "ram_peak_bytes",
+                        "vram_peak_bytes",
+                    )
+                ],
                 [None] * 5,
             )
             self.assertEqual(set(generated["performance"].values()), {None})
@@ -165,14 +176,36 @@ class ProfileIntakeTests(unittest.TestCase):
                 profile._sha256(paths["provider"].read_bytes()),
             )
 
-    def test_artifact_digest_mismatch_commits_zero_of_two_outputs(self) -> None:
+    def test_provider_executable_artifact_is_never_executed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            arguments, paths, _record = prepare(root)
-            paths["artifact"].write_bytes(b"different-artifact")
-            self.assertEqual(profile.main(arguments), 2)
-            self.assertFalse(paths["receipt"].exists())
-            self.assertFalse(paths["profile"].exists())
+            arguments, paths, record = prepare(root)
+            marker = root / "executed"
+            paths["artifact"].write_text(
+                f"#!/bin/sh\ntouch {marker}\n",
+                encoding="utf-8",
+            )
+            paths["artifact"].chmod(0o700)
+            record["artifact"]["content_sha256"] = profile._sha256(
+                paths["artifact"].read_bytes()
+            )
+            write_private_json(paths["provider"], record)
+            self.assertEqual(profile.main(arguments), 0)
+            self.assertFalse(marker.exists())
+
+    def test_each_digest_mismatch_commits_zero_of_one_final_bundle(self) -> None:
+        for role in ("artifact", "fixture", "hardware"):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                arguments, paths, _record = prepare(root)
+                if role == "hardware":
+                    changed = json.loads(paths[role].read_bytes())
+                    changed["snapshot_id"] = "fixture:h0-cpu-only-changed"
+                    write_private_json(paths[role], changed)
+                else:
+                    paths[role].write_bytes(paths[role].read_bytes() + b"changed")
+                self.assertEqual(profile.main(arguments), 2)
+                self.assertFalse(paths["bundle"].exists())
 
     def test_full_hardware_schema_and_privacy_are_enforced(self) -> None:
         invalid = {
@@ -184,10 +217,19 @@ class ProfileIntakeTests(unittest.TestCase):
             root = Path(temporary)
             arguments, paths, _record = prepare(root, invalid)
             self.assertEqual(profile.main(arguments), 2)
-            self.assertFalse(paths["receipt"].exists())
-            self.assertFalse(paths["profile"].exists())
+            self.assertFalse(paths["bundle"].exists())
 
-    def test_duplicate_and_noncanonical_provider_records_are_refused(self) -> None:
+    def test_prefixed_ipv6_identifier_is_refused(self) -> None:
+        hardware = json.loads(HARDWARE_FIXTURE.read_bytes())
+        hardware["snapshot_id"] = "local:2001:db8::1"
+        self.assertTrue(profile._contains_ipv6(hardware["snapshot_id"]))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            arguments, paths, _record = prepare(root, hardware)
+            self.assertEqual(profile.main(arguments), 2)
+            self.assertFalse(paths["bundle"].exists())
+
+    def test_duplicate_noncanonical_and_deep_json_are_handled_refusals(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             arguments, paths, _record = prepare(root)
@@ -197,8 +239,7 @@ class ProfileIntakeTests(unittest.TestCase):
             )
             paths["provider"].chmod(0o600)
             self.assertEqual(profile.main(arguments), 2)
-            self.assertFalse(paths["receipt"].exists())
-            self.assertFalse(paths["profile"].exists())
+            self.assertFalse(paths["bundle"].exists())
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -209,10 +250,46 @@ class ProfileIntakeTests(unittest.TestCase):
             )
             paths["provider"].chmod(0o600)
             self.assertEqual(profile.main(arguments), 2)
-            self.assertFalse(paths["receipt"].exists())
-            self.assertFalse(paths["profile"].exists())
+            self.assertFalse(paths["bundle"].exists())
 
-    def test_output_parent_retarget_is_refused_without_redirection(self) -> None:
+        for role in ("provider", "hardware"):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                arguments, paths, _record = prepare(root)
+                paths[role].write_bytes(
+                    b'{"deep":' + b"[" * 2000 + b"0" + b"]" * 2000 + b"}\n"
+                )
+                paths[role].chmod(0o600)
+                self.assertEqual(profile.main(arguments), 2)
+                self.assertFalse(paths["bundle"].exists())
+
+        nested: Any = 0
+        for _index in range(profile.MAX_JSON_DEPTH + 1):
+            nested = [nested]
+        with self.assertRaises(profile.IntakeRefused):
+            profile._strict_json(profile._canonical_bytes({"deep": nested}), "control")
+
+    def test_fifo_is_nonblocking_refusal_for_four_of_four_input_roles(self) -> None:
+        for role in ("provider", "artifact", "fixture", "hardware"):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                arguments, paths, _record = prepare(root)
+                paths[role].unlink()
+                os.mkfifo(paths[role], 0o600)
+                completed = subprocess.run(
+                    [sys.executable, "-m", "tools.measure.profile", *arguments],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                    timeout=2,
+                )
+                self.assertEqual(completed.returncode, 2)
+                self.assertNotIn(b"Traceback", completed.stderr)
+                self.assertEqual(completed.stderr.count(b"\n"), 1)
+                self.assertFalse(paths["bundle"].exists())
+
+    def test_output_parent_retarget_cannot_redirect_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "output"
@@ -220,43 +297,60 @@ class ProfileIntakeTests(unittest.TestCase):
             redirect = root / "redirect"
             output.mkdir(mode=0o700)
             redirect.mkdir(mode=0o700)
-            receipt = profile._open_output_target(output / "receipt.json")
-            catalog = profile._open_output_target(output / "profile.json")
+            target = profile._open_bundle_target(output / "bundle")
             try:
                 output.rename(moved)
                 output.symlink_to(redirect, target_is_directory=True)
                 with self.assertRaises(profile.IntakeRefused):
-                    profile._write_outputs(
-                        [(receipt, b"receipt\n"), (catalog, b"profile\n")]
-                    )
+                    profile._write_bundle(target, b"receipt\n", b"profile\n")
             finally:
-                receipt.close()
-                catalog.close()
+                target.close()
             self.assertEqual(list(moved.iterdir()), [])
             self.assertEqual(list(redirect.iterdir()), [])
 
-    def test_second_output_collision_rolls_back_first_and_preserves_collision(self) -> None:
+    def test_parent_mode_revocation_cannot_expose_partial_final_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            receipt_path = root / "receipt.json"
-            profile_path = root / "profile.json"
-            receipt = profile._open_output_target(receipt_path)
-            catalog = profile._open_output_target(profile_path)
+            bundle = root / "bundle"
+            target = profile._open_bundle_target(bundle)
+            original_rename = profile._rename_noreplace
+
+            def revoke_then_rename(parent_fd: int, source: str, destination: str) -> None:
+                root.chmod(0o500)
+                original_rename(parent_fd, source, destination)
+
             try:
-                profile_path.write_bytes(b"keep\n")
-                with self.assertRaises(profile.IntakeRefused):
-                    profile._write_outputs(
-                        [(receipt, b"receipt\n"), (catalog, b"profile\n")]
-                    )
+                with mock.patch.object(
+                    profile,
+                    "_rename_noreplace",
+                    side_effect=revoke_then_rename,
+                ):
+                    with self.assertRaises(profile.IntakeRefused):
+                        profile._write_bundle(target, b"receipt\n", b"profile\n")
             finally:
-                receipt.close()
-                catalog.close()
-            self.assertFalse(receipt_path.exists())
-            self.assertEqual(profile_path.read_bytes(), b"keep\n")
-            self.assertEqual(
-                sorted(path.name for path in root.iterdir()),
-                ["profile.json"],
-            )
+                root.chmod(0o700)
+                target.close()
+            self.assertFalse(bundle.exists())
+            for residue in root.iterdir():
+                self.assertTrue(residue.is_dir())
+                self.assertEqual(list(residue.iterdir()), [])
+
+    def test_bundle_race_is_preserved_and_never_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "bundle"
+            target = profile._open_bundle_target(bundle)
+            bundle.mkdir(mode=0o700)
+            marker = bundle / "keep"
+            marker.write_bytes(b"keep\n")
+            try:
+                with self.assertRaises(profile.IntakeRefused):
+                    profile._write_bundle(target, b"receipt\n", b"profile\n")
+            finally:
+                target.close()
+            self.assertEqual(marker.read_bytes(), b"keep\n")
+            self.assertEqual(sorted(path.name for path in bundle.iterdir()), ["keep"])
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["bundle"])
 
     def test_private_input_mode_and_symlink_input_are_refused(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -264,8 +358,7 @@ class ProfileIntakeTests(unittest.TestCase):
             arguments, paths, _record = prepare(root)
             paths["provider"].chmod(0o640)
             self.assertEqual(profile.main(arguments), 2)
-            self.assertFalse(paths["receipt"].exists())
-            self.assertFalse(paths["profile"].exists())
+            self.assertFalse(paths["bundle"].exists())
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -274,17 +367,17 @@ class ProfileIntakeTests(unittest.TestCase):
             paths["provider"].rename(actual)
             paths["provider"].symlink_to(actual)
             self.assertEqual(profile.main(arguments), 2)
-            self.assertFalse(paths["receipt"].exists())
-            self.assertFalse(paths["profile"].exists())
+            self.assertFalse(paths["bundle"].exists())
 
-    def test_existing_output_is_preserved_and_other_output_is_not_created(self) -> None:
+    def test_existing_bundle_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             arguments, paths, _record = prepare(root)
-            paths["receipt"].write_bytes(b"keep\n")
+            paths["bundle"].mkdir(mode=0o700)
+            marker = paths["bundle"] / "keep"
+            marker.write_bytes(b"keep\n")
             self.assertEqual(profile.main(arguments), 2)
-            self.assertEqual(paths["receipt"].read_bytes(), b"keep\n")
-            self.assertFalse(paths["profile"].exists())
+            self.assertEqual(marker.read_bytes(), b"keep\n")
 
 
 if __name__ == "__main__":

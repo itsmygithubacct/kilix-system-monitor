@@ -6,11 +6,16 @@ exact byte identities: **1/1** artifact, **1/1** fixture, and **1/1** private,
 redacted `plebian.hardware/v1` snapshot. The hardware document must pass its
 full schema, semantic denylist, and privacy controls.
 
-Successful intake writes **2/2** new, exact-mode-0600 files in one retained
-caller-owned directory: a schema-valid intake receipt and a schema-valid
-`plebian.models.profiles/v1` catalog. Handled failures roll back to **0/2** new
-outputs, existing outputs are never replaced, and symlinked path components
-are refused.
+Successful intake atomically commits **1/1** new mode-0700 bundle containing
+**2/2** exact-mode-0600 files: a schema-valid intake receipt and a schema-valid
+`plebian.models.profiles/v1` catalog. A Linux `renameat2(RENAME_NOREPLACE)` is
+the single visibility event. Before that event the final bundle is **0/1**;
+after it, both files are visible **2/2**. Existing bundles are never replaced,
+and symlinked path components are refused. Concurrent mutation by another
+same-UID process can leave an empty private temporary directory after a refused
+commit, but cannot expose a partial final bundle or a receipt claiming commit.
+The protocol does not claim persistence of a caller-owned pathname against a
+same-UID process that can rename that path before or after the final check.
 
 Intake records but does not accept provider claims. The generated profile is
 always `qualification_eligible: false`, `qualification: unqualified`, and
@@ -26,8 +31,9 @@ no-escape launcher/cgroup boundary; sampled process trees are not accepted as
 that boundary.
 
 All paths must be absolute. Provider evidence and hardware JSON must be
-canonical, caller-owned, singly linked, and mode 0600. The **2/2** absent output
-paths must share one caller-owned, non-group/world-writable parent directory.
+canonical, caller-owned, singly linked, and mode 0600. The **1/1** output bundle
+must be absent beneath a caller-owned, non-group/world-writable parent
+directory.
 
 ```text
 python -m tools.measure.profile \
@@ -35,9 +41,11 @@ python -m tools.measure.profile \
   --artifact /absolute/model.bin \
   --fixture /absolute/fixture.wav \
   --hardware-snapshot /absolute/hardware.json \
-  --intake-receipt /absolute/private/intake-receipt.json \
-  --profile-catalog /absolute/private/profile-catalog.json
+  --output-bundle /absolute/private/provider-profile-intake
 ```
+
+On success the bundle contains `intake-receipt.json` and
+`profile-catalog.json`, **2/2** files.
 
 The provider record schema is
 `tools/measure/provider-measurement-v1.schema.json`; the output receipt schema

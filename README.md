@@ -60,11 +60,13 @@ Use the release-pinned uv 0.12.5 for a functional developer check:
 
     /absolute/path/to/release-pinned-uv-0.12.5 sync --locked --offline \
       --no-install-project --managed-python --no-python-downloads --python 3.12.8
-    make check UV=/absolute/path/to/release-pinned-uv-0.12.5
+    TMPDIR=/home/pleb/scratch-workers \
+      make check UV=/absolute/path/to/release-pinned-uv-0.12.5
 
 The locked aggregate environment includes the exact uv-build 0.12.5 backend
 needed by both component sdists, so the package gate can stay offline after the
 normal locked environment sync instead of depending on an unrelated cache hit.
+The validator refuses scratch roots outside `/home/pleb/scratch-workers`.
 
 The current `tools/validate_candidate` shell path has useful partial isolation:
 it refuses an unpinned uv or Python, checks the candidate file set before

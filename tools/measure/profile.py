@@ -10,6 +10,7 @@ measurements remain in the provider record; none are promoted into the profile.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import ipaddress
 import json
@@ -29,6 +30,11 @@ RECEIPT_SCHEMA = Path(__file__).with_name("profile-intake-receipt-v1.schema.json
 HARDWARE_SCHEMA = ROOT / "contracts/p1-candidate/schemas/plebian.hardware-v1.schema.json"
 PROFILE_SCHEMA = ROOT / "contracts/p1-candidate/schemas/plebian.models.profiles-v1.schema.json"
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
+MAX_JSON_DEPTH = 64
+MAX_JSON_NODES = 100_000
+BUNDLE_PROFILE_NAME = "profile-catalog.json"
+BUNDLE_RECEIPT_NAME = "intake-receipt.json"
+RENAME_NOREPLACE = 1
 PROHIBITED_KEYS = {
     "asset_tag",
     "hostname",
@@ -57,16 +63,13 @@ class FileEvidence:
 
 
 @dataclass(slots=True)
-class OutputTarget:
+class BundleTarget:
     parent_fd: int
     parent_path: Path
     parent_device: int
     parent_inode: int
+    parent_mode: int
     name: str
-
-    @property
-    def identity(self) -> tuple[int, int, str]:
-        return (self.parent_device, self.parent_inode, self.name)
 
     def close(self) -> None:
         if self.parent_fd >= 0:
@@ -129,7 +132,7 @@ def _read_regular_file(
     if not path.is_absolute() or path.name in {"", ".", ".."}:
         raise IntakeRefused("all input paths must be absolute file paths")
     parent_fd = _open_directory_nofollow(path.parent)
-    flags = os.O_RDONLY | os.O_CLOEXEC
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
@@ -219,29 +222,68 @@ def _strict_json(payload: bytes, label: str) -> dict[str, Any]:
             object_pairs_hook=unique_object,
             parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
         )
-        canonical = _canonical_bytes(document)
-    except (UnicodeError, ValueError, TypeError) as error:
+    except (RecursionError, UnicodeError, ValueError, TypeError) as error:
         raise IntakeRefused(f"{label} is not strict finite JSON") from error
     if not isinstance(document, dict):
         raise IntakeRefused(f"{label} must be a JSON object")
+    stack: list[tuple[Any, int]] = [(document, 1)]
+    node_count = 0
+    while stack:
+        value, depth = stack.pop()
+        node_count += 1
+        if depth > MAX_JSON_DEPTH or node_count > MAX_JSON_NODES:
+            raise IntakeRefused(f"{label} exceeds the JSON structure boundary")
+        if isinstance(value, dict):
+            stack.extend((item, depth + 1) for item in value.values())
+        elif isinstance(value, list):
+            stack.extend((item, depth + 1) for item in value)
+    try:
+        canonical = _canonical_bytes(document)
+    except (RecursionError, ValueError, TypeError) as error:
+        raise IntakeRefused(f"{label} exceeds the canonical JSON boundary") from error
     if payload != canonical:
         raise IntakeRefused(f"{label} must use the canonical JSON encoding")
     return document
 
 
 def _schema_errors(document: dict[str, Any], schema_path: Path) -> list[str]:
-    from jsonschema import Draft202012Validator, FormatChecker
-
     try:
+        from jsonschema import Draft202012Validator, FormatChecker
+
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
-    except (OSError, UnicodeError, ValueError) as error:
+    except (ImportError, OSError, RecursionError, UnicodeError, ValueError) as error:
         raise IntakeRefused("a pinned intake schema is unavailable") from error
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
-    return [
-        error.message
-        for error in sorted(validator.iter_errors(document), key=lambda item: list(item.path))
-    ]
+    try:
+        return [
+            error.message
+            for error in sorted(
+                validator.iter_errors(document), key=lambda item: list(item.path)
+            )
+        ]
+    except RecursionError as error:
+        raise IntakeRefused("JSON schema validation exceeded its structure boundary") from error
+
+
+def _contains_ipv6(value: str) -> bool:
+    for token in re.findall(r"[0-9A-Fa-f:.]+", value):
+        candidates = {token}
+        if token.startswith(":") and not token.startswith("::"):
+            candidates.add(token[1:])
+        if token.endswith(":") and not token.endswith("::"):
+            candidates.add(token[:-1])
+        if token.startswith(":") and token.endswith(":") and len(token) > 2:
+            candidates.add(token[1:-1])
+        for candidate in candidates:
+            if candidate.count(":") < 2:
+                continue
+            try:
+                if ipaddress.ip_address(candidate).version == 6:
+                    return True
+            except ValueError:
+                continue
+    return False
 
 
 def _privacy_errors(value: Any, trail: str = "$") -> list[str]:
@@ -268,15 +310,8 @@ def _privacy_errors(value: Any, trail: str = "$") -> list[str]:
             break
         if MAC.search(value):
             errors.append(f"MAC-address value at {trail}")
-        if ":" in value:
-            candidate = value.removeprefix("[").removesuffix("]")
-            try:
-                address = ipaddress.ip_address(candidate)
-            except ValueError:
-                pass
-            else:
-                if address.version == 6:
-                    errors.append(f"IP-address value at {trail}")
+        if _contains_ipv6(value):
+            errors.append(f"IP-address value at {trail}")
     return errors
 
 
@@ -303,9 +338,9 @@ def _validate_hardware(document: dict[str, Any]) -> None:
         )
 
 
-def _open_output_target(path: Path) -> OutputTarget:
+def _open_bundle_target(path: Path) -> BundleTarget:
     if not path.is_absolute() or path.name in {"", ".", ".."}:
-        raise IntakeRefused("all output paths must be absolute file paths")
+        raise IntakeRefused("the output bundle must be an absolute path")
     parent_fd = _open_directory_nofollow(path.parent)
     try:
         metadata = os.fstat(parent_fd)
@@ -316,14 +351,15 @@ def _open_output_target(path: Path) -> OutputTarget:
         except FileNotFoundError:
             pass
         except OSError as error:
-            raise IntakeRefused("output target cannot be inspected") from error
+            raise IntakeRefused("output bundle cannot be inspected") from error
         else:
-            raise IntakeRefused("output target already exists")
-        return OutputTarget(
+            raise IntakeRefused("output bundle already exists")
+        return BundleTarget(
             parent_fd=parent_fd,
             parent_path=path.parent,
             parent_device=metadata.st_dev,
             parent_inode=metadata.st_ino,
+            parent_mode=stat.S_IMODE(metadata.st_mode),
             name=path.name,
         )
     except Exception:
@@ -331,16 +367,19 @@ def _open_output_target(path: Path) -> OutputTarget:
         raise
 
 
-def _target_still_bound(target: OutputTarget) -> bool:
+def _target_still_safe(target: BundleTarget) -> bool:
     try:
         descriptor = _open_directory_nofollow(target.parent_path)
     except IntakeRefused:
         return False
     try:
         metadata = os.fstat(descriptor)
-        return (metadata.st_dev, metadata.st_ino) == (
-            target.parent_device,
-            target.parent_inode,
+        return (
+            (metadata.st_dev, metadata.st_ino)
+            == (target.parent_device, target.parent_inode)
+            and metadata.st_uid == os.geteuid()
+            and stat.S_IMODE(metadata.st_mode) == target.parent_mode
+            and not metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
         )
     finally:
         os.close(descriptor)
@@ -355,72 +394,118 @@ def _write_all(descriptor: int, payload: bytes) -> None:
         position += written
 
 
-def _write_outputs(outputs: list[tuple[OutputTarget, bytes]]) -> None:
-    if len(outputs) != 2:
-        raise IntakeRefused("the intake transaction requires exactly 2/2 outputs")
-    targets = [target for target, _payload in outputs]
-    if len({target.identity for target in targets}) != 2:
-        raise IntakeRefused("the 2/2 output targets must be distinct")
-    parent_identities = {
-        (target.parent_device, target.parent_inode) for target in targets
-    }
-    if len(parent_identities) != 1:
-        raise IntakeRefused("the 2/2 outputs must share one retained parent directory")
-    if not all(_target_still_bound(target) for target in targets):
-        raise IntakeRefused("an output parent changed after preflight")
-
-    parent_fd = targets[0].parent_fd
-    temporary_names: list[str] = []
-    final_names: list[str] = []
+def _write_private_file(parent_fd: int, name: str, payload: bytes) -> None:
     flags = os.O_WRONLY | os.O_CLOEXEC | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
+    descriptor = os.open(name, flags, 0o600, dir_fd=parent_fd)
     try:
-        for target, payload in outputs:
-            temporary = f".{target.name}.intake-{secrets.token_hex(16)}"
-            descriptor = os.open(temporary, flags, 0o600, dir_fd=parent_fd)
-            temporary_names.append(temporary)
-            try:
-                os.fchmod(descriptor, 0o600)
-                _write_all(descriptor, payload)
-                os.fsync(descriptor)
-                if stat.S_IMODE(os.fstat(descriptor).st_mode) != 0o600:
-                    raise OSError("output mode verification failed")
-            finally:
-                os.close(descriptor)
-        if not all(_target_still_bound(target) for target in targets):
-            raise IntakeRefused("an output parent changed before commit")
-        for temporary, target in zip(temporary_names, targets, strict=True):
-            os.link(
-                temporary,
-                target.name,
-                src_dir_fd=parent_fd,
-                dst_dir_fd=parent_fd,
-                follow_symlinks=False,
-            )
-            final_names.append(target.name)
-        for temporary in temporary_names:
-            os.unlink(temporary, dir_fd=parent_fd)
-        temporary_names.clear()
-        os.fsync(parent_fd)
-        if not all(_target_still_bound(target) for target in targets):
-            raise IntakeRefused("an output parent changed during commit")
-        final_names.clear()
+        os.fchmod(descriptor, 0o600)
+        _write_all(descriptor, payload)
+        os.fsync(descriptor)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600:
+            raise OSError("output mode verification failed")
+    finally:
+        os.close(descriptor)
+
+
+def _rename_noreplace(parent_fd: int, source: str, destination: str) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise IntakeRefused("atomic no-replace bundle commit is unavailable")
+    renameat2.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        parent_fd,
+        os.fsencode(source),
+        parent_fd,
+        os.fsencode(destination),
+        RENAME_NOREPLACE,
+    )
+    if result != 0:
+        number = ctypes.get_errno()
+        raise OSError(number, os.strerror(number))
+
+
+def _write_bundle(
+    target: BundleTarget,
+    receipt_payload: bytes,
+    profile_payload: bytes,
+) -> None:
+    if not _target_still_safe(target):
+        raise IntakeRefused("the output parent changed after preflight")
+    temporary = f".{target.name}.intake-{secrets.token_hex(16)}"
+    temporary_fd = -1
+    temporary_created = False
+    committed = False
+    directory_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+    try:
+        os.mkdir(temporary, 0o700, dir_fd=target.parent_fd)
+        temporary_created = True
+        os.chmod(
+            temporary,
+            0o700,
+            dir_fd=target.parent_fd,
+            follow_symlinks=False,
+        )
+        temporary_fd = os.open(
+            temporary,
+            directory_flags,
+            dir_fd=target.parent_fd,
+        )
+        directory_metadata = os.fstat(temporary_fd)
+        if (
+            directory_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(directory_metadata.st_mode) != 0o700
+        ):
+            raise IntakeRefused("temporary output bundle is not private")
+        _write_private_file(temporary_fd, BUNDLE_PROFILE_NAME, profile_payload)
+        _write_private_file(temporary_fd, BUNDLE_RECEIPT_NAME, receipt_payload)
+        if set(os.listdir(temporary_fd)) != {BUNDLE_PROFILE_NAME, BUNDLE_RECEIPT_NAME}:
+            raise IntakeRefused("temporary output bundle does not contain exactly 2/2 files")
+        os.fsync(temporary_fd)
+        if not _target_still_safe(target):
+            raise IntakeRefused("the output parent changed before bundle commit")
+        try:
+            os.stat(target.name, dir_fd=target.parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise IntakeRefused("output bundle appeared after preflight")
+        _rename_noreplace(target.parent_fd, temporary, target.name)
+        committed = True
     except IntakeRefused:
         raise
     except OSError as error:
-        raise IntakeRefused("the 2/2 output transaction failed") from error
+        raise IntakeRefused("the 1/1 atomic output-bundle commit failed") from error
     finally:
-        for name in final_names:
+        if not committed and temporary_fd >= 0:
             try:
-                os.unlink(name, dir_fd=parent_fd)
-            except FileNotFoundError:
-                pass
+                os.fchmod(temporary_fd, 0o700)
             except OSError:
                 pass
-        for name in temporary_names:
+            for name in (BUNDLE_RECEIPT_NAME, BUNDLE_PROFILE_NAME):
+                try:
+                    os.unlink(name, dir_fd=temporary_fd)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    pass
+        if temporary_fd >= 0:
+            os.close(temporary_fd)
+        if not committed and temporary_created:
             try:
-                os.unlink(name, dir_fd=parent_fd)
+                os.rmdir(temporary, dir_fd=target.parent_fd)
             except FileNotFoundError:
                 pass
             except OSError:
@@ -565,7 +650,7 @@ def _build_outputs(
             "total": 1,
             "status": "unaccepted",
         },
-        "outputs": {"committed": 2, "total": 2},
+        "bundle_files": {"prepared": 2, "total": 2},
         "provider_evidence_sha256": provider_file.sha256,
         "profile_catalog_sha256": _sha256(profile_payload),
         "disposition": "recorded-unqualified",
@@ -589,19 +674,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--hardware-snapshot", type=Path, required=True)
-    parser.add_argument("--intake-receipt", type=Path, required=True)
-    parser.add_argument("--profile-catalog", type=Path, required=True)
+    parser.add_argument("--output-bundle", type=Path, required=True)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
-    targets: list[OutputTarget] = []
+    target: BundleTarget | None = None
     try:
-        receipt_target = _open_output_target(arguments.intake_receipt)
-        targets.append(receipt_target)
-        profile_target = _open_output_target(arguments.profile_catalog)
-        targets.append(profile_target)
+        target = _open_bundle_target(arguments.output_bundle)
 
         provider_file = _read_regular_file(
             arguments.provider_evidence,
@@ -617,8 +698,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             maximum=MAX_DOCUMENT_BYTES,
             private=True,
         )
-        assert provider_file.payload is not None
-        assert hardware_file.payload is not None
+        if provider_file.payload is None or hardware_file.payload is None:
+            raise IntakeRefused("private JSON capture did not produce 2/2 documents")
         provider = _strict_json(provider_file.payload, "provider record")
         hardware = _strict_json(hardware_file.payload, "hardware snapshot")
         _validate_provider(provider)
@@ -631,21 +712,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             hardware,
             hardware_file,
         )
-        _write_outputs(
-            [
-                (receipt_target, receipt_payload),
-                (profile_target, profile_payload),
-            ]
-        )
+        _write_bundle(target, receipt_payload, profile_payload)
     except IntakeRefused as error:
         print(f"profile-intake: refused: {error}", file=sys.stderr)
         return 2
+    except RecursionError:
+        print("profile-intake: refused: JSON structure boundary exceeded", file=sys.stderr)
+        return 2
     finally:
-        for target in targets:
+        if target is not None:
             target.close()
     print(
         "profile-intake: provider records 1/1 recorded, byte identities 3/3, "
-        "outputs 2/2, measurement evidence 0/1 accepted, qualified profiles 0/1"
+        "output bundles 1/1 with files 2/2, measurement evidence 0/1 accepted, "
+        "qualified profiles 0/1"
     )
     return 0
 

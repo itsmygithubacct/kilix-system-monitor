@@ -317,6 +317,45 @@ def strict_json_parser_controls() -> tuple[list[str], int]:
     return errors, len(controls)
 
 
+def _contains_ipv6_address(value: str) -> bool:
+    for token in re.findall(r"[0-9A-Fa-f:.]+", value):
+        candidates = {token}
+        if token.startswith(":") and not token.startswith("::"):
+            candidates.add(token[1:])
+        if token.endswith(":") and not token.endswith("::"):
+            candidates.add(token[:-1])
+        if token.startswith(":") and token.endswith(":") and len(token) > 2:
+            candidates.add(token[1:-1])
+        for candidate in candidates:
+            if candidate.count(":") < 2:
+                continue
+            try:
+                if ipaddress.ip_address(candidate).version == 6:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
+def privacy_value_controls() -> tuple[list[str], int]:
+    rejected = {
+        "prefixed-ipv6": "local:2001:db8::1",
+        "embedded-bracketed-ipv6": "node=[2001:db8::2]",
+    }
+    allowed = {
+        "timestamp": "2026-08-31T12:00:00Z",
+        "snapshot": "fixture:h0-cpu-only",
+    }
+    errors: list[str] = []
+    for label, value in rejected.items():
+        if not privacy_errors(value):
+            errors.append(f"privacy scanner accepted {label} control")
+    for label, value in allowed.items():
+        if privacy_errors(value):
+            errors.append(f"privacy scanner rejected {label} control")
+    return errors, len(rejected) + len(allowed)
+
+
 def verify_candidate_integrity(expected_manifest_sha256: str) -> tuple[list[str], int]:
     errors: list[str] = []
     for path in sorted(ROOT.rglob("*")):
@@ -373,6 +412,8 @@ def privacy_errors(value: Any, trail: str = "$") -> list[str]:
     elif isinstance(value, str):
         if "/home/" in value or IPV4.search(value) or MAC.search(value):
             errors.append(f"identifier-shaped value at {trail}")
+        elif _contains_ipv6_address(value):
+            errors.append(f"IP-address value at {trail}")
         else:
             try:
                 ipaddress.ip_address(value.removeprefix("[").removesuffix("]"))
@@ -1497,6 +1538,7 @@ def run_live_hardware_check(
             "PATH": "/usr/bin:/bin",
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONHASHSEED": "0",
+            "TMPDIR": os.environ["TMPDIR"],
             "TZ": "UTC",
         },
         stdin=subprocess.DEVNULL,
@@ -1567,6 +1609,7 @@ def main() -> int:
     invalid_count = 0
     invalid_total = 0
     parser_control_count = 0
+    privacy_control_count = 0
     unknown_control_count = 0
     response_status_control_count = 0
     f107_control_count = 0
@@ -1588,6 +1631,8 @@ def main() -> int:
             invalid_count += 1
         parser_errors, parser_control_count = strict_json_parser_controls()
         failures.extend(parser_errors)
+        privacy_errors_found, privacy_control_count = privacy_value_controls()
+        failures.extend(privacy_errors_found)
         unknown_errors, unknown_control_count = hardware_unknown_projection_controls(
             available
         )
@@ -1622,6 +1667,7 @@ def main() -> int:
     mode = (
         f", {invalid_count}/{invalid_total} invalid mutations rejected, "
         f"{parser_control_count}/6 strict JSON parser controls rejected, "
+        f"{privacy_control_count}/4 privacy value controls exercised, "
         f"{unknown_control_count}/10 hardware unknown-projection controls rejected, "
         f"{response_status_control_count}/2 hardware response-status controls rejected, "
         f"{f107_control_count}/4 F107-B return controls rejected, "
