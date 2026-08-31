@@ -32,7 +32,10 @@ The collector uses bounded reads from procfs, sysfs and cgroup v2. Optional
 local commands are found only in a fixed system path and run with fixed argv,
 a clean locale, null stdin, a five-second deadline and a 64 KiB output limit.
 Resolved executables must remain inside that path and must not be group- or
-world-writable. It never uses the network or elevates privilege.
+world-writable. Debian's `nvidia-smi` alternative is allowed to resolve only
+inside the fixed `/usr/lib/nvidia/current` packaged root; that exception applies
+to **1/1** executable name and does not extend the subprocess `PATH`. It never
+uses the network or elevates privilege.
 
 The additive plebian.hardware.privacy/v1 candidate fixes those boundaries as
 data rather than leaving them as review conventions. The common file reader

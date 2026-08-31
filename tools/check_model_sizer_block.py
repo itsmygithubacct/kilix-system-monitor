@@ -26,11 +26,18 @@ def main() -> int:
         )
         return 1
     notice = (COMPONENT / "README.md").read_text(encoding="utf-8")
-    for required in ("F100 has not passed U5", "F100-C0 is not frozen", "no executable"):
+    for required in (
+        "capacity fixtures are frozen **3/3**",
+        "F100 has not passed U5",
+        "no executable",
+    ):
         if required not in notice:
             print(f"FAIL: model-sizer blocker notice lacks {required!r}", file=sys.stderr)
             return 1
-    print("PASS: D4 remains blocked; no model-sizer executable or provisional fit policy exists")
+    print(
+        "PASS: F100-C0 capacity fixtures 3/3 frozen; D4 remains blocked on "
+        "F100 U5 0/1; model-sizer executables 0/1"
+    )
     return 0
 
 

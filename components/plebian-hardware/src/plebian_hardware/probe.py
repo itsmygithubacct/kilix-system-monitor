@@ -49,6 +49,7 @@ VENDORS = {
     "0x8086": "intel",
 }
 PROBE_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
+NVIDIA_SMI_ROOT = "/usr/lib/nvidia/current"
 EXECUTABLE_INTEGRITY = "resolved-within-path-and-not-group-or-world-writable"
 SUBPROCESS_ENVIRONMENT = {
     "LANG": "C.UTF-8",
@@ -102,12 +103,20 @@ def _find_executable(command: str) -> str | None:
     if re.fullmatch(r"[a-zA-Z0-9_.+-]{1,80}", command) is None:
         return None
     roots: list[Path] = []
-    for raw_root in PROBE_PATH.split(":"):
+    raw_roots = PROBE_PATH.split(":")
+    if command == "nvidia-smi":
+        raw_roots.append(NVIDIA_SMI_ROOT)
+    for raw_root in raw_roots:
         try:
             root = Path(raw_root).resolve(strict=True)
+            metadata = root.stat()
         except OSError:
             continue
-        if root.is_dir() and root not in roots:
+        if (
+            stat.S_ISDIR(metadata.st_mode)
+            and not metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+            and root not in roots
+        ):
             roots.append(root)
     for root in roots:
         try:

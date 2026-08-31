@@ -3,10 +3,10 @@
 This directory reserves the F106 component boundary and contains no executable
 or fit-engine implementation yet.
 
-F100 has not passed U5 and F100-C0 is not frozen. Consequently there is no
-authoritative OS, display, service, RAM, VRAM, disk or concurrency reserve
-object against which resource arithmetic can be implemented. A provisional
-policy object is explicitly not an entry condition and is not present here.
+The F100-C0 H0/H1/H2 capacity fixtures are frozen **3/3**. F100 has not passed U5,
+so the sizer's remaining entry conditions are not closed and no executable
+or fit engine is introduced here. A provisional policy object is explicitly
+not an entry condition and is not present here.
 
 The pre-freeze schemas and fixtures under ../../contracts/p1-candidate retain
 null capacity identities, null reserve/available arithmetic and unknown or
@@ -32,6 +32,6 @@ results, retry/idempotency, cancellation and resume binding are fixed by the
 candidate schema. All fixtures remain blocked or unknown, so this design starts
 **0/1** D4 implementations and authorizes **0/1** transfers.
 
-D4 starts only after both gates are recorded. Until then, the absence of a
-plebian-model-sizer entry point is intentional and checked by the aggregate
-test suite.
+D4 starts only after its remaining U5 gate is recorded. Until then, the absence
+of a plebian-model-sizer entry point is intentional and checked by the
+aggregate test suite.

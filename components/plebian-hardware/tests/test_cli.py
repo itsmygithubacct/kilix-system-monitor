@@ -342,6 +342,33 @@ class ProbeBoundaryTests(unittest.TestCase):
                 self.assertIsNone(probe._find_executable("escape-tool"))
                 self.assertIsNone(probe._find_executable("writable-tool"))
 
+    def test_nvidia_smi_accepts_only_its_fixed_packaged_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            allowed = temporary_root / "allowed"
+            packaged = temporary_root / "packaged"
+            allowed.mkdir()
+            packaged.mkdir()
+            executable = packaged / "nvidia-smi"
+            executable.write_bytes(b"#!/bin/false\n")
+            executable.chmod(0o700)
+            (allowed / "nvidia-smi").symlink_to(executable)
+            other = packaged / "other-tool"
+            other.write_bytes(b"#!/bin/false\n")
+            other.chmod(0o700)
+            (allowed / "other-tool").symlink_to(other)
+            with (
+                mock.patch.object(probe, "PROBE_PATH", str(allowed)),
+                mock.patch.object(probe, "NVIDIA_SMI_ROOT", str(packaged)),
+            ):
+                self.assertEqual(
+                    probe._find_executable("nvidia-smi"),
+                    str(executable),
+                )
+                self.assertIsNone(probe._find_executable("other-tool"))
+                executable.chmod(0o722)
+                self.assertIsNone(probe._find_executable("nvidia-smi"))
+
     def test_reads_are_bounded_regular_ascii_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
