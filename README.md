@@ -12,10 +12,11 @@ that couple them:
   Fit, recommendation and planning code is blocked until F100 passes U5 and
   F100-C0 freezes real reserve policy.
 
-The parent is local and unpublished. Its telemetry history was imported from
-the exact public source with a prefix-only rewrite; MIGRATION.md records the
-source, rewrite tool, complete commit map, equivalence checks and split-back
-procedure. No source repository, consumer pin or public remote was changed.
+The parent is public at `refs/heads/work/0.2.1-f106`. Its telemetry history was
+imported from the exact public source with a prefix-only rewrite; MIGRATION.md
+records the source, rewrite tool, complete commit map, equivalence checks and
+split-back procedure. The source repository and consumer pin remain unchanged;
+this parent now has its own public origin.
 
 ## Contract state
 
@@ -77,8 +78,10 @@ select Python through `/usr/bin/env` and inherited `PATH`.
 The aggregate developer check exercises contract integrity and negative
 fixtures, the imported telemetry suite, the hardware unit boundaries, live
 inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
-consumer readiness, and the intentional model-sizer block. Hardware checks use
-no network and no privilege.
+consumer readiness, the unqualified provider-profile measurement harness, and
+the intentional model-sizer block. Hardware checks use no network and no
+privilege. `tools/measure/profile.py` measures exact artifact/fixture bytes and
+provider process-tree RAM while keeping qualification at **0/1**.
 
 ## Current boundaries
 

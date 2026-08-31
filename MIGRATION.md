@@ -1,7 +1,8 @@
 # kilix-telemetry history import
 
-Status: local, unpublished and abortable. No source remote, consumer pin,
-public repository, tag or publication setting was changed.
+Status: public work ref and rollback-safe. The source repository, consumer pin,
+release tag and source-publication settings remain unchanged; this parent now
+has its own public origin.
 
 ## Frozen source and selected refs
 
@@ -34,8 +35,9 @@ An isolated mirror of the exact public source was transformed in place with:
       --refs refs/heads/main
 
 The ordinary checkout was never a rewrite target. The rewritten mirror was
-then cloned as this new local parent, and its temporary source remote was
-removed. The parent therefore has no remote while publication remains gated.
+then cloned as this new parent, and its temporary source remote was removed.
+The parent was subsequently published at `refs/heads/work/0.2.1-f106`; the
+source repository was not mutated.
 
 ## Complete commit map
 
@@ -81,13 +83,13 @@ local clone containing the exact source commit:
 
 ## Abort and rollback
 
-Before publication, abort by retaining the source repository and discarding
-this unpublished parent if any combined-history hygiene, provenance,
+Before a successor publication, abort by retaining the current public work ref
+and discarding the successor if any combined-history hygiene, provenance,
 licensing, component-identity, package, test, F120 or visibility gate fails.
 No source remote needs repair because none was mutated.
 
-After a future publication, rollback selects the last known-good parent and
-component refs; it does not rewrite or delete either public history. Consumers
+After publication, rollback selects the last known-good parent and component
+refs; it does not rewrite or delete either public history. Consumers
 move only through their owning tracks and retain their direct read-only
 fallbacks.
 

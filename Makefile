@@ -1,8 +1,8 @@
 UV ?= uv
 
-.PHONY: check contracts-check telemetry-check hardware-check package-check launcher-consumer-readiness model-sizer-blocked
+.PHONY: check contracts-check telemetry-check hardware-check package-check profile-measure-check launcher-consumer-readiness model-sizer-blocked
 
-check: contracts-check telemetry-check hardware-check package-check launcher-consumer-readiness model-sizer-blocked
+check: contracts-check telemetry-check hardware-check package-check profile-measure-check launcher-consumer-readiness model-sizer-blocked
 
 contracts-check:
 	UV="$(UV)" /bin/sh tools/validate_candidate
@@ -16,6 +16,9 @@ hardware-check:
 
 package-check:
 	UV=$(UV) PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_distributions.py
+
+profile-measure-check:
+	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tools/measure/tests -v
 
 launcher-consumer-readiness:
 	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_trusted_launcher_consumer_readiness.py --self-test

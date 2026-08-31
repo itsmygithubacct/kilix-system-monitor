@@ -1,6 +1,6 @@
 schema = "kilix.system-monitor.manifest/v0-development"
-publication_disposition = "unpublished"
-visibility = "local-only"
+publication_disposition = "work-ref-published"
+visibility = "public"
 contracts = "contracts/p1-candidate"
 contracts_status = "pre-freeze"
 f120_registration = "integration/f120-registration.json"
