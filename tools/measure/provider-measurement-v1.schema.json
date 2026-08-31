@@ -1,0 +1,280 @@
+{
+  "$id": "urn:plebian:tools:schema:provider-measurement:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/identity"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "license_decision_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/identity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._+-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "version",
+        "content_sha256",
+        "license_decision_id"
+      ],
+      "type": "object"
+    },
+    "backend": {
+      "enum": [
+        "cpu",
+        "cuda",
+        "oneapi",
+        "opencl",
+        "rocm",
+        "vulkan"
+      ]
+    },
+    "catalog_id": {
+      "$ref": "#/$defs/identity"
+    },
+    "command": {
+      "additionalProperties": false,
+      "properties": {
+        "argv_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "command_id": {
+          "$ref": "#/$defs/identity"
+        },
+        "executable_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "command_id",
+        "argv_sha256",
+        "executable_sha256"
+      ],
+      "type": "object"
+    },
+    "fixture": {
+      "additionalProperties": false,
+      "properties": {
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixture_id": {
+          "$ref": "#/$defs/identity"
+        }
+      },
+      "required": [
+        "fixture_id",
+        "content_sha256"
+      ],
+      "type": "object"
+    },
+    "hardware": {
+      "additionalProperties": false,
+      "properties": {
+        "snapshot_id": {
+          "pattern": "^(fixture|local|redacted):[a-z0-9][a-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "snapshot_sha256"
+      ],
+      "type": "object"
+    },
+    "measured_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "measurement_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "cgroup-v2-memory.peak",
+            "provider-native",
+            "sampled-process-tree"
+          ]
+        },
+        "receipt_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reported_only": {
+          "const": true
+        },
+        "status": {
+          "const": "unaccepted"
+        }
+      },
+      "required": [
+        "status",
+        "method",
+        "receipt_sha256",
+        "reported_only"
+      ],
+      "type": "object"
+    },
+    "measurement_id": {
+      "$ref": "#/$defs/identity"
+    },
+    "profile_id": {
+      "$ref": "#/$defs/identity"
+    },
+    "profile_version": {
+      "pattern": "^[0-9]+(?:\\.[0-9]+){0,2}$",
+      "type": "string"
+    },
+    "provider": {
+      "$ref": "#/$defs/identity"
+    },
+    "reported_performance": {
+      "additionalProperties": false,
+      "properties": {
+        "first_result_ms": {
+          "$ref": "#/$defs/nonnegativeNumberOrNull"
+        },
+        "realtime_factor": {
+          "$ref": "#/$defs/nonnegativeNumberOrNull"
+        },
+        "tokens_per_second": {
+          "$ref": "#/$defs/nonnegativeNumberOrNull"
+        }
+      },
+      "required": [
+        "first_result_ms",
+        "realtime_factor",
+        "tokens_per_second"
+      ],
+      "type": "object"
+    },
+    "reported_requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "enum": [
+            "aarch64",
+            "x86_64"
+          ]
+        },
+        "disk_installed_bytes": {
+          "$ref": "#/$defs/nonnegativeIntegerOrNull"
+        },
+        "download_bytes": {
+          "$ref": "#/$defs/nonnegativeIntegerOrNull"
+        },
+        "ram_peak_bytes": {
+          "$ref": "#/$defs/nonnegativeIntegerOrNull"
+        },
+        "temporary_bytes": {
+          "$ref": "#/$defs/nonnegativeIntegerOrNull"
+        },
+        "vram_peak_bytes": {
+          "$ref": "#/$defs/nonnegativeIntegerOrNull"
+        }
+      },
+      "required": [
+        "architecture",
+        "download_bytes",
+        "disk_installed_bytes",
+        "temporary_bytes",
+        "ram_peak_bytes",
+        "vram_peak_bytes"
+      ],
+      "type": "object"
+    },
+    "safety_margin_basis_points": {
+      "maximum": 10000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema": {
+      "const": "plebian.models.provider-measurement/v1"
+    },
+    "task": {
+      "enum": [
+        "audio-codec",
+        "chat",
+        "embedding",
+        "object-detection",
+        "sound-detection",
+        "stt",
+        "tts",
+        "vision"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "measurement_id",
+    "catalog_id",
+    "profile_id",
+    "profile_version",
+    "provider",
+    "task",
+    "backend",
+    "measured_at",
+    "safety_margin_basis_points",
+    "artifact",
+    "fixture",
+    "hardware",
+    "command",
+    "reported_requirements",
+    "reported_performance",
+    "measurement_boundary"
+  ],
+  "$defs": {
+    "identity": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "nonnegativeIntegerOrNull": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "nonnegativeNumberOrNull": {
+      "minimum": 0,
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "title": "Provider-owned unaccepted measurement record",
+  "type": "object"
+}

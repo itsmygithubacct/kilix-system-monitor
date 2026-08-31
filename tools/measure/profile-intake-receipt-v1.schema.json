@@ -1,0 +1,366 @@
+{
+  "$id": "urn:plebian:tools:schema:profile-intake-receipt:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "byte_identities": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixture_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "hardware_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "matched": {
+          "const": 3
+        },
+        "total": {
+          "const": 3
+        }
+      },
+      "required": [
+        "matched",
+        "total",
+        "artifact_sha256",
+        "fixture_sha256",
+        "hardware_sha256"
+      ],
+      "type": "object"
+    },
+    "disposition": {
+      "const": "recorded-unqualified"
+    },
+    "intake_id": {
+      "$ref": "#/$defs/identity"
+    },
+    "measurement_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "const": 0
+        },
+        "status": {
+          "const": "unaccepted"
+        },
+        "total": {
+          "const": 1
+        }
+      },
+      "required": [
+        "accepted",
+        "total",
+        "status"
+      ],
+      "type": "object"
+    },
+    "outputs": {
+      "$ref": "#/$defs/twoOfTwo"
+    },
+    "profile_catalog_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "promotion": {
+      "additionalProperties": false,
+      "properties": {
+        "license_decisions": {
+          "$ref": "#/$defs/zeroPromotedOne"
+        },
+        "performance_metrics": {
+          "$ref": "#/$defs/zeroPromotedThree"
+        },
+        "provider_measurements": {
+          "$ref": "#/$defs/zeroPromotedNine"
+        },
+        "qualification": {
+          "$ref": "#/$defs/zeroAcceptedOne"
+        },
+        "resource_metrics": {
+          "$ref": "#/$defs/zeroPromotedFive"
+        }
+      },
+      "required": [
+        "provider_measurements",
+        "resource_metrics",
+        "performance_metrics",
+        "license_decisions",
+        "qualification"
+      ],
+      "type": "object"
+    },
+    "provider_evidence_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "provider_records": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_as_measurement": {
+          "const": 0
+        },
+        "recorded": {
+          "const": 1
+        },
+        "total": {
+          "const": 1
+        }
+      },
+      "required": [
+        "recorded",
+        "total",
+        "accepted_as_measurement"
+      ],
+      "type": "object"
+    },
+    "reported_fields": {
+      "additionalProperties": false,
+      "properties": {
+        "license_decision": {
+          "$ref": "#/$defs/zeroOrOneOfOne"
+        },
+        "performance": {
+          "$ref": "#/$defs/threeOfThree"
+        },
+        "requirements": {
+          "$ref": "#/$defs/sixOfSix"
+        }
+      },
+      "required": [
+        "requirements",
+        "performance",
+        "license_decision"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "plebian.models.profile-intake-receipt/v1"
+    },
+    "validation": {
+      "additionalProperties": false,
+      "properties": {
+        "hardware_schema_and_semantics": {
+          "$ref": "#/$defs/oneOfOne"
+        },
+        "privacy_documents": {
+          "$ref": "#/$defs/twoPassedOfTwo"
+        },
+        "provider_schema": {
+          "$ref": "#/$defs/oneOfOne"
+        }
+      },
+      "required": [
+        "provider_schema",
+        "hardware_schema_and_semantics",
+        "privacy_documents"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "intake_id",
+    "provider_records",
+    "byte_identities",
+    "validation",
+    "reported_fields",
+    "promotion",
+    "measurement_boundary",
+    "outputs",
+    "provider_evidence_sha256",
+    "profile_catalog_sha256",
+    "disposition"
+  ],
+  "$defs": {
+    "identity": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "oneOfOne": {
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "const": 1
+        },
+        "total": {
+          "const": 1
+        }
+      },
+      "required": [
+        "passed",
+        "total"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sixOfSix": {
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "const": 6
+        },
+        "total": {
+          "const": 6
+        }
+      },
+      "required": [
+        "present",
+        "total"
+      ],
+      "type": "object"
+    },
+    "threeOfThree": {
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "const": 3
+        },
+        "total": {
+          "const": 3
+        }
+      },
+      "required": [
+        "present",
+        "total"
+      ],
+      "type": "object"
+    },
+    "twoOfTwo": {
+      "additionalProperties": false,
+      "properties": {
+        "committed": {
+          "const": 2
+        },
+        "total": {
+          "const": 2
+        }
+      },
+      "required": [
+        "committed",
+        "total"
+      ],
+      "type": "object"
+    },
+    "twoPassedOfTwo": {
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "const": 2
+        },
+        "total": {
+          "const": 2
+        }
+      },
+      "required": [
+        "passed",
+        "total"
+      ],
+      "type": "object"
+    },
+    "zeroAcceptedOne": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "const": 0
+        },
+        "total": {
+          "const": 1
+        }
+      },
+      "required": [
+        "accepted",
+        "total"
+      ],
+      "type": "object"
+    },
+    "zeroOrOneOfOne": {
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "const": 1
+        }
+      },
+      "required": [
+        "present",
+        "total"
+      ],
+      "type": "object"
+    },
+    "zeroPromotedFive": {
+      "additionalProperties": false,
+      "properties": {
+        "promoted": {
+          "const": 0
+        },
+        "total": {
+          "const": 5
+        }
+      },
+      "required": [
+        "promoted",
+        "total"
+      ],
+      "type": "object"
+    },
+    "zeroPromotedNine": {
+      "additionalProperties": false,
+      "properties": {
+        "promoted": {
+          "const": 0
+        },
+        "total": {
+          "const": 9
+        }
+      },
+      "required": [
+        "promoted",
+        "total"
+      ],
+      "type": "object"
+    },
+    "zeroPromotedOne": {
+      "additionalProperties": false,
+      "properties": {
+        "promoted": {
+          "const": 0
+        },
+        "total": {
+          "const": 1
+        }
+      },
+      "required": [
+        "promoted",
+        "total"
+      ],
+      "type": "object"
+    },
+    "zeroPromotedThree": {
+      "additionalProperties": false,
+      "properties": {
+        "promoted": {
+          "const": 0
+        },
+        "total": {
+          "const": 3
+        }
+      },
+      "required": [
+        "promoted",
+        "total"
+      ],
+      "type": "object"
+    }
+  },
+  "title": "Unqualified provider-profile intake receipt",
+  "type": "object"
+}

@@ -1,71 +1,77 @@
 #!/usr/bin/env python3
-"""Measure 1/1 provider command without turning the result into qualification.
+"""Validate provider-owned measurement evidence without accepting its claims.
 
-The harness deliberately emits an unqualified ``plebian.models.profiles/v1``
-catalog.  It measures process-tree RAM, elapsed time, and exact artifact and
-fixture bytes.  Qualification remains a later owner/reviewer action over the
-raw evidence; this command never upgrades its own output.
+This module does not execute a provider.  It binds one canonical provider
+record to the exact bytes supplied for an artifact, fixture, and redacted
+hardware snapshot, then emits an explicitly unqualified profile.  Reported
+measurements remain in the provider record; none are promoted into the profile.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
-import math
 import os
-import platform
 import re
-import resource
-import signal
+import secrets
 import stat
-import subprocess
 import sys
-import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
 
-MAX_METADATA_BYTES = 4 * 1024 * 1024
-MAX_PROCESS_TREE = 4096
-DEFAULT_TIMEOUT_SECONDS = 3600.0
-DEFAULT_SAMPLE_INTERVAL_SECONDS = 0.01
-FIXED_ENVIRONMENT = {
-    "LANG": "C.UTF-8",
-    "LC_ALL": "C.UTF-8",
-    "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+ROOT = Path(__file__).resolve().parents[2]
+PROVIDER_SCHEMA = Path(__file__).with_name("provider-measurement-v1.schema.json")
+RECEIPT_SCHEMA = Path(__file__).with_name("profile-intake-receipt-v1.schema.json")
+HARDWARE_SCHEMA = ROOT / "contracts/p1-candidate/schemas/plebian.hardware-v1.schema.json"
+PROFILE_SCHEMA = ROOT / "contracts/p1-candidate/schemas/plebian.models.profiles-v1.schema.json"
+MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
+PROHIBITED_KEYS = {
+    "asset_tag",
+    "hostname",
+    "ip_address",
+    "mac_address",
+    "machine_id",
+    "serial",
+    "serial_number",
+    "system_uuid",
+    "username",
+    "uuid",
 }
-IDENTITY = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
-VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+){0,2}$")
-ARTIFACT_VERSION = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$")
-SNAPSHOT_ID = re.compile(r"^(?:fixture|local|redacted):[a-z0-9][a-z0-9._:-]{0,127}$")
-TASKS = {
-    "audio-codec",
-    "chat",
-    "embedding",
-    "object-detection",
-    "sound-detection",
-    "stt",
-    "tts",
-    "vision",
-}
-BACKENDS = {"cpu", "cuda", "oneapi", "opencl", "rocm", "vulkan"}
+IPV4 = re.compile(r"(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])")
+MAC = re.compile(r"(?i)(?<![0-9a-f])(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}(?![0-9a-f])")
 
 
-class MeasurementRefused(ValueError):
-    """The requested measurement crossed a fail-closed boundary."""
+class IntakeRefused(ValueError):
+    """The supplied record failed a fail-closed intake control."""
 
 
 @dataclass(frozen=True, slots=True)
-class CommandResult:
-    returncode: int | None
-    elapsed_ns: int
-    ram_peak_bytes: int
-    process_tree_complete: bool
-    timed_out: bool
-    executable_sha256: str
+class FileEvidence:
+    sha256: str
+    size: int
+    payload: bytes | None
+
+
+@dataclass(slots=True)
+class OutputTarget:
+    parent_fd: int
+    parent_path: Path
+    parent_device: int
+    parent_inode: int
+    name: str
+
+    @property
+    def identity(self) -> tuple[int, int, str]:
+        return (self.parent_device, self.parent_inode, self.name)
+
+    def close(self) -> None:
+        if self.parent_fd >= 0:
+            os.close(self.parent_fd)
+            self.parent_fd = -1
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -85,71 +91,125 @@ def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def _hash_regular_file(path: Path, *, maximum: int | None = None) -> tuple[str, int]:
+def _open_directory_nofollow(path: Path) -> int:
+    """Open an absolute directory through no-symlink component traversal."""
     if not path.is_absolute():
-        raise MeasurementRefused("input paths must be absolute")
+        raise IntakeRefused("all paths must be absolute")
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open("/", flags)
+        for component in path.parts[1:]:
+            if component in {"", ".", ".."}:
+                os.close(descriptor)
+                raise IntakeRefused("path contains an unsupported component")
+            try:
+                child = os.open(component, flags, dir_fd=descriptor)
+            except OSError:
+                os.close(descriptor)
+                raise
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except IntakeRefused:
+        raise
+    except OSError as error:
+        raise IntakeRefused("path ancestry is unavailable or contains a link") from error
+
+
+def _read_regular_file(
+    path: Path,
+    *,
+    capture: bool,
+    maximum: int | None = None,
+    private: bool = False,
+) -> FileEvidence:
+    """Read and hash one stable regular-file snapshot through a retained fd."""
+    if not path.is_absolute() or path.name in {"", ".", ".."}:
+        raise IntakeRefused("all input paths must be absolute file paths")
+    parent_fd = _open_directory_nofollow(path.parent)
     flags = os.O_RDONLY | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(path, flags)
-    except OSError as error:
-        raise MeasurementRefused("input file cannot be opened without following links") from error
-    digest = hashlib.sha256()
-    size = 0
-    try:
-        metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise MeasurementRefused("input is not a regular file")
-        while True:
-            chunk = os.read(descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            size += len(chunk)
-            if maximum is not None and size > maximum:
-                raise MeasurementRefused("metadata input exceeds its byte boundary")
-            digest.update(chunk)
+        try:
+            descriptor = os.open(path.name, flags, dir_fd=parent_fd)
+        except OSError as error:
+            raise IntakeRefused("input is unavailable or is a link") from error
     finally:
-        os.close(descriptor)
-    return digest.hexdigest(), size
+        os.close(parent_fd)
 
-
-def _load_hardware_snapshot(path: Path) -> tuple[str, str]:
-    if not path.is_absolute():
-        raise MeasurementRefused("input paths must be absolute")
-    flags = os.O_RDONLY | os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as error:
-        raise MeasurementRefused(
-            "hardware snapshot cannot be opened without following links"
-        ) from error
+    digest = hashlib.sha256()
     chunks: list[bytes] = []
     size = 0
-    digest = hashlib.sha256()
     try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise MeasurementRefused("hardware snapshot is not a regular file")
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise IntakeRefused("input is not a regular file")
+        if private and (
+            before.st_uid != os.geteuid()
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o600
+        ):
+            raise IntakeRefused(
+                "private JSON input must be caller-owned, singly linked, and mode 0600"
+            )
+        if maximum is not None and before.st_size > maximum:
+            raise IntakeRefused("JSON input exceeds its byte boundary")
         while True:
-            chunk = os.read(descriptor, 65536)
-            if not chunk:
+            block = os.read(descriptor, 1024 * 1024)
+            if not block:
                 break
-            size += len(chunk)
-            if size > MAX_METADATA_BYTES:
-                raise MeasurementRefused("metadata input exceeds its byte boundary")
-            chunks.append(chunk)
-            digest.update(chunk)
+            size += len(block)
+            if maximum is not None and size > maximum:
+                raise IntakeRefused("JSON input exceeds its byte boundary")
+            digest.update(block)
+            if capture:
+                chunks.append(block)
+        after = os.fstat(descriptor)
+    except IntakeRefused:
+        raise
+    except OSError as error:
+        raise IntakeRefused("input could not be read as one stable snapshot") from error
     finally:
         os.close(descriptor)
-    payload = b"".join(chunks)
 
+    stable_before = (
+        before.st_dev,
+        before.st_ino,
+        before.st_mode,
+        before.st_uid,
+        before.st_nlink,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+    stable_after = (
+        after.st_dev,
+        after.st_ino,
+        after.st_mode,
+        after.st_uid,
+        after.st_nlink,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    if stable_before != stable_after or size != after.st_size:
+        raise IntakeRefused("input changed while it was being read")
+    return FileEvidence(
+        sha256=digest.hexdigest(),
+        size=size,
+        payload=b"".join(chunks) if capture else None,
+    )
+
+
+def _strict_json(payload: bytes, label: str) -> dict[str, Any]:
     def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for key, value in pairs:
             if key in result:
-                raise MeasurementRefused("hardware snapshot contains a duplicate key")
+                raise ValueError("duplicate key")
             result[key] = value
         return result
 
@@ -159,317 +219,266 @@ def _load_hardware_snapshot(path: Path) -> tuple[str, str]:
             object_pairs_hook=unique_object,
             parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
         )
-    except (UnicodeError, ValueError) as error:
-        raise MeasurementRefused("hardware snapshot is not strict JSON") from error
-    if not isinstance(document, dict) or document.get("schema") != "plebian.hardware/v1":
-        raise MeasurementRefused("hardware snapshot schema is unsupported")
-    snapshot_id = document.get("snapshot_id")
-    if not isinstance(snapshot_id, str) or SNAPSHOT_ID.fullmatch(snapshot_id) is None:
-        raise MeasurementRefused("hardware snapshot identity is invalid")
-    return snapshot_id, digest.hexdigest()
+        canonical = _canonical_bytes(document)
+    except (UnicodeError, ValueError, TypeError) as error:
+        raise IntakeRefused(f"{label} is not strict finite JSON") from error
+    if not isinstance(document, dict):
+        raise IntakeRefused(f"{label} must be a JSON object")
+    if payload != canonical:
+        raise IntakeRefused(f"{label} must use the canonical JSON encoding")
+    return document
 
 
-def _validated_executable(raw: str) -> str:
-    path = Path(raw)
-    if not path.is_absolute():
-        raise MeasurementRefused("provider executable must be absolute")
+def _schema_errors(document: dict[str, Any], schema_path: Path) -> list[str]:
+    from jsonschema import Draft202012Validator, FormatChecker
+
     try:
-        resolved = path.resolve(strict=True)
-        metadata = resolved.stat()
-    except OSError as error:
-        raise MeasurementRefused("provider executable is unavailable") from error
-    if not stat.S_ISREG(metadata.st_mode) or not os.access(resolved, os.X_OK):
-        raise MeasurementRefused("provider executable is not an executable regular file")
-    if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-        raise MeasurementRefused("provider executable is group- or world-writable")
-    return str(resolved)
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+    except (OSError, UnicodeError, ValueError) as error:
+        raise IntakeRefused("a pinned intake schema is unavailable") from error
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    return [
+        error.message
+        for error in sorted(validator.iter_errors(document), key=lambda item: list(item.path))
+    ]
 
 
-def _read_proc_text(path: Path, maximum: int = 1024 * 1024) -> str | None:
-    try:
-        payload = path.read_bytes()
-    except OSError:
-        return None
-    if len(payload) > maximum:
-        return None
-    try:
-        return payload.decode("ascii", errors="strict")
-    except UnicodeError:
-        return None
-
-
-def _process_tree_rss(root_pid: int) -> tuple[int, bool]:
-    pending = [root_pid]
-    seen: set[int] = set()
-    total = 0
-    complete = True
-    while pending:
-        pid = pending.pop()
-        if pid in seen:
-            continue
-        if len(seen) >= MAX_PROCESS_TREE:
-            return total, False
-        seen.add(pid)
-        status_text = _read_proc_text(Path("/proc") / str(pid) / "status", 65536)
-        children_text = _read_proc_text(
-            Path("/proc") / str(pid) / "task" / str(pid) / "children"
-        )
-        if status_text is None:
-            complete = False
-        else:
-            for line in status_text.splitlines():
-                if not line.startswith("VmRSS:"):
-                    continue
-                fields = line.split()
-                if len(fields) == 3 and fields[1].isdigit() and fields[2] == "kB":
-                    total += int(fields[1]) * 1024
-                else:
-                    complete = False
-                break
-        if children_text is None:
-            complete = False
-            continue
-        for raw in children_text.split():
-            if raw.isdigit():
-                pending.append(int(raw))
-            else:
-                complete = False
-    return total, complete
-
-
-def _rusage_peak_bytes() -> int:
-    peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-    # Linux reports KiB; macOS reports bytes. F106 qualifies Linux only.
-    return max(0, int(peak)) * 1024 if sys.platform.startswith("linux") else max(0, int(peak))
-
-
-def run_provider_command(
-    argv: Sequence[str],
-    *,
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-    sample_interval_seconds: float = DEFAULT_SAMPLE_INTERVAL_SECONDS,
-) -> CommandResult:
-    if not argv:
-        raise MeasurementRefused("provider command is empty")
-    if not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 86400:
-        raise MeasurementRefused("timeout is outside the supported boundary")
-    if not math.isfinite(sample_interval_seconds) or not 0.001 <= sample_interval_seconds <= 1:
-        raise MeasurementRefused("sampling interval is outside the supported boundary")
-    executable = _validated_executable(argv[0])
-    executable_sha256, _ = _hash_regular_file(Path(executable))
-    command = [executable, *argv[1:]]
-    if any("\0" in item for item in command):
-        raise MeasurementRefused("provider command contains a NUL byte")
-    started = time.monotonic_ns()
-    try:
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=FIXED_ENVIRONMENT,
-            close_fds=True,
-            start_new_session=True,
-        )
-    except OSError as error:
-        raise MeasurementRefused("provider command could not start") from error
-    peak = 0
-    complete = True
-    samples = 0
-    timed_out = False
-    deadline = time.monotonic() + timeout_seconds
-    while process.poll() is None:
-        rss, sample_complete = _process_tree_rss(process.pid)
-        samples += 1
-        peak = max(peak, rss)
-        complete = complete and sample_complete
-        if time.monotonic() >= deadline:
-            timed_out = True
+def _privacy_errors(value: Any, trail: str = "$") -> list[str]:
+    errors: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = key.lower().replace("-", "_")
+            if normalized in PROHIBITED_KEYS:
+                errors.append(f"forbidden identifier key at {trail}.{key}")
+            errors.extend(_privacy_errors(item, f"{trail}.{key}"))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            errors.extend(_privacy_errors(item, f"{trail}[{index}]"))
+    elif isinstance(value, str):
+        lowered = value.lower()
+        if "/home/" in value or "/users/" in lowered or "c:\\users\\" in lowered:
+            errors.append(f"home-directory value at {trail}")
+        for match in IPV4.finditer(value):
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except OSError:
-                process.kill()
+                ipaddress.ip_address(match.group(0))
+            except ValueError:
+                continue
+            errors.append(f"IP-address value at {trail}")
             break
-        time.sleep(sample_interval_seconds)
-    returncode = process.wait()
-    elapsed = max(0, time.monotonic_ns() - started)
-    peak = max(peak, _rusage_peak_bytes())
-    return CommandResult(
-        returncode=None if timed_out else returncode,
-        elapsed_ns=elapsed,
-        ram_peak_bytes=peak,
-        process_tree_complete=complete and samples > 0,
-        timed_out=timed_out,
-        executable_sha256=executable_sha256,
-    )
+        if MAC.search(value):
+            errors.append(f"MAC-address value at {trail}")
+        if ":" in value:
+            candidate = value.removeprefix("[").removesuffix("]")
+            try:
+                address = ipaddress.ip_address(candidate)
+            except ValueError:
+                pass
+            else:
+                if address.version == 6:
+                    errors.append(f"IP-address value at {trail}")
+    return errors
 
 
-def _write_new(path: Path, payload: bytes) -> None:
-    if not path.is_absolute() or not path.name or path.name in {".", ".."}:
-        raise MeasurementRefused("output paths must be absolute files")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+def _validate_provider(document: dict[str, Any]) -> None:
+    failures = _schema_errors(document, PROVIDER_SCHEMA)
+    failures.extend(_privacy_errors(document))
+    if failures:
+        raise IntakeRefused(
+            f"provider record failed schema/privacy validation ({len(failures)} error(s))"
+        )
+
+
+def _validate_hardware(document: dict[str, Any]) -> None:
+    from tools.validate_candidate import semantic_errors
+
+    schema_failures = _schema_errors(document, HARDWARE_SCHEMA)
+    failures = list(schema_failures)
+    failures.extend(_privacy_errors(document))
+    if not schema_failures:
+        failures.extend(semantic_errors("plebian.hardware/v1", document))
+    if failures:
+        raise IntakeRefused(
+            f"hardware snapshot failed schema/privacy validation ({len(failures)} error(s))"
+        )
+
+
+def _open_output_target(path: Path) -> OutputTarget:
+    if not path.is_absolute() or path.name in {"", ".", ".."}:
+        raise IntakeRefused("all output paths must be absolute file paths")
+    parent_fd = _open_directory_nofollow(path.parent)
     try:
-        descriptor = os.open(path, flags, 0o600)
-    except OSError as error:
-        raise MeasurementRefused("output already exists or cannot be created safely") from error
-    try:
-        offset = 0
-        while offset < len(payload):
-            offset += os.write(descriptor, payload[offset:])
-        os.fsync(descriptor)
-    except BaseException:
+        metadata = os.fstat(parent_fd)
+        if metadata.st_uid != os.geteuid() or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            raise IntakeRefused("output parent must be caller-owned and not group/world-writable")
         try:
-            path.unlink()
-        except OSError:
+            os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
             pass
+        except OSError as error:
+            raise IntakeRefused("output target cannot be inspected") from error
+        else:
+            raise IntakeRefused("output target already exists")
+        return OutputTarget(
+            parent_fd=parent_fd,
+            parent_path=path.parent,
+            parent_device=metadata.st_dev,
+            parent_inode=metadata.st_ino,
+            name=path.name,
+        )
+    except Exception:
+        os.close(parent_fd)
         raise
+
+
+def _target_still_bound(target: OutputTarget) -> bool:
+    try:
+        descriptor = _open_directory_nofollow(target.parent_path)
+    except IntakeRefused:
+        return False
+    try:
+        metadata = os.fstat(descriptor)
+        return (metadata.st_dev, metadata.st_ino) == (
+            target.parent_device,
+            target.parent_inode,
+        )
     finally:
         os.close(descriptor)
 
 
-def _preflight_output(path: Path) -> None:
-    if not path.is_absolute() or not path.name or path.name in {".", ".."}:
-        raise MeasurementRefused("output paths must be absolute files")
-    try:
-        parent_metadata = path.parent.lstat()
-    except OSError as error:
-        raise MeasurementRefused("output parent is unavailable") from error
-    if not stat.S_ISDIR(parent_metadata.st_mode) or stat.S_ISLNK(parent_metadata.st_mode):
-        raise MeasurementRefused("output parent must be a real directory")
-    if parent_metadata.st_uid != os.geteuid() or parent_metadata.st_mode & (
-        stat.S_IWGRP | stat.S_IWOTH
-    ):
-        raise MeasurementRefused("output parent must be private and owned by this user")
-    try:
-        path.lstat()
-    except FileNotFoundError:
-        return
-    except OSError as error:
-        raise MeasurementRefused("output cannot be inspected safely") from error
-    raise MeasurementRefused("output already exists")
+def _write_all(descriptor: int, payload: bytes) -> None:
+    position = 0
+    while position < len(payload):
+        written = os.write(descriptor, payload[position:])
+        if written <= 0:
+            raise OSError("short output write")
+        position += written
 
 
-def _output_identity(path: Path) -> Path:
-    try:
-        return path.parent.resolve(strict=True) / path.name
-    except OSError as error:
-        raise MeasurementRefused("output parent cannot be resolved") from error
-
-
-def _require_identity(label: str, value: str) -> str:
-    if IDENTITY.fullmatch(value) is None:
-        raise MeasurementRefused(f"{label} is not a stable identity")
-    return value
-
-
-def build_outputs(arguments: argparse.Namespace) -> tuple[bytes, bytes | None, CommandResult]:
-    profile_id = _require_identity("profile id", arguments.profile_id)
-    provider = _require_identity("provider", arguments.provider)
-    artifact_id = _require_identity("artifact id", arguments.artifact_id)
-    catalog_id = _require_identity("catalog id", arguments.catalog_id)
-    fixture_id = _require_identity("fixture id", arguments.fixture_id)
-    command_id = _require_identity("command id", arguments.command_id)
-    if VERSION.fullmatch(arguments.profile_version) is None:
-        raise MeasurementRefused("profile version is invalid")
-    if ARTIFACT_VERSION.fullmatch(arguments.artifact_version) is None:
-        raise MeasurementRefused("artifact version is invalid")
-    license_decision_id = _require_identity(
-        "license decision id", arguments.license_decision_id
-    )
-    if arguments.task not in TASKS or arguments.backend not in BACKENDS:
-        raise MeasurementRefused("task or backend is unsupported")
-    if not 0 <= arguments.safety_margin_basis_points <= 10000:
-        raise MeasurementRefused("safety margin is outside 0..10000 basis points")
-    architecture = platform.machine().lower()
-    if architecture not in {"x86_64", "aarch64"}:
-        raise MeasurementRefused("host architecture is outside the 0.2.1 profile boundary")
-
-    artifact_sha256, artifact_bytes = _hash_regular_file(arguments.artifact)
-    fixture_sha256, fixture_bytes = _hash_regular_file(
-        arguments.fixture, maximum=MAX_METADATA_BYTES
-    )
-    snapshot_id, snapshot_sha256 = _load_hardware_snapshot(arguments.hardware_snapshot)
-    command_argv = tuple(arguments.command)
-    command_digest = _sha256(_canonical_bytes(list(command_argv)))
-    result = run_provider_command(
-        command_argv,
-        timeout_seconds=arguments.timeout_seconds,
-        sample_interval_seconds=arguments.sample_interval_ms / 1000.0,
-    )
-    measured_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace(
-        "+00:00", "Z"
-    )
-    raw = {
-        "schema": "plebian.models.raw-measurement/v1",
-        "status": "timed-out"
-        if result.timed_out
-        else "succeeded"
-        if result.returncode == 0
-        else "failed",
-        "measured_at": measured_at,
-        "command": {
-            "command_id": command_id,
-            "argv_sha256": command_digest,
-            "executable_sha256": result.executable_sha256,
-            "environment": "fixed-clean",
-            "returncode": result.returncode,
-            "timed_out": result.timed_out,
-        },
-        "artifact": {
-            "artifact_id": artifact_id,
-            "version": arguments.artifact_version,
-            "bytes": artifact_bytes,
-            "content_sha256": artifact_sha256,
-        },
-        "fixture": {
-            "fixture_id": fixture_id,
-            "bytes": fixture_bytes,
-            "content_sha256": fixture_sha256,
-        },
-        "hardware": {
-            "snapshot_id": snapshot_id,
-            "snapshot_sha256": snapshot_sha256,
-        },
-        "measurement": {
-            "elapsed_ns": result.elapsed_ns,
-            "ram_peak_bytes": result.ram_peak_bytes,
-            "ram_method": "process-tree-rss-with-rusage-high-water-floor",
-            "sample_interval_ms": arguments.sample_interval_ms,
-            "process_tree_complete": result.process_tree_complete,
-        },
+def _write_outputs(outputs: list[tuple[OutputTarget, bytes]]) -> None:
+    if len(outputs) != 2:
+        raise IntakeRefused("the intake transaction requires exactly 2/2 outputs")
+    targets = [target for target, _payload in outputs]
+    if len({target.identity for target in targets}) != 2:
+        raise IntakeRefused("the 2/2 output targets must be distinct")
+    parent_identities = {
+        (target.parent_device, target.parent_inode) for target in targets
     }
-    raw_payload = _canonical_bytes(raw)
-    if result.returncode != 0 or result.timed_out:
-        return raw_payload, None, result
+    if len(parent_identities) != 1:
+        raise IntakeRefused("the 2/2 outputs must share one retained parent directory")
+    if not all(_target_still_bound(target) for target in targets):
+        raise IntakeRefused("an output parent changed after preflight")
+
+    parent_fd = targets[0].parent_fd
+    temporary_names: list[str] = []
+    final_names: list[str] = []
+    flags = os.O_WRONLY | os.O_CLOEXEC | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        for target, payload in outputs:
+            temporary = f".{target.name}.intake-{secrets.token_hex(16)}"
+            descriptor = os.open(temporary, flags, 0o600, dir_fd=parent_fd)
+            temporary_names.append(temporary)
+            try:
+                os.fchmod(descriptor, 0o600)
+                _write_all(descriptor, payload)
+                os.fsync(descriptor)
+                if stat.S_IMODE(os.fstat(descriptor).st_mode) != 0o600:
+                    raise OSError("output mode verification failed")
+            finally:
+                os.close(descriptor)
+        if not all(_target_still_bound(target) for target in targets):
+            raise IntakeRefused("an output parent changed before commit")
+        for temporary, target in zip(temporary_names, targets, strict=True):
+            os.link(
+                temporary,
+                target.name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+                follow_symlinks=False,
+            )
+            final_names.append(target.name)
+        for temporary in temporary_names:
+            os.unlink(temporary, dir_fd=parent_fd)
+        temporary_names.clear()
+        os.fsync(parent_fd)
+        if not all(_target_still_bound(target) for target in targets):
+            raise IntakeRefused("an output parent changed during commit")
+        final_names.clear()
+    except IntakeRefused:
+        raise
+    except OSError as error:
+        raise IntakeRefused("the 2/2 output transaction failed") from error
+    finally:
+        for name in final_names:
+            try:
+                os.unlink(name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+        for name in temporary_names:
+            try:
+                os.unlink(name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+
+
+def _build_outputs(
+    provider: dict[str, Any],
+    provider_file: FileEvidence,
+    artifact: FileEvidence,
+    fixture: FileEvidence,
+    hardware: dict[str, Any],
+    hardware_file: FileEvidence,
+) -> tuple[bytes, bytes]:
+    expected = {
+        "artifact": provider["artifact"]["content_sha256"],
+        "fixture": provider["fixture"]["content_sha256"],
+        "hardware": provider["hardware"]["snapshot_sha256"],
+    }
+    observed = {
+        "artifact": artifact.sha256,
+        "fixture": fixture.sha256,
+        "hardware": hardware_file.sha256,
+    }
+    if expected != observed:
+        raise IntakeRefused("provider byte identities matched fewer than 3/3 inputs")
+    if provider["hardware"]["snapshot_id"] != hardware["snapshot_id"]:
+        raise IntakeRefused("provider hardware identity does not match the supplied snapshot")
+    architecture = hardware["cpu"]["architecture"]
+    if architecture not in {"aarch64", "x86_64"}:
+        raise IntakeRefused("hardware architecture cannot populate the profile schema")
+    if provider["reported_requirements"]["architecture"] != architecture:
+        raise IntakeRefused("provider architecture does not match the supplied hardware snapshot")
 
     profile = {
         "schema": "plebian.models.profiles/v1",
-        "catalog_id": catalog_id,
+        "catalog_id": provider["catalog_id"],
         "fixture_kind": "provider-catalog",
         "qualification_eligible": False,
         "profiles": [
             {
-                "profile_id": profile_id,
-                "version": arguments.profile_version,
-                "provider": provider,
-                "task": arguments.task,
-                "backend": arguments.backend,
+                "profile_id": provider["profile_id"],
+                "version": provider["profile_version"],
+                "provider": provider["provider"],
+                "task": provider["task"],
+                "backend": provider["backend"],
                 "artifact": {
-                    "artifact_id": artifact_id,
-                    "version": arguments.artifact_version,
-                    "content_sha256": artifact_sha256,
-                    "license_decision_id": license_decision_id,
+                    "artifact_id": provider["artifact"]["artifact_id"],
+                    "version": provider["artifact"]["version"],
+                    "content_sha256": artifact.sha256,
+                    "license_decision_id": None,
                 },
                 "requirements": {
                     "architecture": architecture,
                     "download_bytes": None,
                     "disk_installed_bytes": None,
                     "temporary_bytes": None,
-                    "ram_peak_bytes": result.ram_peak_bytes
-                    if result.process_tree_complete
-                    else None,
+                    "ram_peak_bytes": None,
                     "vram_peak_bytes": None,
                 },
                 "performance": {
@@ -478,83 +487,165 @@ def build_outputs(arguments: argparse.Namespace) -> tuple[bytes, bytes | None, C
                     "tokens_per_second": None,
                 },
                 "evidence": {
-                    "confidence": "measured",
-                    "command": command_id,
-                    "fixture": fixture_id,
-                    "measured_at": measured_at,
-                    "raw_evidence_sha256": _sha256(raw_payload),
-                    "reference_hardware_class": snapshot_id,
-                    "safety_margin_basis_points": arguments.safety_margin_basis_points,
+                    "confidence": "unknown",
+                    "command": None,
+                    "fixture": None,
+                    "measured_at": None,
+                    "raw_evidence_sha256": provider_file.sha256,
+                    "reference_hardware_class": None,
+                    "safety_margin_basis_points": 0,
                 },
                 "qualification": "unqualified",
             }
         ],
     }
-    from jsonschema import Draft202012Validator, FormatChecker
+    profile_failures = _schema_errors(profile, PROFILE_SCHEMA)
+    if profile_failures:
+        raise IntakeRefused(
+            f"generated profile failed its candidate schema ({len(profile_failures)} error(s))"
+        )
+    profile_payload = _canonical_bytes(profile)
 
-    schema_path = Path(__file__).resolve().parents[2] / "contracts/p1-candidate/schemas/plebian.models.profiles-v1.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    failures = list(
-        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(profile)
-    )
-    if failures:
-        raise MeasurementRefused("generated profile does not satisfy its candidate schema")
-    return raw_payload, _canonical_bytes(profile), result
+    requirements = provider["reported_requirements"]
+    performance = provider["reported_performance"]
+    receipt = {
+        "schema": "plebian.models.profile-intake-receipt/v1",
+        "intake_id": provider["measurement_id"],
+        "provider_records": {
+            "recorded": 1,
+            "total": 1,
+            "accepted_as_measurement": 0,
+        },
+        "byte_identities": {
+            "matched": 3,
+            "total": 3,
+            "artifact_sha256": artifact.sha256,
+            "fixture_sha256": fixture.sha256,
+            "hardware_sha256": hardware_file.sha256,
+        },
+        "validation": {
+            "provider_schema": {"passed": 1, "total": 1},
+            "hardware_schema_and_semantics": {"passed": 1, "total": 1},
+            "privacy_documents": {"passed": 2, "total": 2},
+        },
+        "reported_fields": {
+            "requirements": {
+                "present": sum(key in requirements for key in (
+                    "architecture",
+                    "download_bytes",
+                    "disk_installed_bytes",
+                    "temporary_bytes",
+                    "ram_peak_bytes",
+                    "vram_peak_bytes",
+                )),
+                "total": 6,
+            },
+            "performance": {
+                "present": sum(key in performance for key in (
+                    "first_result_ms",
+                    "realtime_factor",
+                    "tokens_per_second",
+                )),
+                "total": 3,
+            },
+            "license_decision": {
+                "present": int(provider["artifact"]["license_decision_id"] is not None),
+                "total": 1,
+            },
+        },
+        "promotion": {
+            "provider_measurements": {"promoted": 0, "total": 9},
+            "resource_metrics": {"promoted": 0, "total": 5},
+            "performance_metrics": {"promoted": 0, "total": 3},
+            "license_decisions": {"promoted": 0, "total": 1},
+            "qualification": {"accepted": 0, "total": 1},
+        },
+        "measurement_boundary": {
+            "accepted": 0,
+            "total": 1,
+            "status": "unaccepted",
+        },
+        "outputs": {"committed": 2, "total": 2},
+        "provider_evidence_sha256": provider_file.sha256,
+        "profile_catalog_sha256": _sha256(profile_payload),
+        "disposition": "recorded-unqualified",
+    }
+    receipt_failures = _schema_errors(receipt, RECEIPT_SCHEMA)
+    if receipt_failures:
+        raise IntakeRefused(
+            f"generated receipt failed its schema ({len(receipt_failures)} error(s))"
+        )
+    return _canonical_bytes(receipt), profile_payload
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Measure one provider command and emit unqualified profile evidence."
+        description=(
+            "Validate one provider-owned measurement record and emit an unqualified "
+            "profile without executing provider code."
+        )
     )
-    parser.add_argument("--profile-id", required=True)
-    parser.add_argument("--profile-version", required=True)
-    parser.add_argument("--provider", required=True)
-    parser.add_argument("--task", required=True, choices=sorted(TASKS))
-    parser.add_argument("--backend", required=True, choices=sorted(BACKENDS))
-    parser.add_argument("--catalog-id", required=True)
-    parser.add_argument("--artifact-id", required=True)
-    parser.add_argument("--artifact-version", required=True)
-    parser.add_argument("--license-decision-id", required=True)
+    parser.add_argument("--provider-evidence", type=Path, required=True)
     parser.add_argument("--artifact", type=Path, required=True)
-    parser.add_argument("--fixture-id", required=True)
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--hardware-snapshot", type=Path, required=True)
-    parser.add_argument("--command-id", required=True)
-    parser.add_argument("--safety-margin-basis-points", type=int, default=0)
-    parser.add_argument("--timeout-seconds", type=float, default=DEFAULT_TIMEOUT_SECONDS)
-    parser.add_argument("--sample-interval-ms", type=float, default=10.0)
-    parser.add_argument("--raw-evidence", type=Path, required=True)
+    parser.add_argument("--intake-receipt", type=Path, required=True)
     parser.add_argument("--profile-catalog", type=Path, required=True)
-    parser.add_argument("command", nargs=argparse.REMAINDER)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = _parser()
-    arguments = parser.parse_args(argv)
-    if arguments.command[:1] == ["--"]:
-        arguments.command = arguments.command[1:]
+    arguments = _parser().parse_args(argv)
+    targets: list[OutputTarget] = []
     try:
-        if _output_identity(arguments.raw_evidence) == _output_identity(
-            arguments.profile_catalog
-        ):
-            raise MeasurementRefused("raw evidence and profile catalog outputs must differ")
-        _preflight_output(arguments.raw_evidence)
-        _preflight_output(arguments.profile_catalog)
-        raw, profile, result = build_outputs(arguments)
-        _write_new(arguments.raw_evidence, raw)
-        if profile is None:
-            print(
-                "profile-measure: command 0/1, raw evidence 1/1, profile catalogs 0/1; qualification 0/1",
-                file=sys.stderr,
-            )
-            return 124 if result.timed_out else 1
-        _write_new(arguments.profile_catalog, profile)
-    except (MeasurementRefused, OSError, ValueError) as error:
-        print(f"profile-measure: REFUSED: {error}", file=sys.stderr)
+        receipt_target = _open_output_target(arguments.intake_receipt)
+        targets.append(receipt_target)
+        profile_target = _open_output_target(arguments.profile_catalog)
+        targets.append(profile_target)
+
+        provider_file = _read_regular_file(
+            arguments.provider_evidence,
+            capture=True,
+            maximum=MAX_DOCUMENT_BYTES,
+            private=True,
+        )
+        artifact = _read_regular_file(arguments.artifact, capture=False)
+        fixture = _read_regular_file(arguments.fixture, capture=False)
+        hardware_file = _read_regular_file(
+            arguments.hardware_snapshot,
+            capture=True,
+            maximum=MAX_DOCUMENT_BYTES,
+            private=True,
+        )
+        assert provider_file.payload is not None
+        assert hardware_file.payload is not None
+        provider = _strict_json(provider_file.payload, "provider record")
+        hardware = _strict_json(hardware_file.payload, "hardware snapshot")
+        _validate_provider(provider)
+        _validate_hardware(hardware)
+        receipt_payload, profile_payload = _build_outputs(
+            provider,
+            provider_file,
+            artifact,
+            fixture,
+            hardware,
+            hardware_file,
+        )
+        _write_outputs(
+            [
+                (receipt_target, receipt_payload),
+                (profile_target, profile_payload),
+            ]
+        )
+    except IntakeRefused as error:
+        print(f"profile-intake: refused: {error}", file=sys.stderr)
         return 2
+    finally:
+        for target in targets:
+            target.close()
     print(
-        "profile-measure: command 1/1, raw evidence 1/1, profile catalogs 1/1; qualification 0/1"
+        "profile-intake: provider records 1/1 recorded, byte identities 3/3, "
+        "outputs 2/2, measurement evidence 0/1 accepted, qualified profiles 0/1"
     )
     return 0
 

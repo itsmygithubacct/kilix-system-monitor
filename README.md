@@ -78,10 +78,12 @@ select Python through `/usr/bin/env` and inherited `PATH`.
 The aggregate developer check exercises contract integrity and negative
 fixtures, the imported telemetry suite, the hardware unit boundaries, live
 inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
-consumer readiness, the unqualified provider-profile measurement harness, and
+consumer readiness, the unqualified provider-profile intake validator, and
 the intentional model-sizer block. Hardware checks use no network and no
-privilege. `tools/measure/profile.py` measures exact artifact/fixture bytes and
-provider process-tree RAM while keeping qualification at **0/1**.
+privilege. `tools/measure/profile.py` records **1/1** provider-owned evidence
+record against **3/3** exact input-byte identities, promotes **0/9** provider
+measurement fields, and keeps qualification acceptance at **0/1**. Provider
+execution is outside this validator.
 
 ## Current boundaries
 
