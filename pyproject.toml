@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "kilix-system-monitor-contracts"
 version = "0.0.0"
@@ -14,3 +18,12 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+# This root project is the aggregate contract-check umbrella, not a library:
+# the distributable components are components/kilix-telemetry and
+# components/plebian-hardware, which carry their own uv_build backends and are
+# what tools/check_distributions.py builds and inspects. Declaring an empty
+# package list stops setuptools auto-discovery from refusing to guess across
+# components/, contracts/, integration/ and tools/.
+[tool.setuptools]
+packages = []
