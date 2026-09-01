@@ -108,6 +108,13 @@ def dispatch(
     state_root: Path | None = None,
 ) -> tuple[int, bytes, bytes]:
     """Return exit status, stdout and stderr for an exact argv tail."""
+    # A help request is an answered question, not a usage error. It exits 0 with
+    # the usage on stdout; everything the contract does not name still exits 2
+    # with the usage on stderr. This does not widen the strict argv contract:
+    # --help was never one of its seven vectors, and exit 0 carrying its answer
+    # on stdout is exactly what the contract already requires of exit 0.
+    if list(arguments) in (["--help"], ["-h"]):
+        return 0, (USAGE + "\n").encode("utf-8"), b""
     if list(arguments) == ["show"]:
         mode = "show"
         scope = "inventory"
