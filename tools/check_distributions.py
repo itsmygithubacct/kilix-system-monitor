@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Build and inspect both implemented Python component distributions offline."""
+"""Build and inspect every Python distribution this repository produces, offline.
+
+The population is every distribution the repository can be asked to build,
+including the root. The root was previously absent, and that absence is why
+a commit whose own ``uv build`` returned exit 2 with 0 artifacts passed this
+check at exit 0 (finding F-02). A gate that inspects only the parts that
+happen to be present cannot fail on the part that is missing.
+
+The root builds under build isolation because it uses the setuptools backend,
+which is not installed in the locked environment; the two components keep
+``--no-build-isolation`` because their ``uv_build`` backend is. Both remain
+fully offline.
+"""
 
 from __future__ import annotations
 
@@ -15,10 +27,20 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
+    # The root umbrella. It carries no importable module by design - the
+    # distributable units are the two components below - but it must still be
+    # buildable, and nothing else in this repository checks that.
+    "kilix-system-monitor-contracts": {
+        "path": ROOT,
+        "modules": (),
+        "version": "0.0.0",
+        "isolated_build": True,
+    },
     "kilix-telemetry": {
         "path": ROOT / "components" / "kilix-telemetry",
         "modules": ("kilix_telemetry/__init__.py",),
         "version": "0.1.2",
+        "isolated_build": False,
     },
     "plebian-hardware": {
         "path": ROOT / "components" / "plebian-hardware",
@@ -27,6 +49,7 @@ PACKAGES = {
             "plebian_hardware/state.py",
         ),
         "version": "0.1.0",
+        "isolated_build": False,
     },
 }
 BUILD_BACKEND_VERSION = "0.12.5"
@@ -96,7 +119,7 @@ def main() -> int:
                     uv,
                     "build",
                     "--offline",
-                    "--no-build-isolation",
+                    *((), ("--no-build-isolation",))[not details["isolated_build"]],
                     "--no-progress",
                     "--out-dir",
                     str(destination),
@@ -126,7 +149,11 @@ def main() -> int:
                 tuple(str(module) for module in details["modules"]),
                 name,
             )
-    print("PASS: offline wheel/sdist build and content inspection for 2 implemented components")
+    components = sum(1 for details in PACKAGES.values() if details["modules"])
+    print(
+        f"PASS: offline wheel/sdist build and content inspection for {len(PACKAGES)} "
+        f"distributions ({components} implemented components plus the root umbrella)"
+    )
     return 0
 
 

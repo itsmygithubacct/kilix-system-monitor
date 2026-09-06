@@ -62,6 +62,23 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr.count(b"\n"), 1)
             self.assertLessEqual(len(stderr), cli.MAX_DIAGNOSTIC_BYTES)
 
+    def test_help_is_answered_on_stdout_and_exits_zero(self) -> None:
+        for request in (["--help"], ["-h"]):
+            status, stdout, stderr = cli.dispatch(request)
+            self.assertEqual(status, 0, request)
+            self.assertEqual(stderr, b"", request)
+            self.assertIn(b"usage: plebian-hardware", stdout)
+            self.assertEqual(stdout.count(b"\n"), 1, request)
+
+    def test_help_does_not_widen_the_strict_argv_contract(self) -> None:
+        # The seven contract vectors and a help request are the only argv that
+        # exit 0. Anything adjacent to help is still a usage error.
+        for invalid in (["--help", "extra"], ["show", "--help"], ["--HELP"], ["help"]):
+            status, stdout, stderr = cli.dispatch(invalid)
+            self.assertEqual(status, 2, invalid)
+            self.assertEqual(stdout, b"", invalid)
+            self.assertEqual(stderr.count(b"\n"), 1, invalid)
+
     def test_show_is_redacted_and_unqualified(self) -> None:
         status, stdout, stderr = cli.dispatch(
             ["show"], lambda scope: observation(scope)
