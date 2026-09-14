@@ -18,6 +18,13 @@ version = "0.1.0"
 status = "unprivileged-d2"
 
 [[components]]
+id = "kilix-device-lease"
+path = "components/kilix-device-lease"
+version = "1.0.0"
+status = "imported-awaiting-interface-acceptance"
+interface = "contracts/kilix.device-lease-v1.interface.json"
+
+[[components]]
 id = "plebian-model-sizer"
 path = "components/plebian-model-sizer"
 version = "unassigned"

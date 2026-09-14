@@ -1,0 +1,37 @@
+{
+  "admission": {
+    "co_residency": false,
+    "exclusive": true
+  },
+  "distribution": "kilix-device-lease",
+  "error_codes": [
+    "cancelled",
+    "deadline",
+    "invalid-request",
+    "lost-lease",
+    "queue-full",
+    "unavailable"
+  ],
+  "guard_fd": {
+    "cloexec": true,
+    "inherit_via": "pass_fds"
+  },
+  "label_pattern": "[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}\\Z",
+  "max_queue": 24,
+  "max_wait_seconds": 3600,
+  "max_workload_queue": 8,
+  "namespace_default": "/run/user/{euid}/kilix-device-leases-v1",
+  "python_module": "kilix_device_lease",
+  "release_semantics": {
+    "cleanup_ack_required": true,
+    "lock_un": false,
+    "quarantine_on_unproven": true
+  },
+  "schema": "kilix.device-lease.interface/v1",
+  "version": "kilix.device-lease/v1",
+  "workloads": [
+    "tts-utterance",
+    "stt-job",
+    "llm-turn"
+  ]
+}

@@ -100,3 +100,70 @@ repeat topology/identity/tree/licence/build/test and complete-history hygiene
 checks. Publish the extracted repository only with separate authorization and
 a non-destructive ref plan. Shared schemas remain available at their frozen
 digest so a split does not strand consumers or silently downgrade cache data.
+
+## kilix-device-lease import
+
+Status: local, unpublished commit. This is a byte import with recorded
+provenance, not a history import.
+
+### Source
+
+The shared accelerator lease was written in kilix-voice on branch
+`work/0.2.2-astra4-shared-device-lease`; no remote-tracking branch contains
+that commit. The import
+reads commit `b9c2a36f8b92fbc3100f600da44b8f4483d2f797` with `git show`; the
+source checkout and branch were not modified. Two commits touch the imported
+files, both authored and committed by
+`itsmygithubacct <itsmygithubacct@users.noreply.github.com>`:
+
+    095d18c1ffb57f9ab255fd698d2029cebfde8e42 2026-09-08T02:47:00Z Add conservative shared accelerator leases
+    b9c2a36f8b92fbc3100f600da44b8f4483d2f797 2026-09-08T02:58:11Z Avoid waiting again when a queued lease request ends
+
+### File map
+
+| Source path | Source blob | Source SHA-256 | Destination | Destination SHA-256 | Change |
+| --- | --- | --- | --- | --- | --- |
+| `voicelib/device_leases.py` | `cbea4a9b7349ac9cd1199d5036630808301a52ae` | `382ea1de20dbf4eda21c92a529ecd95f04451a8224fb4b20b0315d17918b0ccc` | `components/kilix-device-lease/src/kilix_device_lease/__init__.py` | `382ea1de20dbf4eda21c92a529ecd95f04451a8224fb4b20b0315d17918b0ccc` | identical bytes |
+| `tests/test_device_leases.py` | `cc6ac79b3ed6290793e68af5291ea6326386208e` | `67529dc68d588f3b919462fc12d678b369088787fb443095268215e7d0177a3d` | `components/kilix-device-lease/tests/test_device_leases.py` | `a8d0de2ea5675c35404280efc91fd53b1f2ccf3da6129908b58a7eaf545fa408` | 3 source line(s) replaced |
+| `tests/device_lease_peer.py` | `a7f6c56b0aa0fc9489419a56861daa35f595a5fe` | `d9ba2b2f60a75f5748de306210bbe0a915dec5d05b49077f214421ca0e62a2fd` | `components/kilix-device-lease/tests/device_lease_peer.py` | `99225fd59491b030b47802718802ce19764beb204f87585ce3bafc3d1050570b` | 1 source line(s) replaced |
+| `DEVICE_LEASES.md` | `554e84e91ec460f228cf61e15deb2578cc5ef126` | `f0d2eebc1bf22051eb7e76d6e8855238a2a1d886c4e7784f72b693af8f920a3d` | `components/kilix-device-lease/README.md` | `77ebe79900810606822636b7a2c3bcf1c673a13dd756b711b2737ad9dfc53446` | 6 source line(s) replaced |
+
+The module is unchanged: its docstring names no import path, so no byte of it
+needed to move. The two test files change only their import lines, and the
+test module's `PROJECT` now names the component `src` directory that child
+processes put on `PYTHONPATH`. The README is DEVICE_LEASES.md with the import
+path replaced and two sections added (interface document, checks).
+
+Added on import, with no source counterpart: `pyproject.toml` (uv_build 0.12.5,
+distribution `kilix-device-lease` 1.0.0, no dependencies), `LICENSE`,
+`tests/test_interface_document.py`, `tests/test_mutual_exclusion.py`, and the
+interface document `contracts/kilix.device-lease-v1.interface.json`.
+
+### Why not a history import
+
+The telemetry import above was a prefix-only rewrite of a whole repository.
+This import selects four files from a larger repository, renames the module
+path and rewrites test imports, so no prefix-only rewrite reproduces it. The
+source commits' identities are recorded above instead.
+
+### Licence
+
+kilix-voice is distributed under GPL-3.0. These files were written under the
+same account, on a branch no remote-tracking ref contains. They are offered here
+under this repository's MIT licence, which the package gate requires of every
+component. The owner's confirmation of that licence choice is required before
+this commit is published.
+
+### Consumers and the one-home rule
+
+kilix-qwen-tts and kilix-transcribe import `kilix_device_lease` and no longer
+import `voicelib.device_leases`. No copy of the lease is to remain in
+kilix-voice: branches carrying `voicelib/device_leases.py` must not be merged
+there as they stand.
+
+### Abort and rollback
+
+Before publication, drop the import commit; nothing outside this repository
+and the two provider work branches references it, and the kilix-voice branch is
+untouched. After publication, consumers move back only through their owning
+tracks.

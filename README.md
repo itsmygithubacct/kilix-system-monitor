@@ -1,11 +1,15 @@
 # kilix-system-monitor
 
 kilix-system-monitor is the F106 provider monorepo for Plebian OS and Kilix.
-It keeps three separately versioned components beside the contract fixtures
+It keeps four separately versioned components beside the contract fixtures
 that couple them:
 
 - components/kilix-telemetry preserves the public kilix-telemetry package,
   import, command and history identities.
+- components/kilix-device-lease is the one home of the `kilix.device-lease/v1`
+  shared accelerator execution lease that the Qwen and transcription providers
+  consume. It coordinates exclusive execution only; it admits no model, device
+  or capacity.
 - components/plebian-hardware implements the currently open, unprivileged D2
   observation surface.
 - components/plebian-model-sizer is an intentionally non-executable skeleton.
@@ -36,6 +40,13 @@ proposals until the same P1 signoff occurs. The weight evidence is explicitly
 digest-enumerated with no wildcard inheritance; it authorizes no selection,
 fit, staging or transfer.
 
+contracts/kilix.device-lease-v1.interface.json records the lease interface:
+version, workloads, queue bounds, maximum wait, label pattern, default
+namespace, error codes, release semantics, guard-descriptor inheritance and
+exclusive, non-co-residential admission. The component suite holds the module
+to those exact values. F100 acceptance of the interface bytes is a separate
+record and has not been given by anything in this repository.
+
 integration/f120-registration.json is the exact pre-repository scaffold from
 the published F120 handoff. Its zero commit and metadata sentinels are retained
 until the parent has a reviewed public install surface. An F120 development
@@ -64,7 +75,7 @@ Use the release-pinned uv 0.12.5 for a functional developer check:
       make check UV=/absolute/path/to/release-pinned-uv-0.12.5
 
 The locked aggregate environment includes the exact uv-build 0.12.5 backend
-needed by both component sdists, so the package gate can stay offline after the
+needed by the component sdists, so the package gate can stay offline after the
 normal locked environment sync instead of depending on an unrelated cache hit.
 The validator refuses scratch roots outside `/home/pleb/scratch-workers`.
 
@@ -78,7 +89,8 @@ channel and complete causal mutations. The self-test's two replay helpers still
 select Python through `/usr/bin/env` and inherited `PATH`.
 
 The aggregate developer check exercises contract integrity and negative
-fixtures, the imported telemetry suite, the hardware unit boundaries, live
+fixtures, the imported telemetry suite, the shared accelerator lease's
+real-process controls and interface-document binding, the hardware unit boundaries, live
 inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
 consumer readiness, the unqualified provider-profile intake validator, and
 the intentional model-sizer block. Hardware checks use no network and no

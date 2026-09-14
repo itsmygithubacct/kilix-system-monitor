@@ -1,14 +1,17 @@
 UV ?= uv
 
-.PHONY: check contracts-check telemetry-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
+.PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
 
-check: contracts-check telemetry-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
+check: contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
 
 contracts-check:
 	UV="$(UV)" /bin/sh tools/validate_candidate
 
 telemetry-check:
 	cd components/kilix-telemetry && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tests -v
+
+lease-check:
+	cd components/kilix-device-lease && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tests -v
 
 hardware-check:
 	cd components/plebian-hardware && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tests -v

@@ -8,8 +8,8 @@ check at exit 0 (finding F-02). A gate that inspects only the parts that
 happen to be present cannot fail on the part that is missing.
 
 The root builds under build isolation because it uses the setuptools backend,
-which is not installed in the locked environment; the two components keep
-``--no-build-isolation`` because their ``uv_build`` backend is. Both remain
+which is not installed in the locked environment; the components keep
+``--no-build-isolation`` because their ``uv_build`` backend is. All remain
 fully offline.
 """
 
@@ -28,7 +28,7 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
     # The root umbrella. It carries no importable module by design - the
-    # distributable units are the two components below - but it must still be
+    # distributable units are the components below - but it must still be
     # buildable, and nothing else in this repository checks that.
     "kilix-system-monitor-contracts": {
         "path": ROOT,
@@ -49,6 +49,12 @@ PACKAGES = {
             "plebian_hardware/state.py",
         ),
         "version": "0.1.0",
+        "isolated_build": False,
+    },
+    "kilix-device-lease": {
+        "path": ROOT / "components" / "kilix-device-lease",
+        "modules": ("kilix_device_lease/__init__.py",),
+        "version": "1.0.0",
         "isolated_build": False,
     },
 }
