@@ -6,6 +6,7 @@ check: contracts-check telemetry-check lease-check hardware-check package-check 
 
 contracts-check:
 	UV="$(UV)" /bin/sh tools/validate_candidate
+	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/validate_frozen_contracts.py
 
 telemetry-check:
 	cd components/kilix-telemetry && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tests -v

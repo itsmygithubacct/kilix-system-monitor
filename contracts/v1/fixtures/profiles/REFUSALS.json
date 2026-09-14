@@ -1,0 +1,65 @@
+{
+  "profile-backend-outside-vocabulary.json": {
+    "base": "fixtures/profiles/valid/measured-cuda-whisper-tiny.json",
+    "expected": "is not one of",
+    "op": "set",
+    "pointer": "/profiles/0/backend",
+    "value": "gpu"
+  },
+  "profile-estimate-qualified.json": {
+    "base": "fixtures/profiles/valid/unqualified-estimate.json",
+    "expected": "qualified profile lacks measured evidence",
+    "op": "set",
+    "pointer": "/profiles/0/qualification",
+    "value": "qualified"
+  },
+  "profile-injected-requirements-key.json": {
+    "base": "fixtures/profiles/valid/measured-cpu-small-en-us.json",
+    "expected": "Additional properties are not allowed",
+    "op": "add",
+    "pointer": "/profiles/0/requirements/vram_estimate_bytes",
+    "value": 0
+  },
+  "profile-missing-backend.json": {
+    "base": "fixtures/profiles/valid/measured-cpu-small-en-us.json",
+    "expected": "'backend' is a required property",
+    "op": "remove",
+    "pointer": "/profiles/0/backend",
+    "value": null
+  },
+  "profile-missing-ram-peak-bytes.json": {
+    "base": "fixtures/profiles/valid/measured-cuda-whisper-tiny.json",
+    "expected": "'ram_peak_bytes' is a required property",
+    "op": "remove",
+    "pointer": "/profiles/0/requirements/ram_peak_bytes",
+    "value": null
+  },
+  "profile-missing-vram-peak-bytes.json": {
+    "base": "fixtures/profiles/valid/measured-cuda-whisper-tiny.json",
+    "expected": "'vram_peak_bytes' is a required property",
+    "op": "remove",
+    "pointer": "/profiles/0/requirements/vram_peak_bytes",
+    "value": null
+  },
+  "profile-negative-bytes.json": {
+    "base": "fixtures/profiles/valid/measured-cpu-small-en-us.json",
+    "expected": "is less than the minimum",
+    "op": "set",
+    "pointer": "/profiles/0/requirements/disk_installed_bytes",
+    "value": -1
+  },
+  "profile-performance-without-measured-evidence.json": {
+    "base": "fixtures/profiles/valid/unqualified-estimate.json",
+    "expected": "performance number lacks measured evidence",
+    "op": "set",
+    "pointer": "/profiles/0/performance/realtime_factor",
+    "value": 0.5
+  },
+  "profile-voice-local-resource-shape.json": {
+    "base": "fixtures/profiles/valid/measured-cpu-small-en-us.json",
+    "expected": "Additional properties are not allowed",
+    "op": "add",
+    "pointer": "/resource_profile_schema",
+    "value": "kilix.speech.resource-profile/v1"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-voice-res02-measured",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "qwen3-tts-0.6b-base",
+        "content_sha256": "a67d49412234a0a44a62bcf7a257b8689d52720960d059c37b072181d952073b",
+        "license_decision_id": null,
+        "version": "5d83992436eae1d760afd27aff78a71d676296fc"
+      },
+      "backend": "cuda",
+      "evidence": {
+        "command": "harness/res02_measure.py --arm qwen3-tts-0.6b-base-cuda --runs 5 --warmup 1 --label measured",
+        "confidence": "measured",
+        "fixture": "res02-qwen-hello-there-v1",
+        "measured_at": "2026-09-14T14:05:11.054934+00:00",
+        "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+        "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": null,
+        "realtime_factor": 2.28123,
+        "tokens_per_second": null
+      },
+      "profile_id": "qwen3-tts-0.6b-base-cuda-res02",
+      "provider": "kilix-qwen-tts",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 2516106051,
+        "download_bytes": null,
+        "ram_peak_bytes": 4166164480,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 2799697920
+      },
+      "task": "tts",
+      "version": "0.2.2"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

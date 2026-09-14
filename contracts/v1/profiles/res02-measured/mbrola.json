@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-voice-res02-measured",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "mbrola-us1",
+        "content_sha256": null,
+        "license_decision_id": null,
+        "version": "0.3+repack2-5"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": "harness/res02_measure.py --arm mbrola --runs 5 --warmup 1 --label measured",
+        "confidence": "measured",
+        "fixture": "res02-tts-paragraph-v1",
+        "measured_at": "2026-09-14T14:03:40.863911+00:00",
+        "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+        "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": 26.714,
+        "realtime_factor": 0.007669,
+        "tokens_per_second": null
+      },
+      "profile_id": "mbrola-us1-cpu-res02",
+      "provider": "kilix-voice",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 7238597,
+        "download_bytes": null,
+        "ram_peak_bytes": 20652032,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 0
+      },
+      "task": "tts",
+      "version": "0.2.2"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

@@ -40,6 +40,15 @@ proposals until the same P1 signoff occurs. The weight evidence is explicitly
 digest-enumerated with no wildcard inheritance; it authorizes no selection,
 fit, staging or transfer.
 
+contracts/v1 is the frozen F106 resource-profile bundle: the
+`plebian.models.profiles/v1` and `plebian.hardware/v1` schemas, byte-identical
+to the candidate bytes consumers acknowledged, **7/7** measured provider
+profile rows, **3/3** valid and **9/9** refused profile fixtures, and
+`FROZEN-SHA256SUMS`, whose digest `tools/validate_frozen_contracts.py` pins.
+The builder landed those bytes; the non-author review, cross-family
+acceptance, consumer signoff and owner signoff that complete the freeze are
+recorded outside this repository. Every measured row stays unqualified.
+
 contracts/kilix.device-lease-v1.interface.json records the lease interface:
 version, workloads, queue bounds, maximum wait, label pattern, default
 namespace, error codes, release semantics, guard-descriptor inheritance and

@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-voice-res02-measured",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "piper-en-us-kristin-medium",
+        "content_sha256": "5849957f929cbf720c258f8458692d6103fff2f0e3d3b19c8259474bb06a18d4",
+        "license_decision_id": null,
+        "version": "39ab474be869e9181350af6a65e4953eef67aaa0"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": "harness/res02_measure.py --arm piper-en-us-kristin-medium --runs 5 --warmup 1 --label measured",
+        "confidence": "measured",
+        "fixture": "res02-tts-paragraph-v1",
+        "measured_at": "2026-09-14T14:03:50.213875+00:00",
+        "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+        "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": 260.425,
+        "realtime_factor": 0.076652,
+        "tokens_per_second": null
+      },
+      "profile_id": "piper-en-us-kristin-medium-cpu-res02",
+      "provider": "kilix-piper-tts",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 63537632,
+        "download_bytes": 63536826,
+        "ram_peak_bytes": 420659200,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 0
+      },
+      "task": "tts",
+      "version": "0.2.2"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

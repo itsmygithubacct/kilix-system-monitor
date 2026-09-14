@@ -1,0 +1,262 @@
+{
+  "$comment": "Track D P1 candidate only; estimates and synthetic fixtures cannot qualify a profile.",
+  "$defs": {
+    "bytesOrNull": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$id": "urn:plebian:candidate:schema:model-profiles:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "catalog_id": {
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "fixture_kind": {
+      "enum": [
+        "provider-catalog",
+        "synthetic-contract"
+      ]
+    },
+    "profiles": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_id": {
+                "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+                "type": "string"
+              },
+              "content_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "license_decision_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "version": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifact_id",
+              "version",
+              "content_sha256",
+              "license_decision_id"
+            ],
+            "type": "object"
+          },
+          "backend": {
+            "enum": [
+              "cpu",
+              "cuda",
+              "oneapi",
+              "opencl",
+              "rocm",
+              "vulkan"
+            ]
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "enum": [
+                  "estimated",
+                  "measured",
+                  "unknown"
+                ]
+              },
+              "fixture": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "measured_at": {
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "raw_evidence_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "reference_hardware_class": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "safety_margin_basis_points": {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "confidence",
+              "command",
+              "fixture",
+              "measured_at",
+              "raw_evidence_sha256",
+              "reference_hardware_class",
+              "safety_margin_basis_points"
+            ],
+            "type": "object"
+          },
+          "performance": {
+            "additionalProperties": false,
+            "properties": {
+              "first_result_ms": {
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "realtime_factor": {
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "tokens_per_second": {
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "first_result_ms",
+              "realtime_factor",
+              "tokens_per_second"
+            ],
+            "type": "object"
+          },
+          "profile_id": {
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "provider": {
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+            "type": "string"
+          },
+          "qualification": {
+            "enum": [
+              "qualified",
+              "unqualified"
+            ]
+          },
+          "requirements": {
+            "additionalProperties": false,
+            "properties": {
+              "architecture": {
+                "enum": [
+                  "aarch64",
+                  "x86_64"
+                ]
+              },
+              "disk_installed_bytes": {
+                "$ref": "#/$defs/bytesOrNull"
+              },
+              "download_bytes": {
+                "$ref": "#/$defs/bytesOrNull"
+              },
+              "ram_peak_bytes": {
+                "$ref": "#/$defs/bytesOrNull"
+              },
+              "temporary_bytes": {
+                "$ref": "#/$defs/bytesOrNull"
+              },
+              "vram_peak_bytes": {
+                "$ref": "#/$defs/bytesOrNull"
+              }
+            },
+            "required": [
+              "architecture",
+              "download_bytes",
+              "disk_installed_bytes",
+              "temporary_bytes",
+              "ram_peak_bytes",
+              "vram_peak_bytes"
+            ],
+            "type": "object"
+          },
+          "task": {
+            "enum": [
+              "audio-codec",
+              "chat",
+              "embedding",
+              "object-detection",
+              "sound-detection",
+              "stt",
+              "tts",
+              "vision"
+            ]
+          },
+          "version": {
+            "pattern": "^[0-9]+(?:\\.[0-9]+){0,2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_id",
+          "version",
+          "provider",
+          "task",
+          "backend",
+          "artifact",
+          "requirements",
+          "performance",
+          "evidence",
+          "qualification"
+        ],
+        "type": "object"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "qualification_eligible": {
+      "type": "boolean"
+    },
+    "schema": {
+      "const": "plebian.models.profiles/v1"
+    }
+  },
+  "required": [
+    "schema",
+    "catalog_id",
+    "fixture_kind",
+    "qualification_eligible",
+    "profiles"
+  ],
+  "title": "Candidate plebian.models.profiles/v1",
+  "type": "object"
+}

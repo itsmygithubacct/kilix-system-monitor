@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-voice-res02-measured",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "espeak-ng-data",
+        "content_sha256": null,
+        "license_decision_id": null,
+        "version": "1.52.0+dfsg-5"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": "harness/res02_measure.py --arm espeak --runs 5 --warmup 1 --label measured",
+        "confidence": "measured",
+        "fixture": "res02-tts-paragraph-v1",
+        "measured_at": "2026-09-14T14:03:35.406806+00:00",
+        "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+        "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": 10.169,
+        "realtime_factor": 0.002566,
+        "tokens_per_second": null
+      },
+      "profile_id": "espeak-cpu-res02",
+      "provider": "kilix-voice",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 24152227,
+        "download_bytes": null,
+        "ram_peak_bytes": 16605184,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 0
+      },
+      "task": "tts",
+      "version": "0.2.2"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

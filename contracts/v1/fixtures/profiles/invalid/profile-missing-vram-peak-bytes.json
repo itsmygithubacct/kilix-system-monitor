@@ -1,0 +1,43 @@
+{
+  "catalog_id": "kilix-voice-res02-measured",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "openai-whisper-tiny",
+        "content_sha256": "65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9",
+        "license_decision_id": null,
+        "version": "tiny"
+      },
+      "backend": "cuda",
+      "evidence": {
+        "command": "harness/res02_measure.py --arm whisper-tiny-cuda --runs 5 --warmup 1 --label measured",
+        "confidence": "measured",
+        "fixture": "librispeech-dev-clean-84-121550-0014-clean",
+        "measured_at": "2026-09-14T14:10:16.245974+00:00",
+        "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+        "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": null,
+        "realtime_factor": 0.096184,
+        "tokens_per_second": null
+      },
+      "profile_id": "openai-whisper-tiny-cuda-res02",
+      "provider": "openai-whisper",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 75572083,
+        "download_bytes": null,
+        "ram_peak_bytes": 1026093056,
+        "temporary_bytes": null
+      },
+      "task": "stt",
+      "version": "0.2.2"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

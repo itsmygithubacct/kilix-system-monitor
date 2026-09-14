@@ -3,6 +3,8 @@ publication_disposition = "work-ref-published"
 visibility = "public"
 contracts = "contracts/p1-candidate"
 contracts_status = "pre-freeze"
+frozen_contracts = "contracts/v1"
+frozen_contracts_status = "builder-landed-acceptance-pending"
 f120_registration = "integration/f120-registration.json"
 
 [[components]]
