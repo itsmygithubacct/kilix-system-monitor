@@ -98,7 +98,9 @@ pass or by another thread at any point of one. A child that returns from a callb
 parent's `acquire` or `check` call is refused `lost-lease` at once, without
 withdrawing, taking or closing anything of its parent's request. A fork made
 outside Python's fork hooks, such as a raw `fork()` in a C extension, is not
-covered. The library never starts a broker
+covered, and neither is a fork by another thread in the instant after the
+system call that opens a descriptor returns and before the module records it.
+The library never starts a broker
 daemon, kills a process or changes the embedding process's child-reaping policy.
 
 The threat boundary is cooperating providers under one user. A program that
