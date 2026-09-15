@@ -22,6 +22,7 @@ import time
 import tomllib
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 import lease_containment
 import kilix_device_lease as leases
@@ -270,13 +271,13 @@ class InterfaceDocumentTests(unittest.TestCase):
 
     def test_maximum_wait_is_enforced_where_the_document_says(self):
         limit = self.doc["max_wait_seconds"]
-        margin = 30
-        self.assertEqual(self.outcome(deadline=time.monotonic() + limit - margin), "granted")
-        self.assertEqual(self.outcome(deadline=time.monotonic() + limit + margin), "invalid-request")
-        # The two probes straddle only the documented limit: a bound half or
-        # twice as long would decide at least one of them differently.
-        for other in (limit / 2, limit * 2):
-            self.assertNotEqual((limit - margin <= other, limit + margin <= other), (True, False))
+        # The module's clock is frozen, so each probe sits exactly where it says
+        # relative to the documented limit however slowly this test runs: a bound
+        # any later or earlier than the document decides one of them differently.
+        now = time.monotonic()
+        with mock.patch.object(leases, "time", SimpleNamespace(monotonic=lambda: now, sleep=time.sleep)):
+            outcomes = {offset: self.outcome(deadline=now + limit + offset) for offset in (-0.001, 0, 0.001)}
+        self.assertEqual(outcomes, {-0.001: "granted", 0: "granted", 0.001: "invalid-request"})
 
     def rooted(self, *, mode="strict", namespace=None, module=None, ticket=None):
         """Run the module in rooted_effect.py's sandbox; see that file for both modes."""
