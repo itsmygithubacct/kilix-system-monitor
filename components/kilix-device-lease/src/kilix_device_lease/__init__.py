@@ -58,6 +58,21 @@ def _refuse(message: str) -> None:
     raise LeaseError("unavailable", message)
 
 
+class _CallerFailure(BaseException):
+    """Carries an exception from a caller's callback past lease error translation."""
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__()
+        self.error = error
+
+
+def _call(callback: Callable[..., object], *args: object) -> object:
+    try:
+        return callback(*args)
+    except BaseException as error:
+        raise _CallerFailure(error) from None
+
+
 def _identity(info: os.stat_result) -> list[int]:
     return [info.st_dev, info.st_ino]
 
@@ -200,9 +215,9 @@ def _state(value: dict) -> None:
 
 def _check_request(deadline: float, cancelled: Callable[[], bool] | None,
                    disconnected: Callable[[], bool] | None) -> None:
-    if cancelled is not None and cancelled():
+    if cancelled is not None and _call(cancelled):
         raise LeaseError("cancelled", "Shared lease request was cancelled")
-    if disconnected is not None and disconnected():
+    if disconnected is not None and _call(disconnected):
         raise LeaseError("cancelled", "Shared lease client disconnected")
     if time.monotonic() >= deadline:
         raise LeaseError("deadline", "Shared lease deadline expired")
@@ -442,6 +457,14 @@ class Lease:
             raise LeaseError("lost-lease", "Shared lease identity is no longer current")
 
     def check(self) -> None:
+        try:
+            self._check()
+            return
+        except _CallerFailure as failure:
+            error = failure.error
+        raise error
+
+    def _check(self) -> None:
         if self._fd < 0 or os.getpid() != self._pid:
             raise LeaseError("lost-lease", "Shared lease is closed or belongs to another process")
         _check_request(self._deadline, self._cancelled, self._disconnected)
@@ -510,7 +533,21 @@ def acquire(*, job_id: str, workload: str, device: str, deadline: float,
     The optional namespace is for explicitly coordinated private deployments
     and isolated tests. Every cooperating provider must use the same namespace.
     An existing incomplete or replaced namespace is never silently recreated.
+    An exception raised by a cancelled, disconnected or progress callback
+    reaches the caller unchanged; it is never reported as a lease code.
     """
+    try:
+        return _acquire(job_id=job_id, workload=workload, device=device, deadline=deadline,
+                        cancelled=cancelled, disconnected=disconnected, progress=progress,
+                        namespace=namespace)
+    except _CallerFailure as failure:
+        error = failure.error
+    raise error
+
+
+def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
+             cancelled: Callable[[], bool] | None, disconnected: Callable[[], bool] | None,
+             progress: Callable[[QueueStatus], None] | None, namespace: str | None) -> Lease:
     if (not _label(job_id) or not _label(device) or type(workload) is not str or workload not in WORKLOADS
             or not _number(deadline) or deadline > time.monotonic() + MAX_WAIT_SECONDS
             or any(callback is not None and not callable(callback) for callback in (cancelled, disconnected, progress))
@@ -574,7 +611,7 @@ def acquire(*, job_id: str, workload: str, device: str, deadline: float,
                 update = QueueStatus(VERSION, item["ticket"], "queued",
                                      1 + next(i for i, row in enumerate(ordered) if row["ticket"] == item["ticket"]))
             if progress is not None and update != previous:
-                progress(update)
+                _call(progress, update)
             previous = update
             time.sleep(_POLL_SECONDS)
     except OSError as error:

@@ -39,7 +39,9 @@ starting with a letter or number. Use opaque identities; do not pass user paths,
 text, transcripts, audio, consent or prompts. The deadline is an absolute
 `time.monotonic()` value no more than one hour ahead. Cancellation/disconnect
 predicates must be nonblocking; the queue progress callback runs outside the
-registry lock. `QueueStatus` has version, opaque ticket, state and one-based
+registry lock. An exception raised by any of these callbacks reaches the caller
+unchanged, with the request withdrawn from the queue; it is never reported as a
+lease code. `QueueStatus` has version, opaque ticket, state and one-based
 position. Positions reflect workload rotation with FIFO order within each
 workload. Capacity is 24 queued requests, at most eight per workload.
 
