@@ -11,11 +11,18 @@ The root builds under build isolation because it uses the setuptools backend,
 which is not installed in the locked environment; the components keep
 ``--no-build-isolation`` because their ``uv_build`` backend is. All remain
 fully offline.
+
+setuptools writes ``<name>.egg-info`` into the directory it builds from, so
+the root is built from a private copy of the checkout. The check fails if any
+distribution directory gains an entry while it runs, or carries egg-info,
+build or dist output however old, since residue from an earlier in-place
+build would otherwise already be in the starting snapshot.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -59,6 +66,10 @@ PACKAGES = {
     },
 }
 BUILD_BACKEND_VERSION = "0.12.5"
+# Local state a checkout may carry that is never distribution source.
+_NOT_SOURCE = shutil.ignore_patterns(".git", ".venv", "__pycache__", "*.egg-info", "build", "dist")
+# Build output a distribution directory must never carry.
+_BUILD_RESIDUE = ("*.egg-info", "build", "dist")
 
 
 def _safe(names: list[str]) -> None:
@@ -104,6 +115,61 @@ def _inspect_sdist(path: Path, modules: tuple[str, ...], name: str) -> None:
                 raise RuntimeError(f"{name} sdist lacks {suffix.removeprefix('/')}")
 
 
+def build_source(name: str, details: dict, scratch: Path) -> Path:
+    """The directory a distribution is built from: a private copy for the root."""
+    if not details["isolated_build"]:
+        return details["path"]
+    source = scratch / "source" / name
+    shutil.copytree(details["path"], source, ignore=_NOT_SOURCE, symlinks=True)
+    return source
+
+
+def build(uv: str, name: str, details: dict, destination: Path, scratch: Path) -> None:
+    completed = subprocess.run(
+        [
+            uv,
+            "build",
+            "--offline",
+            *((), ("--no-build-isolation",))[not details["isolated_build"]],
+            "--no-progress",
+            "--out-dir",
+            str(destination),
+            str(build_source(name, details, scratch)),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=120,
+    )
+    if completed.returncode != 0:
+        diagnostic = completed.stderr.decode("utf-8", errors="replace")[-2000:]
+        raise RuntimeError(f"{name} offline build failed: {diagnostic}")
+
+
+def snapshot(directories: list[Path]) -> dict[Path, set[str]]:
+    return {directory: set(os.listdir(directory)) for directory in directories}
+
+
+def residue(before: dict[Path, set[str]], after: dict[Path, set[str]], base: Path = ROOT) -> list[str]:
+    left = []
+    for directory, entries in after.items():
+        prefix = directory.relative_to(base).as_posix()
+        for entry in entries - before.get(directory, set()):
+            left.append(entry if prefix == "." else f"{prefix}/{entry}")
+    return sorted(left)
+
+
+def build_residue(directories: list[Path], base: Path = ROOT) -> list[str]:
+    found = []
+    for directory in directories:
+        prefix = directory.relative_to(base).as_posix()
+        for pattern in _BUILD_RESIDUE:
+            for path in directory.glob(pattern):
+                found.append(path.name if prefix == "." else f"{prefix}/{path.name}")
+    return sorted(found)
+
+
 def main() -> int:
     uv = os.environ.get("UV", "uv")
     try:
@@ -115,31 +181,14 @@ def main() -> int:
             "uv-build backend mismatch: "
             f"expected {BUILD_BACKEND_VERSION}, observed {observed_backend}"
         )
+    watched = [Path(details["path"]) for details in PACKAGES.values()]
+    before = snapshot(watched)
     with tempfile.TemporaryDirectory(prefix="kilix-system-monitor-build-") as temporary:
         output = Path(temporary)
         for name, details in PACKAGES.items():
             destination = output / name
             destination.mkdir()
-            completed = subprocess.run(
-                [
-                    uv,
-                    "build",
-                    "--offline",
-                    *((), ("--no-build-isolation",))[not details["isolated_build"]],
-                    "--no-progress",
-                    "--out-dir",
-                    str(destination),
-                    str(details["path"]),
-                ],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-                timeout=120,
-            )
-            if completed.returncode != 0:
-                diagnostic = completed.stderr.decode("utf-8", errors="replace")[-2000:]
-                raise RuntimeError(f"{name} offline build failed: {diagnostic}")
+            build(uv, name, details, destination, output)
             wheels = sorted(destination.glob("*.whl"))
             sdists = sorted(destination.glob("*.tar.gz"))
             if len(wheels) != 1 or len(sdists) != 1:
@@ -155,10 +204,14 @@ def main() -> int:
                 tuple(str(module) for module in details["modules"]),
                 name,
             )
+    left = sorted(set(residue(before, snapshot(watched))) | set(build_residue(watched)))
+    if left:
+        raise RuntimeError("package-check left artefacts in the checkout: " + ", ".join(left))
     components = sum(1 for details in PACKAGES.values() if details["modules"])
     print(
         f"PASS: offline wheel/sdist build and content inspection for {len(PACKAGES)} "
-        f"distributions ({components} implemented components plus the root umbrella)"
+        f"distributions ({components} implemented components plus the root umbrella); "
+        "0 artefacts left in the checkout"
     )
     return 0
 
