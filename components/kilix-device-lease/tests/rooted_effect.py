@@ -109,6 +109,15 @@ class StrictRootedOS:
         self._relative("os.replace", dst, dst_dir_fd)
         return os.replace(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
 
+    def rename(self, src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        self._relative("os.rename", src, src_dir_fd)
+        self._relative("os.rename", dst, dst_dir_fd)
+        return os.rename(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+
+    def rmdir(self, path, *, dir_fd=None):
+        self._relative("os.rmdir", path, dir_fd)
+        return os.rmdir(path, dir_fd=dir_fd)
+
     def listdir(self, path):
         if not isinstance(path, int):
             refuse(f"os.listdir({path!r})")

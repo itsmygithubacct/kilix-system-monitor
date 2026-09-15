@@ -28,7 +28,8 @@ def hook(event, args):
         return
     if event == "open" and not (args[2] & MUTATING):
         return
-    if event not in ("open", "os.remove", "os.rename", "os.mkdir", "fcntl.flock", "os.truncate", "os.chmod"):
+    if event not in ("open", "os.remove", "os.rename", "os.mkdir", "os.rmdir", "fcntl.flock", "os.truncate",
+                     "os.chmod"):
         return
     state["count"] += 1
     if state["count"] == kill_at:
@@ -98,7 +99,7 @@ class CrashRecoveryTests(unittest.TestCase):
             holder = None
             if scenario == "cancel":
                 holder = self.acquire(namespace, job_id="holder")
-            else:
+            elif scenario == "prune":
                 self.abandon_a_queued_request(namespace)
             result = self.victim(namespace, scenario, kill_at)
             if holder is not None:
@@ -116,10 +117,14 @@ class CrashRecoveryTests(unittest.TestCase):
                 successor = error.code
             if successor != "granted":
                 # Only a grant the victim had already persisted may stay quarantined.
+                self.assertIn(scenario, ("prune", "fresh"), f"kill point {kill_at}")
                 active = self.state(namespace)["active"]
-                self.assertEqual((scenario, successor, active and active["state"], active and active["job_id"]),
-                                 ("prune", "unavailable", "held", "victim"), f"kill point {kill_at}")
+                self.assertEqual((successor, active and active["state"], active and active["job_id"]),
+                                 ("unavailable", "held", "victim"), f"kill point {kill_at}")
             self.assertEqual(self.state(namespace)["queue"], [], f"kill point {kill_at}")
+            # Nothing a killed creator built is left beside the namespace.
+            self.assertEqual(sorted(os.listdir(os.path.dirname(namespace))), [".leases.lease-v1.anchor", "leases"],
+                             f"kill point {kill_at}")
             points += 1
             if completed:
                 return points
@@ -130,6 +135,10 @@ class CrashRecoveryTests(unittest.TestCase):
 
     def test_prune_killed_at_any_step_never_wedges_the_namespace(self):
         self.assertGreater(self.sweep("prune"), 3)
+
+    def test_first_creation_killed_at_any_step_never_wedges_the_namespace(self):
+        # The victim is the first requester of a namespace that does not exist yet.
+        self.assertGreater(self.sweep("fresh"), 10)
 
     def test_queue_entry_whose_ticket_vanished_is_dropped(self):
         for expired in (True, False):

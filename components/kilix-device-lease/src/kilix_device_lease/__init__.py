@@ -36,6 +36,8 @@ _LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}\Z", re.ASCII)
 _TOKEN = re.compile(r"[0-9a-f]{32}\Z", re.ASCII)
 _LEAF = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z", re.ASCII)
 _FILE_FLAGS = os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW
+_DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+_NAMESPACE_ENTRIES = ["accelerator.lock", "state.json"]
 
 
 class LeaseError(RuntimeError):
@@ -242,6 +244,10 @@ def _inode(value: object) -> bool:
             and all(type(x) is int and x >= 0 for x in value))
 
 
+def _fresh() -> dict:
+    return {"version": VERSION, "next": 0, "last": None, "active": None, "queue": []}
+
+
 def _state(value: dict) -> None:
     if (set(value) != {"version", "next", "last", "active", "queue"}
             or value["version"] != VERSION
@@ -303,37 +309,24 @@ class _Registry:
                     time.sleep(_POLL_SECONDS)
             # Creating the anchor and locking it are separate steps, so another
             # requester can lock a new anchor before its creator does. Under the
-            # lock, an empty anchor means initialisation has not started, or its
-            # creator died first; no grant can exist, because a grant needs the
-            # identity written below. Whoever holds the lock initialises it, and
-            # an existing namespace directory still makes that refuse.
+            # lock, an empty anchor means initialisation has not finished, or its
+            # creator died first; no grant can exist, because every requester needs
+            # the identity the creator records last. Whoever holds the lock
+            # initialises it.
             info = os.fstat(self.anchor)
             created = stat.S_ISREG(info.st_mode) and info.st_size == 0
             if created and info.st_uid == os.geteuid():
                 os.fchmod(self.anchor, 0o600)
             self.anchor_identity = _identity(_file_info(self.anchor))
             if created:
-                os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)
-                self.directory = os.open(self.leaf, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
-                                         dir_fd=self.parent)
-                os.fchmod(self.directory, 0o700)
-                self.resource = os.open("accelerator.lock", _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
-                                        0o600, dir_fd=self.directory)
-                os.fchmod(self.resource, 0o600)
-                self.identity = {"version": VERSION, "directory": _identity(_directory(self.directory, private=True)),
-                                 "resource": _identity(_file_info(self.resource))}
-                self.value = {"version": VERSION, "next": 0, "last": None, "active": None, "queue": []}
-                self.save()
-                _write(self.anchor, self.identity)
-                os.fsync(self.parent)
+                self.create()
             else:
                 self.identity = _read(self.anchor)
                 if (set(self.identity) != {"version", "directory", "resource"}
                         or self.identity["version"] != VERSION
                         or not _inode(self.identity["directory"]) or not _inode(self.identity["resource"])):
                     _refuse("Shared lease namespace identity is invalid")
-                self.directory = os.open(self.leaf, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
-                                         dir_fd=self.parent)
+                self.directory = os.open(self.leaf, _DIRECTORY_FLAGS, dir_fd=self.parent)
                 self.resource = os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory)
                 fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
                 try:
@@ -347,6 +340,82 @@ class _Registry:
             if isinstance(error, (OSError, ValueError, TypeError)):
                 raise LeaseError("unavailable", "Shared lease namespace cannot be opened safely") from error
             raise
+
+    def create(self) -> None:
+        """Initialise the namespace under the anchor lock, with the anchor still empty.
+
+        The directory is built complete under a private sibling name, renamed into
+        place, and only then recorded in the anchor. A creator killed at any step
+        leaves a partial sibling, which the next creator removes, or a complete
+        directory that no requester can have used beside the empty anchor, which the
+        next creator adopts. Anything else beside an empty anchor is refused.
+        """
+        build = self.anchor_name[:-len("anchor")] + "build"
+        try:
+            os.stat(self.leaf, dir_fd=self.parent, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            self.adopt()
+            return
+        self.remove_build(build)
+        os.mkdir(build, mode=0o700, dir_fd=self.parent)
+        self.directory = os.open(build, _DIRECTORY_FLAGS, dir_fd=self.parent)
+        os.fchmod(self.directory, 0o700)
+        self.resource = os.open("accelerator.lock", _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
+                                0o600, dir_fd=self.directory)
+        os.fchmod(self.resource, 0o600)
+        self.value = _fresh()
+        self.save()
+        os.rename(build, self.leaf, src_dir_fd=self.parent, dst_dir_fd=self.parent)
+        os.fsync(self.parent)
+        self.record()
+
+    def adopt(self) -> None:
+        self.directory = os.open(self.leaf, _DIRECTORY_FLAGS, dir_fd=self.parent)
+        _directory(self.directory, private=True)
+        if sorted(os.listdir(self.directory)) != _NAMESPACE_ENTRIES:
+            _refuse("An existing incomplete shared lease namespace is never adopted")
+        self.resource = os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory)
+        fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
+        try:
+            value = _read(fd)
+        finally:
+            os.close(fd)
+        if _file_info(self.resource).st_size != 0 or value != _fresh():
+            _refuse("An existing used shared lease namespace is never adopted")
+        self.value = value
+        self.record()
+
+    def remove_build(self, build: str) -> None:
+        try:
+            fd = os.open(build, _DIRECTORY_FLAGS, dir_fd=self.parent)
+        except FileNotFoundError:
+            return
+        try:
+            if os.fstat(fd).st_uid != os.geteuid():
+                _refuse("Shared lease build directory has another owner")
+            names = os.listdir(fd)
+            if not set(names) <= {"accelerator.lock", "state.json", "state.next"}:
+                _refuse("Shared lease build directory has unexpected entries")
+            for name in names:
+                entry = os.open(name, _FILE_FLAGS, dir_fd=fd)
+                try:
+                    info = os.fstat(entry)
+                    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
+                        _refuse("Shared lease build directory has unexpected entries")
+                finally:
+                    os.close(entry)
+                os.unlink(name, dir_fd=fd)
+        finally:
+            os.close(fd)
+        os.rmdir(build, dir_fd=self.parent)
+
+    def record(self) -> None:
+        self.identity = {"version": VERSION, "directory": _identity(_directory(self.directory, private=True)),
+                         "resource": _identity(_file_info(self.resource))}
+        _write(self.anchor, self.identity)
+        os.fsync(self.parent)
 
     def __enter__(self) -> _Registry:
         return self

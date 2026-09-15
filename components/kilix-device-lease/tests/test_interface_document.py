@@ -33,10 +33,10 @@ TICKET = "0123456789abcdef0123456789abcdef"
 # Planted absolute calls, each replacing one descriptor-relative call in a copy
 # of the module, and the fragments a refusal of each must name.
 PLANTED = {
-    "makedirs": ("os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)",
+    "makedirs": ("os.mkdir(build, mode=0o700, dir_fd=self.parent)",
                  "{os}.makedirs(os.path.join(self.parent_path, self.leaf), mode=0o700, exist_ok=True)",
                  ("makedirs", "os.mkdir")),
-    "mkdir": ("os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)",
+    "mkdir": ("os.mkdir(build, mode=0o700, dir_fd=self.parent)",
               "{os}.mkdir(os.path.join(self.parent_path, self.leaf), 0o700)", ("os.mkdir",)),
     "rename": ('os.replace("state.next", "state.json", src_dir_fd=self.directory, dst_dir_fd=self.directory)',
                '{os}.rename(os.path.join(self.path, "state.next"), os.path.join(self.path, "state.json"))',
@@ -46,7 +46,7 @@ PLANTED = {
                ("unlink", "os.remove")),
     # Python raises no audit event for mkfifo, so this one proves the sandbox
     # does not rely on audit events alone.
-    "mkfifo": ("os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)",
+    "mkfifo": ("os.mkdir(build, mode=0o700, dir_fd=self.parent)",
                "{os}.mkfifo(os.path.join(self.parent_path, self.leaf), 0o600)", ("mkfifo",)),
 }
 ROUTES = {"module os": "os", "another import of os": "__import__('os')"}

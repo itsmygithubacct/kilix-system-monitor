@@ -79,9 +79,14 @@ every cooperating provider must use the identical namespace. A permanent
 private anchor records the directory and resource inode identities. Existing
 incomplete, foreign, unsafe, hardlinked, symlinked or replaced state is refused,
 not repaired or recreated. First creation is decided under the anchor lock: an
-empty anchor with no namespace directory beside it has never granted anything,
-so whichever requester locks it first initialises it, and simultaneous first
-requesters all wait their turn instead of being refused. Dead queued requests are pruned using their kernel
+empty anchor has never granted anything, because every requester needs the
+identity it records, so whichever requester locks it first initialises it, and
+simultaneous first requesters all wait their turn instead of being refused. The
+creator builds the directory complete under a private sibling name, renames it
+into place and records it in the anchor last. A creator killed at any step
+leaves either a partial sibling, which the next creator removes, or a complete,
+never-used directory beside the empty anchor, which the next creator adopts;
+anything else beside an empty anchor is refused. Dead queued requests are pruned using their kernel
 ticket locks, without PID liveness guesses. Queue bookkeeping saves the queue
 before it removes a ticket file, and a queue entry whose ticket file is already
 gone is dropped, so a coordinator killed at any step cannot wedge the queue.
