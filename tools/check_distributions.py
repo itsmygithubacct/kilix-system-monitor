@@ -17,6 +17,10 @@ the root is built from a private copy of the checkout. The check fails if any
 distribution directory gains an entry while it runs, or carries egg-info,
 build or dist output however old, since residue from an earlier in-place
 build would otherwise already be in the starting snapshot.
+
+The root's build backend is pinned by hash in tools/build-constraints.txt.
+``--prefetch`` runs the same builds online once, so a fresh clone's uv cache
+holds every hash-verified build input; the gate itself always builds offline.
 """
 
 from __future__ import annotations
@@ -66,6 +70,7 @@ PACKAGES = {
     },
 }
 BUILD_BACKEND_VERSION = "0.12.5"
+BUILD_CONSTRAINTS = ROOT / "tools" / "build-constraints.txt"
 # Local state a checkout may carry that is never distribution source.
 _NOT_SOURCE = shutil.ignore_patterns(".git", ".venv", "__pycache__", "*.egg-info", "build", "dist")
 # Build output a distribution directory must never carry.
@@ -124,13 +129,17 @@ def build_source(name: str, details: dict, scratch: Path) -> Path:
     return source
 
 
-def build(uv: str, name: str, details: dict, destination: Path, scratch: Path) -> None:
+def build(uv: str, name: str, details: dict, destination: Path, scratch: Path, *,
+          offline: bool = True) -> None:
+    # The isolated root build resolves its backend; the constraints pin it by hash.
+    isolation = (("--build-constraints", str(BUILD_CONSTRAINTS), "--require-hashes")
+                 if details["isolated_build"] else ("--no-build-isolation",))
     completed = subprocess.run(
         [
             uv,
             "build",
-            "--offline",
-            *((), ("--no-build-isolation",))[not details["isolated_build"]],
+            *(("--offline",) if offline else ()),
+            *isolation,
             "--no-progress",
             "--out-dir",
             str(destination),
@@ -144,7 +153,7 @@ def build(uv: str, name: str, details: dict, destination: Path, scratch: Path) -
     )
     if completed.returncode != 0:
         diagnostic = completed.stderr.decode("utf-8", errors="replace")[-2000:]
-        raise RuntimeError(f"{name} offline build failed: {diagnostic}")
+        raise RuntimeError(f"{name} {'offline' if offline else 'online prefetch'} build failed: {diagnostic}")
 
 
 def snapshot(directories: list[Path]) -> dict[Path, set[str]]:
@@ -170,7 +179,11 @@ def build_residue(directories: list[Path], base: Path = ROOT) -> list[str]:
     return sorted(found)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments not in ([], ["--prefetch"]):
+        raise RuntimeError("usage: check_distributions.py [--prefetch]")
+    offline = arguments != ["--prefetch"]
     uv = os.environ.get("UV", "uv")
     try:
         observed_backend = distribution_version("uv-build")
@@ -188,7 +201,7 @@ def main() -> int:
         for name, details in PACKAGES.items():
             destination = output / name
             destination.mkdir()
-            build(uv, name, details, destination, output)
+            build(uv, name, details, destination, output, offline=offline)
             wheels = sorted(destination.glob("*.whl"))
             sdists = sorted(destination.glob("*.tar.gz"))
             if len(wheels) != 1 or len(sdists) != 1:
@@ -209,7 +222,7 @@ def main() -> int:
         raise RuntimeError("package-check left artefacts in the checkout: " + ", ".join(left))
     components = sum(1 for details in PACKAGES.values() if details["modules"])
     print(
-        f"PASS: offline wheel/sdist build and content inspection for {len(PACKAGES)} "
+        f"PASS: {'offline' if offline else 'online prefetch'} wheel/sdist build and content inspection for {len(PACKAGES)} "
         f"distributions ({components} implemented components plus the root umbrella); "
         "0 artefacts left in the checkout"
     )

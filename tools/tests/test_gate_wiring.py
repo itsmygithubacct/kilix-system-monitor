@@ -38,8 +38,22 @@ class GateWiringTests(unittest.TestCase):
                 text = self.edited(prerequisites, " ".join(part for part in prerequisites.split() if part != target))
                 self.assertTrue(self.errors_for(text), target)
 
+    def check_recipe_lines(self):
+        """Recipe lines of check and of every target it depends on; other targets are not gates."""
+        prerequisites = next(line for line in self.makefile.splitlines() if line.startswith("check:"))
+        reachable = {"check", *prerequisites.split(":", 1)[1].split()}
+        lines, target = [], None
+        for line in self.makefile.splitlines():
+            if line.startswith("\t"):
+                if target in reachable:
+                    lines.append(line)
+            elif line and not line.startswith("#"):
+                head = line.split(":", 1)[0]
+                target = head if ":" in line and "=" not in head else None
+        return lines
+
     def test_a_deleted_recipe_line_is_reported(self):
-        recipe_lines = [line for line in self.makefile.splitlines() if line.startswith("\t")]
+        recipe_lines = self.check_recipe_lines()
         self.assertGreaterEqual(len(recipe_lines), 13)
         for line in recipe_lines:
             with self.subTest(deleted=line.strip()[:70]):

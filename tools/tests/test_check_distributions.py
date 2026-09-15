@@ -4,9 +4,11 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("distributions_under_test", ROOT / "tools" / "check_distributions.py")
@@ -34,6 +36,25 @@ class PackageResidueTests(unittest.TestCase):
         # The egg-info setuptools writes appeared in the private copy, not here.
         self.assertIn("kilix_system_monitor_contracts.egg-info", copied)
         self.assertEqual(sorted(os.listdir(ROOT)), before)
+
+    def test_root_build_backend_is_accepted_only_by_its_pinned_hash(self):
+        uv = os.environ.get("UV") or shutil.which("uv")
+        pinned = distributions.BUILD_CONSTRAINTS.read_text(encoding="utf-8")
+        digests = re.findall(r"--hash=sha256:([0-9a-f]{64})", pinned)
+        self.assertEqual(len(digests), 2)
+        with tempfile.TemporaryDirectory(prefix="umbrella-hash-") as temporary:
+            scratch = Path(temporary)
+            wrong = scratch / "build-constraints.txt"
+            wrong.write_text(re.sub(r"sha256:([0-9a-f])", lambda m: "sha256:" + ("0" if m.group(1) != "0" else "1"),
+                                    pinned), encoding="utf-8")
+            destination = scratch / "out"
+            destination.mkdir()
+            with mock.patch.object(distributions, "BUILD_CONSTRAINTS", wrong):
+                with self.assertRaises(RuntimeError) as caught:
+                    distributions.build(uv, UMBRELLA, distributions.PACKAGES[UMBRELLA], destination, scratch)
+            self.assertIn("offline build failed", str(caught.exception))
+            self.assertIn("Hash mismatch for `setuptools==84.0.0`", str(caught.exception))
+            self.assertEqual(sorted(path.name for path in destination.glob("*.whl")), [])
 
     def test_private_source_carries_no_local_state(self):
         with tempfile.TemporaryDirectory(prefix="umbrella-source-") as temporary:

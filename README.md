@@ -76,7 +76,16 @@ returned identities.
 
 ## Checks
 
-Use the release-pinned uv 0.12.5 for a functional developer check:
+`make check` runs offline. With network access, fill the uv cache it reads
+once, using the release-pinned uv 0.12.5 and its managed CPython 3.12.8:
+
+    make prefetch UV=/absolute/path/to/release-pinned-uv-0.12.5
+
+prefetch syncs the root and component environments from PyPI, and uv verifies
+every download against the hashes in each `uv.lock`. It then runs the package
+gate online once, so the root's isolated setuptools build fetches the backend
+pinned by hash in `tools/build-constraints.txt`. A fresh clone with an empty
+cache needs nothing more. Then, offline, for a functional developer check:
 
     /absolute/path/to/release-pinned-uv-0.12.5 sync --locked --offline \
       --no-install-project --managed-python --no-python-downloads --python 3.12.8
@@ -84,8 +93,9 @@ Use the release-pinned uv 0.12.5 for a functional developer check:
       make check UV=/absolute/path/to/release-pinned-uv-0.12.5
 
 The locked aggregate environment includes the exact uv-build 0.12.5 backend
-needed by the component sdists, so the package gate can stay offline after the
-normal locked environment sync instead of depending on an unrelated cache hit.
+needed by the component sdists, and the root's setuptools backend is pinned by
+hash, so the package gate stays offline instead of depending on an unrelated
+cache hit.
 The validator refuses scratch roots outside `/home/pleb/scratch-workers`.
 
 The current `tools/validate_candidate` shell path has useful partial isolation:

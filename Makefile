@@ -1,6 +1,6 @@
 UV ?= uv
 
-.PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
+.PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked prefetch
 
 check: contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
 	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_gate_wiring.py
@@ -34,3 +34,12 @@ launcher-consumer-readiness:
 
 model-sizer-blocked:
 	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_model_sizer_block.py
+
+# Online, once: fill the uv cache that make check reads offline. uv verifies every
+# download against uv.lock, and the root's build backend against tools/build-constraints.txt.
+prefetch:
+	$(UV) sync --locked --no-install-project --managed-python --no-python-downloads --python 3.12.8
+	cd components/kilix-telemetry && $(UV) sync --locked
+	cd components/kilix-device-lease && $(UV) sync --locked
+	cd components/plebian-hardware && $(UV) sync --locked
+	UV=$(UV) PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked python tools/check_distributions.py --prefetch
