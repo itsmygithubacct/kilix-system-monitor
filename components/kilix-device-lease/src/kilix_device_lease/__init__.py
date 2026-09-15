@@ -73,6 +73,24 @@ def _call(callback: Callable[..., object], *args: object) -> object:
         raise _CallerFailure(error) from None
 
 
+# Ticket descriptors of requests this process is waiting on. A child forked
+# without exec would otherwise share each ticket's lock, and keep a dead
+# requester's queue place alive for as long as the child runs.
+_TICKETS: set[int] = set()
+
+
+def _forget_tickets() -> None:
+    for fd in list(_TICKETS):
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+    _TICKETS.clear()
+
+
+os.register_at_fork(after_in_child=_forget_tickets)
+
+
 def _identity(info: os.stat_result) -> list[int]:
     return [info.st_dev, info.st_ino]
 
@@ -557,11 +575,17 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
     if not path.startswith("/") or path != os.path.normpath(path):
         raise LeaseError("invalid-request", "Lease namespace must be a canonical absolute path")
     _check_request(deadline, cancelled, disconnected)
+    owner = os.getpid()
     item = None
     ticket_fd = -1
     previous = None
     try:
         while True:
+            if os.getpid() != owner:
+                # A forked child resumed its parent's request. The parent still
+                # owns the queue entry, and the child's ticket copy is closed.
+                item, ticket_fd = None, -1
+                raise LeaseError("lost-lease", "Shared lease request belongs to the process that made it")
             _check_request(deadline, cancelled, disconnected)
             with _Registry(path, deadline, cancelled, disconnected) as registry:
                 registry.prune()
@@ -572,6 +596,7 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
                     ticket = uuid.uuid4().hex
                     ticket_fd = os.open(ticket + ".ticket", _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
                                         0o600, dir_fd=registry.directory)
+                    _TICKETS.add(ticket_fd)
                     os.fchmod(ticket_fd, 0o600)
                     fcntl.flock(ticket_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     item = {"ticket": ticket, "job_id": job_id, "workload": workload, "device": device,
@@ -604,6 +629,7 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
                         registry.unlink_ticket(item)
                         fd = os.dup(registry.resource)
                         lease = Lease(fd, registry, item, deadline, cancelled, disconnected)
+                        _TICKETS.discard(ticket_fd)
                         os.close(ticket_fd)
                         ticket_fd = -1
                         item = None
@@ -635,4 +661,5 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
                 # Preserve unproven namespace state; the next request refuses it.
                 pass
         if ticket_fd >= 0:
+            _TICKETS.discard(ticket_fd)
             os.close(ticket_fd)

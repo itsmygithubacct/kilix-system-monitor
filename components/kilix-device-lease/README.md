@@ -84,7 +84,11 @@ so whichever requester locks it first initialises it, and simultaneous first
 requesters all wait their turn instead of being refused. Dead queued requests are pruned using their kernel
 ticket locks, without PID liveness guesses. Queue bookkeeping saves the queue
 before it removes a ticket file, and a queue entry whose ticket file is already
-gone is dropped, so a coordinator killed at any step cannot wedge the queue. The library never starts a broker
+gone is dropped, so a coordinator killed at any step cannot wedge the queue.
+A child forked without exec while its parent's request is queued closes its
+copy of the ticket descriptor, so it never keeps a dead requester's queue place
+alive, and if it carries on inside the parent's `acquire` call it is refused
+`lost-lease` while the parent keeps its request. The library never starts a broker
 daemon, kills a process or changes the embedding process's child-reaping policy.
 
 The threat boundary is cooperating providers under one user. A program that
