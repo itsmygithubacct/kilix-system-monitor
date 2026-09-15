@@ -149,6 +149,36 @@ if os.getpid() != parent:
     os._exit(0)
 report("parent", outcome)
 """
+# A holder whose cancelled callback forks once while it checks its own lease. The
+# child returns False into the parent's check and reports what that check did.
+FORKING_CHECK = r"""
+import json, os, sys, time
+import kilix_device_lease as leases
+parent = os.getpid()
+state = {"checking": False, "forked": False}
+def cancelled():
+    if os.getpid() != parent or not state["checking"] or state["forked"]:
+        return False
+    state["forked"] = True
+    pid = os.fork()
+    if pid:
+        os.waitpid(pid, 0)
+    return False
+lease = leases.acquire(job_id="checker", workload="stt-job", device="d", deadline=time.monotonic() + 30,
+                       namespace=sys.argv[1], cancelled=cancelled)
+state["checking"] = True
+try:
+    lease.check()
+    outcome = "current"
+except BaseException as error:
+    outcome = error.code if isinstance(error, leases.LeaseError) else type(error).__name__
+role = "parent" if os.getpid() == parent else "child"
+print(json.dumps({"role": role, "outcome": outcome}), flush=True)
+if role == "child":
+    os._exit(0)
+lease.release(cleanup_complete=True)
+"""
+
 # Bounds on waiting for an event that should follow at once.
 PATIENCE_SECONDS = 10
 
@@ -305,6 +335,16 @@ class ForkWhileQueuedTests(unittest.TestCase):
                                  (2, [], "forker", "releasing"))
                 self.acquire(namespace=namespace, job_id="successor", workload="stt-job",
                              deadline=time.monotonic() + PATIENCE_SECONDS).release(cleanup_complete=True)
+
+    def test_child_forked_inside_a_check_callback_is_refused_lost_lease(self):
+        done = subprocess.run([sys.executable, "-c", FORKING_CHECK, self.namespace], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, env=self.env, timeout=PATIENCE_SECONDS * 6)
+        self.assertEqual(done.returncode, 0, done.stderr[-4000:])
+        lines = [json.loads(line) for line in done.stdout.splitlines()]
+        self.assertEqual(sorted((line["role"], line["outcome"]) for line in lines),
+                         [("child", "lost-lease"), ("parent", "current")])
+        self.acquire(job_id="successor", workload="stt-job",
+                     deadline=time.monotonic() + PATIENCE_SECONDS).release(cleanup_complete=True)
 
 if __name__ == "__main__":
     unittest.main()
