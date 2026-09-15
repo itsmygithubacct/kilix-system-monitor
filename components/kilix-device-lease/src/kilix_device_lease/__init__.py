@@ -29,6 +29,7 @@ WORKLOADS = ("tts-utterance", "stt-job", "llm-turn")
 MAX_QUEUE = 24
 MAX_WORKLOAD_QUEUE = 8
 MAX_WAIT_SECONDS = 3600.0
+_ACK_WAIT_SECONDS = MAX_WAIT_SECONDS
 _POLL_SECONDS = 0.02
 _MAX_BYTES = 32768
 _LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}\Z", re.ASCII)
@@ -455,23 +456,34 @@ class Lease:
             return
         if os.getpid() != self._pid:
             raise LeaseError("lost-lease", "Only the acquiring process may acknowledge cleanup")
+        retain = False
         try:
             if cleanup_complete:
-                with _Registry(self._path, time.monotonic() + 1.0) as registry:
+                # The acknowledgement is the only cleanup proof, so it waits for a busy
+                # registry as long as a request may wait. If it still cannot be recorded,
+                # the guard stays open so a later release can record it; closing it
+                # would leave the grant held and the namespace quarantined for good.
+                try:
+                    registry = _Registry(self._path, time.monotonic() + _ACK_WAIT_SECONDS)
+                except LeaseError as error:
+                    retain = error.code == "deadline"
+                    raise
+                with registry:
                     self._owned(registry)
                     registry.value["active"]["state"] = "releasing"
                     registry.save()
         finally:
-            fd, self._fd = self._fd, -1
-            # LOCK_UN would unlock every inherited copy of this open description.
-            # Closing only this process's copy preserves the supervisor/engine guard.
-            try:
-                identity = _identity(os.fstat(fd))
-            except OSError as error:
-                raise LeaseError("lost-lease", "Shared lease descriptor was closed externally") from error
-            if identity != self._identity["resource"]:
-                raise LeaseError("lost-lease", "Refusing to close a reused unrelated descriptor")
-            os.close(fd)
+            if not retain:
+                fd, self._fd = self._fd, -1
+                # LOCK_UN would unlock every inherited copy of this open description.
+                # Closing only this process's copy preserves the supervisor/engine guard.
+                try:
+                    identity = _identity(os.fstat(fd))
+                except OSError as error:
+                    raise LeaseError("lost-lease", "Shared lease descriptor was closed externally") from error
+                if identity != self._identity["resource"]:
+                    raise LeaseError("lost-lease", "Refusing to close a reused unrelated descriptor")
+                os.close(fd)
 
     def __enter__(self) -> Lease:
         self.check()

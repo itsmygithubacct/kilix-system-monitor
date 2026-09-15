@@ -55,7 +55,10 @@ channel inaccessible to engines is one way to carry that acknowledgement.
 An engine result, `ENGINE_FAILED`, cancellation, timeout, disconnected provider
 or vanished supervisor is not cleanup proof. Release marks the record releasing
 and closes only the provider's descriptor; the next grant still waits for all
-inherited descriptor copies to close. It never calls `LOCK_UN`, which could
+inherited descriptor copies to close. Recording the acknowledgement waits for a
+busy registry for up to the one-hour maximum request wait. If it still cannot
+be recorded, release raises `deadline` and keeps the descriptor, and calling
+`release(cleanup_complete=True)` again records it. It never calls `LOCK_UN`, which could
 unlock the shared open-file description while descendants still retain it.
 
 Default `release()` and context exit close the local descriptor and preserve
