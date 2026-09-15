@@ -3,6 +3,7 @@ UV ?= uv
 .PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
 
 check: contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
+	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_gate_wiring.py
 
 contracts-check:
 	UV="$(UV)" /bin/sh tools/validate_candidate
