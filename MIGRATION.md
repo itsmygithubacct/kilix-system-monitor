@@ -129,7 +129,9 @@ files, both authored and committed by
 | `DEVICE_LEASES.md` | `554e84e91ec460f228cf61e15deb2578cc5ef126` | `f0d2eebc1bf22051eb7e76d6e8855238a2a1d886c4e7784f72b693af8f920a3d` | `components/kilix-device-lease/README.md` | `77ebe79900810606822636b7a2c3bcf1c673a13dd756b711b2737ad9dfc53446` | 6 source line(s) replaced |
 
 The module is unchanged: its docstring names no import path, so no byte of it
-needed to move. The two test files change only their import lines, and the
+needed to move. The table records the import commit only. Later commits change
+the module and its tests to fix acceptance-review findings; the repository
+history, not this table, records those changes. The two test files change only their import lines, and the
 test module's `PROJECT` now names the component `src` directory that child
 processes put on `PYTHONPATH`. The README is DEVICE_LEASES.md with the import
 path replaced and two sections added (interface document, checks).

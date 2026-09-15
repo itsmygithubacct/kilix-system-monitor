@@ -74,7 +74,9 @@ every cooperating provider must use the identical namespace. A permanent
 private anchor records the directory and resource inode identities. Existing
 incomplete, foreign, unsafe, hardlinked, symlinked or replaced state is refused,
 not repaired or recreated. Dead queued requests are pruned using their kernel
-ticket locks, without PID liveness guesses. The library never starts a broker
+ticket locks, without PID liveness guesses. Queue bookkeeping saves the queue
+before it removes a ticket file, and a queue entry whose ticket file is already
+gone is dropped, so a coordinator killed at any step cannot wedge the queue. The library never starts a broker
 daemon, kills a process or changes the embedding process's child-reaping policy.
 
 The threat boundary is cooperating providers under one user. A program that

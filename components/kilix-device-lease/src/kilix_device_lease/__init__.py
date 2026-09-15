@@ -331,15 +331,28 @@ class _Registry:
             os.close(fd)
 
     def unlink_ticket(self, item: dict) -> None:
+        # Callers save a queue without this entry first, so a coordinator that dies
+        # here leaves only an unreferenced ticket, which prune removes by its lock.
         name = item["ticket"] + ".ticket"
-        if _identity(os.stat(name, dir_fd=self.directory, follow_symlinks=False)) != item["inode"]:
-            _refuse("Shared lease ticket was replaced")
-        os.unlink(name, dir_fd=self.directory)
+        try:
+            if _identity(os.stat(name, dir_fd=self.directory, follow_symlinks=False)) != item["inode"]:
+                _refuse("Shared lease ticket was replaced")
+            os.unlink(name, dir_fd=self.directory)
+        except FileNotFoundError:
+            pass
 
     def prune(self) -> None:
         retained = []
+        removed = []
         for item in self.value["queue"]:
-            fd = os.open(item["ticket"] + ".ticket", _FILE_FLAGS, dir_fd=self.directory)
+            try:
+                fd = os.open(item["ticket"] + ".ticket", _FILE_FLAGS, dir_fd=self.directory)
+            except FileNotFoundError:
+                # An earlier coordinator died after unlinking this ticket but before
+                # saving the queue. No requester can still hold a ticket lock on a
+                # file that no longer exists, and a live requester whose entry is
+                # gone reports lost-lease, so the entry is dropped, never waited on.
+                continue
             try:
                 if _identity(_file_info(fd)) != item["inode"]:
                     _refuse("Shared lease ticket identity changed")
@@ -349,7 +362,7 @@ class _Registry:
                 except BlockingIOError:
                     abandoned = False
                 if abandoned or time.monotonic() >= item["deadline"]:
-                    self.unlink_ticket(item)
+                    removed.append(item)
                 else:
                     retained.append(item)
             finally:
@@ -357,6 +370,8 @@ class _Registry:
         if retained != self.value["queue"]:
             self.value["queue"] = retained
             self.save()
+        for item in removed:
+            self.unlink_ticket(item)
         # A crash between creating a ticket and committing its queue entry must
         # not grow an unbounded collection of unreferenced request files.
         names = os.listdir(self.directory)
@@ -557,9 +572,9 @@ def acquire(*, job_id: str, workload: str, device: str, deadline: float,
                     if found is not None:
                         if found != item:
                             _refuse("Refusing to remove a replaced shared lease ticket")
-                        registry.unlink_ticket(item)
                         registry.value["queue"] = [row for row in registry.value["queue"] if row["ticket"] != item["ticket"]]
                         registry.save()
+                        registry.unlink_ticket(item)
             except (OSError, LeaseError):
                 # Preserve unproven namespace state; the next request refuses it.
                 pass
