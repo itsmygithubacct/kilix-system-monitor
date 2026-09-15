@@ -223,15 +223,11 @@ class _Registry:
             self.parent = _open_parent(self.parent_path)
             self.parent_identity = _identity(os.fstat(self.parent))
             self.anchor_name = "." + self.leaf + ".lease-v1.anchor"
-            created = False
             try:
                 self.anchor = os.open(self.anchor_name, _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
                                       0o600, dir_fd=self.parent)
-                os.fchmod(self.anchor, 0o600)
-                created = True
             except FileExistsError:
                 self.anchor = os.open(self.anchor_name, _FILE_FLAGS, dir_fd=self.parent)
-            self.anchor_identity = _identity(_file_info(self.anchor))
             while True:
                 _check_request(deadline, cancelled, disconnected)
                 try:
@@ -241,6 +237,17 @@ class _Registry:
                     if not blocking:
                         _refuse("Shared lease registry is busy")
                     time.sleep(_POLL_SECONDS)
+            # Creating the anchor and locking it are separate steps, so another
+            # requester can lock a new anchor before its creator does. Under the
+            # lock, an empty anchor means initialisation has not started, or its
+            # creator died first; no grant can exist, because a grant needs the
+            # identity written below. Whoever holds the lock initialises it, and
+            # an existing namespace directory still makes that refuse.
+            info = os.fstat(self.anchor)
+            created = stat.S_ISREG(info.st_mode) and info.st_size == 0
+            if created and info.st_uid == os.geteuid():
+                os.fchmod(self.anchor, 0o600)
+            self.anchor_identity = _identity(_file_info(self.anchor))
             if created:
                 os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)
                 self.directory = os.open(self.leaf, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,

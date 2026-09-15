@@ -76,7 +76,10 @@ Its existing parent must be user-owned mode 0700. A deliberate private
 every cooperating provider must use the identical namespace. A permanent
 private anchor records the directory and resource inode identities. Existing
 incomplete, foreign, unsafe, hardlinked, symlinked or replaced state is refused,
-not repaired or recreated. Dead queued requests are pruned using their kernel
+not repaired or recreated. First creation is decided under the anchor lock: an
+empty anchor with no namespace directory beside it has never granted anything,
+so whichever requester locks it first initialises it, and simultaneous first
+requesters all wait their turn instead of being refused. Dead queued requests are pruned using their kernel
 ticket locks, without PID liveness guesses. Queue bookkeeping saves the queue
 before it removes a ticket file, and a queue entry whose ticket file is already
 gone is dropped, so a coordinator killed at any step cannot wedge the queue. The library never starts a broker
