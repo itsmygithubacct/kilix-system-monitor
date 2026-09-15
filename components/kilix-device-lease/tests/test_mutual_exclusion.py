@@ -9,7 +9,8 @@ import sys
 import tempfile
 import unittest
 
-SOURCE = Path(__file__).resolve().parents[1] / "src"
+import lease_containment
+
 WORKLOADS = ("tts-utterance", "stt-job", "llm-turn")
 WORKERS_PER_WORKLOAD = 3
 ROUNDS = 3
@@ -46,7 +47,7 @@ class MutualExclusionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="device-lease-exclusion-") as folder:
             namespace = folder + "/leases"
             marker = folder + "/critical-section"
-            env = dict(os.environ, PYTHONPATH=str(SOURCE))
+            env = lease_containment.child_env()
             workers = []
 
             def stop():

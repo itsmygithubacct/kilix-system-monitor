@@ -12,6 +12,7 @@ import time
 import unittest
 from unittest import mock
 
+import lease_containment  # noqa: F401
 import kilix_device_lease as leases
 
 # A cooperating process that holds the registry anchor lock until told to stop,

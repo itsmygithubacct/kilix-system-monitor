@@ -10,9 +10,8 @@ import tempfile
 import time
 import unittest
 
+import lease_containment
 import kilix_device_lease as leases
-
-SOURCE = Path(__file__).resolve().parents[1] / "src"
 
 # The victim kills itself immediately before its Nth mutating filesystem or lock
 # operation. Python audit events fire before the operation runs, so point N means
@@ -62,7 +61,7 @@ class CrashRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="device-lease-crash-")
         self.addCleanup(self.temp.cleanup)
-        self.env = dict(os.environ, PYTHONPATH=str(SOURCE))
+        self.env = lease_containment.child_env()
 
     def acquire(self, namespace, **kwargs):
         request = dict(job_id="observer", workload="llm-turn", device="observer",

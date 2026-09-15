@@ -11,10 +11,10 @@ import tempfile
 import time
 import unittest
 
+import lease_containment
 import kilix_device_lease as leases
 
 PEER = Path(__file__).with_name("device_lease_peer.py")
-PROJECT = PEER.parent.parent / "src"
 
 
 class LeaseTests(unittest.TestCase):
@@ -41,7 +41,7 @@ class LeaseTests(unittest.TestCase):
         return leases.acquire(**request)
 
     def peer(self, kind="tts-utterance", job="peer", seconds=10):
-        env = dict(os.environ, PYTHONPATH=str(PROJECT))
+        env = lease_containment.child_env()
         child = subprocess.Popen([sys.executable, str(PEER), self.namespace, kind, job, str(seconds)],
                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  env=env, text=True, bufsize=1)
@@ -250,7 +250,7 @@ finally:
  for stream in (provider.stdin,provider.stdout,provider.stderr):stream.close()
 '''
         result = subprocess.run([sys.executable, "-c", code, str(PEER), self.namespace],
-                                env=dict(os.environ, PYTHONPATH=str(PROJECT)), capture_output=True, text=True, timeout=15)
+                                env=lease_containment.child_env(), capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(json.loads(result.stdout)["successor_refused"])
 

@@ -12,9 +12,8 @@ import tempfile
 import time
 import unittest
 
+import lease_containment
 import kilix_device_lease as leases
-
-SOURCE = Path(__file__).resolve().parents[1] / "src"
 
 # A queued requester forks a worker without exec from its progress callback.
 # The worker only sleeps; it never touches the lease API. The requester then
@@ -65,7 +64,7 @@ class ForkWhileQueuedTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="device-lease-fork-")
         self.addCleanup(self.temp.cleanup)
         self.namespace = self.temp.name + "/leases"
-        self.env = dict(os.environ, PYTHONPATH=str(SOURCE))
+        self.env = lease_containment.child_env()
 
     def acquire(self, **kwargs):
         request = dict(job_id="holder", workload="llm-turn", device="d",

@@ -22,12 +22,34 @@ import time
 import tomllib
 from types import SimpleNamespace
 import unittest
-from unittest import mock
 
+import lease_containment
 import kilix_device_lease as leases
 
 COMPONENT = Path(__file__).resolve().parents[1]
 DOCUMENT = COMPONENT.parents[1] / "contracts" / "kilix.device-lease-v1.interface.json"
+EFFECT = Path(__file__).with_name("rooted_effect.py")
+TICKET = "0123456789abcdef0123456789abcdef"
+# Planted absolute calls, each replacing one descriptor-relative call in a copy
+# of the module, and the fragments a refusal of each must name.
+PLANTED = {
+    "makedirs": ("os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)",
+                 "{os}.makedirs(os.path.join(self.parent_path, self.leaf), mode=0o700, exist_ok=True)",
+                 ("makedirs", "os.mkdir")),
+    "mkdir": ("os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)",
+              "{os}.mkdir(os.path.join(self.parent_path, self.leaf), 0o700)", ("os.mkdir",)),
+    "rename": ('os.replace("state.next", "state.json", src_dir_fd=self.directory, dst_dir_fd=self.directory)',
+               '{os}.rename(os.path.join(self.path, "state.next"), os.path.join(self.path, "state.json"))',
+               ("rename",)),
+    "unlink": ('_refuse("Shared lease ticket was replaced")\n            os.unlink(name, dir_fd=self.directory)',
+               '_refuse("Shared lease ticket was replaced")\n            {os}.unlink(os.path.join(self.path, name))',
+               ("unlink", "os.remove")),
+    # Python raises no audit event for mkfifo, so this one proves the sandbox
+    # does not rely on audit events alone.
+    "mkfifo": ("os.mkdir(self.leaf, mode=0o700, dir_fd=self.parent)",
+               "{os}.mkfifo(os.path.join(self.parent_path, self.leaf), 0o600)", ("mkfifo",)),
+}
+ROUTES = {"module os": "os", "another import of os": "__import__('os')"}
 KEYS = {
     "admission", "distribution", "error_codes", "guard_fd", "label_pattern", "max_queue",
     "max_wait_seconds", "max_workload_queue", "namespace_default", "python_module",
@@ -108,23 +130,6 @@ def error_code_findings(source: str) -> tuple[set[str], list[str]]:
                       or (isinstance(parent, ast.Tuple) and isinstance(parents.get(parent), ast.ExceptHandler))):
                 problems.append(f"line {node.lineno}: LeaseError used other than by a call or except clause")
     return codes, problems
-
-
-class RootedOS:
-    """The module's os, with the filesystem root moved to a private directory."""
-
-    def __init__(self, root: str) -> None:
-        self.root = root
-
-    def __getattr__(self, name):
-        return getattr(os, name)
-
-    def open(self, path, flags, mode=0o777, *, dir_fd=None):
-        if dir_fd is None:
-            if path != "/":
-                raise AssertionError(f"absolute open outside the private root: {path!r}")
-            return os.open(self.root, flags, mode)
-        return os.open(path, flags, mode, dir_fd=dir_fd)
 
 
 class InterfaceDocumentTests(unittest.TestCase):
@@ -273,30 +278,76 @@ class InterfaceDocumentTests(unittest.TestCase):
         for other in (limit / 2, limit * 2):
             self.assertNotEqual((limit - margin <= other, limit + margin <= other), (True, False))
 
+    def rooted(self, *, mode="strict", namespace=None, module=None, ticket=None):
+        """Run the module in rooted_effect.py's sandbox; see that file for both modes."""
+        root = tempfile.mkdtemp(prefix="root-", dir=self.temp.name)
+        documented = namespace or self.doc["namespace_default"].format(euid=os.geteuid())
+        os.makedirs(root + os.path.dirname(documented), mode=0o700)
+        config = {"mode": mode, "namespace": namespace, "root": root, "ticket": ticket,
+                  "module": str(module or leases.__file__)}
+        # The child creates the default leaf inside its private root, which the
+        # suite's path guard would refuse; its own sandbox is stricter.
+        done = subprocess.run([sys.executable, str(EFFECT), json.dumps(config)], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=60,
+                              env=lease_containment.env_without_path_guard())
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return json.loads(done.stdout)
+
     def test_default_namespace_is_created_where_the_document_says(self):
         documented = self.doc["namespace_default"].format(euid=os.geteuid())
-        parent, leaf = os.path.split(documented)
-        expected = sorted([leaf, f".{leaf}.lease-v1.anchor"])
+        leaf = os.path.basename(documented)
+        report = self.rooted()
+        self.assertEqual((report["outcome"], report["refused"]), ("granted", []))
+        self.assertEqual(report["beside"], sorted([leaf, f".{leaf}.lease-v1.anchor"]))
+        self.assertIn("state.json", report["inside"])
+        # Planted: a namespace one character away lands somewhere else.
+        shadow = self.rooted(namespace=documented + "-shadow")
+        self.assertEqual((shadow["outcome"], shadow["refused"]), ("granted", []))
+        self.assertNotEqual(shadow["beside"], report["beside"])
 
-        def entries_after(namespace):
-            root = tempfile.mkdtemp(prefix="root-", dir=self.temp.name)
-            os.makedirs(root + parent, mode=0o700)
-            with unittest.mock.patch.object(leases, "os", RootedOS(root)):
-                lease = leases.acquire(job_id="interface-job", workload="llm-turn",
-                                       device="interface-device", deadline=time.monotonic() + 2,
-                                       namespace=namespace)
-                lease.release(cleanup_complete=True)
-            return sorted(os.listdir(root + parent)), root
+    def canary(self, call):
+        """A real directory outside the sandbox root that a planted call would change."""
+        canary = tempfile.mkdtemp(prefix=f"canary-{call}-", dir=self.temp.name)
+        fixture = {"rename": "state.next", "unlink": TICKET + ".ticket"}.get(call)
+        if fixture:
+            os.mkdir(canary + "/leases", 0o700)
+            Path(canary, "leases", fixture).write_bytes(b"canary")
+        return canary
 
-        observed, root = entries_after(None)
-        self.assertEqual(observed, expected)
-        self.assertTrue(os.path.isfile(root + documented + "/state.json"))
-        # Planted: a namespace one character away lands somewhere else, and the
-        # private root refuses to reach any real absolute path.
-        shadow, _root = entries_after(documented + "-shadow")
-        self.assertNotEqual(shadow, expected)
-        with self.assertRaises(AssertionError):
-            RootedOS(root).open(parent, os.O_RDONLY | os.O_DIRECTORY)
+    @staticmethod
+    def snapshot(folder):
+        return sorted((str(path.relative_to(folder)), path.read_bytes() if path.is_file() else None)
+                      for path in Path(folder).rglob("*"))
+
+    def planted(self, call, route):
+        anchor, replacement, _fragments = PLANTED[call]
+        source = module_source()
+        self.assertEqual(source.count(anchor), 1, call)
+        folder = tempfile.mkdtemp(prefix=f"planted-{call}-", dir=self.temp.name)
+        path = Path(folder) / "kilix_device_lease.py"
+        path.write_text(source.replace(anchor, replacement.format(os=route)), encoding="utf-8")
+        return path
+
+    def test_effect_sandbox_refuses_planted_absolute_calls(self):
+        for call, (_anchor, _replacement, fragments) in PLANTED.items():
+            for route, prefix in ROUTES.items():
+                with self.subTest(call=call, route=route):
+                    canary = self.canary(call)
+                    before = self.snapshot(canary)
+                    report = self.rooted(namespace=canary + "/leases", module=self.planted(call, prefix),
+                                         ticket=TICKET)
+                    self.assertTrue(any(fragment in refusal for fragment in fragments
+                                        for refusal in report["refused"]), report)
+                    self.assertEqual(self.snapshot(canary), before)
+            # The same planted call under the earlier open-only sandbox reaches
+            # the canary, so the strict arm above had something to refuse.
+            with self.subTest(call=call, sandbox="open-only"):
+                canary = self.canary(call)
+                before = self.snapshot(canary)
+                report = self.rooted(mode="open-only", namespace=canary + "/leases",
+                                     module=self.planted(call, "os"), ticket=TICKET)
+                self.assertEqual(report["refused"], [])
+                self.assertNotEqual(self.snapshot(canary), before)
 
     def test_release_semantics_equal_document(self):
         semantics = self.doc["release_semantics"]

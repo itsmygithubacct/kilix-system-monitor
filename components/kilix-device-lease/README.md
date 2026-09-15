@@ -115,6 +115,14 @@ From the monorepo root, with the release-pinned uv 0.12.5:
 
 The suite runs private real-process controls. It uses no GPU, model payload,
 microphone, network or audio output, and never touches the default namespace.
+Every test process, and every Python child it starts, installs
+`tests/containment/lease_path_guard.py`, which refuses any filesystem call on
+a path under `/run/user` or naming the default namespace leaf. The one test
+that creates the default namespace does so in a child whose filesystem root is
+moved to a private directory and which refuses every other path. Planted
+calls prove both refusals. Mutation runs should still use a private mount
+namespace over `/run/user`, because neither refusal sees calls made through
+ctypes.
 
 The module was imported from kilix-voice; MIGRATION.md records the source
 commit, the exact bytes and every change made on import.

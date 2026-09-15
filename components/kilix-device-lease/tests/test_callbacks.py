@@ -8,6 +8,7 @@ import tempfile
 import time
 import unittest
 
+import lease_containment  # noqa: F401
 import kilix_device_lease as leases
 
 

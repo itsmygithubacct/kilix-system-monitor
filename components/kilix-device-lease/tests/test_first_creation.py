@@ -10,9 +10,9 @@ import tempfile
 import time
 import unittest
 
+import lease_containment
 import kilix_device_lease as leases
 
-SOURCE = Path(__file__).resolve().parents[1] / "src"
 WORKERS = 8
 TRIALS = 15
 
@@ -45,7 +45,7 @@ class FirstCreationTests(unittest.TestCase):
 
     def test_simultaneous_first_creation_grants_every_requester(self):
         outcomes = {}
-        env = dict(os.environ, PYTHONPATH=str(SOURCE))
+        env = lease_containment.child_env()
         for trial in range(TRIALS):
             parent = f"{self.temp.name}/trial-{trial}"
             os.mkdir(parent, 0o700)
