@@ -113,6 +113,25 @@ class FrozenValidatorGuardTests(unittest.TestCase):
                     marker = ("/" + segment + "/" + "someone").encode("utf-8")
                     self.assertTrue(frozen.text_errors(prefix + marker))
 
+    def test_private_path_scan_finds_a_marker_anywhere_in_a_large_file(self):
+        # A scan that keeps only a window of a file, from either end, misses a
+        # marker outside it. Each file here holds 8 MiB of clean text on each side
+        # of its marker, far more than any window a truncating scan could keep, and
+        # the marker sits near the start, in the middle or at the end.
+        clean = b"measured under a private scratch root\n"
+        padding = clean * (8 * 1024 * 1024 // len(clean) + 1)
+        self.assertEqual(frozen.text_errors(padding + padding), [])
+        for segment in ("home", "tmp", "root", "mnt"):
+            marker = ("/" + segment + "/" + "someone").encode("utf-8")
+            placements = {
+                "at byte 15": b"measured under " + marker + b" by a tool\n" + padding + padding,
+                "in the middle": padding + marker + padding,
+                "at the end": padding + padding + marker,
+            }
+            for where, data in placements.items():
+                with self.subTest(segment=segment, where=where):
+                    self.assertTrue(frozen.text_errors(data))
+
     def test_evidence_refusals_come_from_the_companion_semantic_rules(self):
         validator = frozen.Draft202012Validator(document(frozen.PROFILES_SCHEMA),
                                                 format_checker=frozen.FormatChecker())
