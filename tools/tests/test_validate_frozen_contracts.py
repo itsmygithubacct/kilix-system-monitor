@@ -100,6 +100,18 @@ class FrozenValidatorGuardTests(unittest.TestCase):
                 text = "measured under " + "/" + segment + "/" + "someone" + " by a tool"
                 self.assertTrue(frozen.text_errors(text.encode("utf-8")))
         self.assertEqual(frozen.text_errors(b"measured under a private scratch root"), [])
+        # A marker late in a file must be found too, not only one near the start:
+        # after the largest bundle member, and after far more clean text than a
+        # typical read buffer holds.
+        largest = max((member for member in BUNDLE.rglob("*") if member.is_file()),
+                      key=lambda member: member.stat().st_size)
+        padding = b"measured under a private scratch root\n" * 1000
+        self.assertGreater(largest.stat().st_size, 4096)
+        for prefix, where in ((largest.read_bytes(), "after " + largest.name), (padding, "after clean text")):
+            for segment in ("home", "tmp", "root", "mnt"):
+                with self.subTest(segment=segment, where=where):
+                    marker = ("/" + segment + "/" + "someone").encode("utf-8")
+                    self.assertTrue(frozen.text_errors(prefix + marker))
 
     def test_evidence_refusals_come_from_the_companion_semantic_rules(self):
         validator = frozen.Draft202012Validator(document(frozen.PROFILES_SCHEMA),
