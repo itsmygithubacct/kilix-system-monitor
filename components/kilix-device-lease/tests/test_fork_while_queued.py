@@ -1,6 +1,7 @@
 """A process forked from a queued requester never keeps that request alive."""
 from __future__ import annotations
 
+from collections import Counter
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+import uuid
 
 import lease_containment
 import kilix_device_lease as leases
@@ -149,6 +151,103 @@ if os.getpid() != parent:
     os._exit(0)
 report("parent", outcome)
 """
+# A queued requester that forks from a second thread at each distinct call site
+# the lease module reaches: every audited call, and every os.fstat, which Python
+# does not audit and which the module makes while it holds a descriptor it opened
+# for one step only. Each forked child lists every descriptor it holds that the
+# requester did not hold before it started, and exits at once. The requester
+# cancels itself after a number of registry passes, so it is never granted.
+THREAD_FORKING_REQUESTER = r"""
+import json, os, sys, threading, time, warnings
+import kilix_device_lease as leases
+warnings.simplefilter("ignore", DeprecationWarning)
+namespace = sys.argv[1]
+module = leases.__file__
+parent = os.getpid()
+main = threading.main_thread()
+
+def descriptors():
+    found = {}
+    for name in os.listdir("/proc/self/fd"):
+        try:
+            found[int(name)] = os.readlink("/proc/self/fd/" + name)
+        except OSError:
+            pass
+    return found
+
+before = set(descriptors())
+seen = set()
+rows = []
+state = {"busy": False, "checks": 0}
+
+def fork_from_another_thread(stack, event):
+    read_end, write_end = os.pipe()
+    ignored = before | {read_end, write_end}
+    forked = {}
+    def fork():
+        pid = os.fork()
+        if pid == 0:
+            try:
+                held = sorted(target for fd, target in descriptors().items() if fd not in ignored)
+                os.write(write_end, json.dumps(held).encode())
+            finally:
+                os._exit(0)
+        forked["pid"] = pid
+    thread = threading.Thread(target=fork)
+    thread.start()
+    thread.join()
+    os.close(write_end)
+    report = b""
+    while True:
+        chunk = os.read(read_end, 65536)
+        if not chunk:
+            break
+        report += chunk
+    os.close(read_end)
+    os.waitpid(forked["pid"], 0)
+    held = sorted(target for fd, target in descriptors().items() if fd not in ignored)
+    rows.append({"stack": stack, "event": event, "child": json.loads(report), "parent": held})
+
+def observe(event, args):
+    if state["busy"] or os.getpid() != parent or threading.current_thread() is not main:
+        return
+    state["busy"] = True
+    try:
+        names, lines = [], []
+        frame = sys._getframe(1)
+        while frame is not None:
+            if frame.f_code.co_filename == module:
+                names.append(frame.f_code.co_name)
+                lines.append(frame.f_lineno)
+            frame = frame.f_back
+        key = (tuple(lines), event)
+        if names and key not in seen:
+            seen.add(key)
+            fork_from_another_thread(">".join(reversed(names)), event)
+    finally:
+        state["busy"] = False
+
+real_fstat = os.fstat
+def fstat(fd):
+    observe("os.fstat", (fd,))
+    return real_fstat(fd)
+
+def cancelled():
+    state["checks"] += 1
+    return state["checks"] > 40
+
+sys.addaudithook(observe)
+os.fstat = fstat
+try:
+    leases.acquire(job_id="thread-forker", workload="tts-utterance", device="d",
+                   deadline=time.monotonic() + 60, namespace=namespace, cancelled=cancelled)
+    outcome = "granted"
+except leases.LeaseError as error:
+    outcome = error.code
+os.fstat = real_fstat
+print(json.dumps({"outcome": outcome, "rows": rows}), flush=True)
+"""
+
 # A holder whose cancelled callback forks once while it checks its own lease. The
 # child returns False into the parent's check and reports what that check did.
 FORKING_CHECK = r"""
@@ -345,6 +444,55 @@ class ForkWhileQueuedTests(unittest.TestCase):
                          [("child", "lost-lease"), ("parent", "current")])
         self.acquire(job_id="successor", workload="stt-job",
                      deadline=time.monotonic() + PATIENCE_SECONDS).release(cleanup_complete=True)
+
+    def test_child_forked_by_another_thread_during_a_registry_pass_holds_no_descriptor(self):
+        # The requester queues behind a holder, and its passes prune an unreferenced
+        # ticket as well as its own, so prune and validate each hold a descriptor
+        # of their own while another thread forks.
+        holder = self.acquire()
+        orphan = uuid.uuid4().hex + ".ticket"
+        fd = os.open(Path(self.namespace) / orphan, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+        finally:
+            os.close(fd)
+        try:
+            done = subprocess.run([sys.executable, "-c", THREAD_FORKING_REQUESTER, self.namespace],
+                                  stdin=subprocess.DEVNULL, capture_output=True, text=True, env=self.env,
+                                  timeout=PATIENCE_SECONDS * 30)
+        finally:
+            holder.release(cleanup_complete=True)
+        self.assertEqual(done.returncode, 0, done.stderr[-4000:])
+        report = json.loads(done.stdout.splitlines()[-1])
+        self.assertEqual(report["outcome"], "cancelled")
+        rows = report["rows"]
+        # The module only opens the namespace's parent directory, what lies under
+        # it, and the directories above it; the interpreter's own descriptors,
+        # such as the one os.urandom keeps open, are not the module's.
+        directory = os.path.realpath(os.path.dirname(self.namespace))
+        path = {directory, *(str(ancestor) for ancestor in Path(directory).parents)}
+
+        def lease_descriptors(targets):
+            return [target for target in targets if target in path or target.startswith(directory + "/")]
+
+        held = [(row["stack"], row["event"], lease_descriptors(row["child"]))
+                for row in rows if lease_descriptors(row["child"])]
+        self.assertEqual(held, [], json.dumps(held, indent=1))
+        # Those forks did happen while a pass held a descriptor opened for one step:
+        # prune's second copy of the requester's own ticket, and of the orphan...
+        prune = [Counter(target for target in row["parent"] if target.endswith(".ticket"))
+                 for row in rows if row["stack"].endswith(">prune") and row["event"] == "fcntl.flock"]
+        self.assertTrue(any(counts[name] >= 2 for counts in prune for name in counts), prune)
+        self.assertTrue(any(name.endswith("/" + orphan) for counts in prune for name in counts), prune)
+        # ...validate's second copy of the namespace's parent directory, and the
+        # directories its no-follow traversal passes through.
+        directory = os.path.realpath(os.path.dirname(self.namespace))
+        validate = [row["parent"] for row in rows if row["stack"].endswith(">validate") and row["event"] == "os.fstat"]
+        self.assertTrue(any(held.count(directory) >= 2 for held in validate), validate)
+        traversal = [row["parent"] for row in rows
+                     if row["stack"].endswith(">validate>_open_parent") and row["event"] == "open"]
+        self.assertTrue(any("/" in held for held in traversal), traversal)
+        self.assertFalse((Path(self.namespace) / orphan).exists())
 
 if __name__ == "__main__":
     unittest.main()

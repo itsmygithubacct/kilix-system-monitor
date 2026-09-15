@@ -83,12 +83,13 @@ def _call(callback: Callable[..., object], *args: object) -> object:
     return result
 
 
-# Registries and tickets this process has open. A child forked without exec
-# shares each descriptor's open file description, and with it the anchor,
-# resource and ticket locks: the child would keep the registry locked, or a dead
-# requester's queue place alive, for as long as it runs. The child closes its
-# copies and forgets their numbers, so nothing in it can later close a number
-# it has reused.
+# Registries, tickets and every other descriptor this module has open. A child
+# forked without exec shares each descriptor's open file description, and with it
+# the anchor, resource and ticket locks: the child would keep the registry locked,
+# or a dead requester's queue place alive, for as long as it runs. That holds for a
+# fork by another thread too, while a registry pass holds a descriptor it opened
+# for one step only. The child closes its copies and forgets their numbers, so
+# nothing in it can later close a number it has reused.
 _OPEN: set = set()
 
 
@@ -101,10 +102,14 @@ def _forget_in_child() -> None:
 os.register_at_fork(after_in_child=_forget_in_child)
 
 
-class _Ticket:
-    """A queued request's ticket descriptor, which only its requester may close."""
+class _Descriptor:
+    """A descriptor this module has open, which a forked child closes.
 
-    def __init__(self, fd: int) -> None:
+    It is tracked before a descriptor is opened into it, and a ``with`` block
+    closes it however the block ends.
+    """
+
+    def __init__(self, fd: int = -1) -> None:
         self.fd = fd
         _OPEN.add(self)
 
@@ -121,6 +126,16 @@ class _Ticket:
         fd, self.fd = self.fd, -1
         if fd >= 0:
             os.close(fd)
+
+    def __enter__(self) -> _Descriptor:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+
+class _Ticket(_Descriptor):
+    """A queued request's ticket descriptor, which only its requester may close."""
 
 
 def _identity(info: os.stat_result) -> list[int]:
@@ -148,23 +163,29 @@ def _directory(fd: int, *, private: bool) -> os.stat_result:
     return info
 
 
-def _open_parent(path: str) -> int:
+def _open_parent(path: str) -> _Descriptor:
     """No-follow traversal; public root-owned sticky ancestors may contain fixtures."""
-    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    current = _Descriptor()
     try:
-        _directory(fd, private=False)
+        current.fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        _directory(current.fd, private=False)
         for component in path.split("/")[1:]:
             if not component or component in (".", ".."):
                 _refuse("Shared lease namespace must use canonical absolute components")
-            child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
-                            dir_fd=fd)
-            os.close(fd)
-            fd = child
-            _directory(fd, private=False)
-        _directory(fd, private=True)
-        return fd
+            child = _Descriptor()
+            try:
+                child.fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                   dir_fd=current.fd)
+            except BaseException:
+                child.close()
+                raise
+            current.close()
+            current = child
+            _directory(current.fd, private=False)
+        _directory(current.fd, private=True)
+        return current
     except BaseException:
-        os.close(fd)
+        current.close()
         raise
 
 
@@ -290,7 +311,10 @@ class _Registry:
         try:
             if not _LEAF.fullmatch(self.leaf) or not self.parent_path.startswith("/"):
                 _refuse("Invalid shared lease namespace")
-            self.parent = _open_parent(self.parent_path)
+            opened = _open_parent(self.parent_path)
+            # Both hold the number until the registry does, so no fork misses it.
+            self.parent, opened.fd = opened.fd, -1
+            opened.close()
             self.parent_identity = _identity(os.fstat(self.parent))
             self.anchor_name = "." + self.leaf + ".lease-v1.anchor"
             try:
@@ -328,11 +352,9 @@ class _Registry:
                     _refuse("Shared lease namespace identity is invalid")
                 self.directory = os.open(self.leaf, _DIRECTORY_FLAGS, dir_fd=self.parent)
                 self.resource = os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory)
-                fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
-                try:
-                    self.value = _read(fd)
-                finally:
-                    os.close(fd)
+                with _Descriptor() as state:
+                    state.fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
+                    self.value = _read(state.fd)
                 _state(self.value)
             self.validate()
         except BaseException as error:
@@ -377,38 +399,32 @@ class _Registry:
         if sorted(os.listdir(self.directory)) != _NAMESPACE_ENTRIES:
             _refuse("An existing incomplete shared lease namespace is never adopted")
         self.resource = os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory)
-        fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
-        try:
-            value = _read(fd)
-        finally:
-            os.close(fd)
+        with _Descriptor() as state:
+            state.fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
+            value = _read(state.fd)
         if _file_info(self.resource).st_size != 0 or value != _fresh():
             _refuse("An existing used shared lease namespace is never adopted")
         self.value = value
         self.record()
 
     def remove_build(self, build: str) -> None:
-        try:
-            fd = os.open(build, _DIRECTORY_FLAGS, dir_fd=self.parent)
-        except FileNotFoundError:
-            return
-        try:
-            if os.fstat(fd).st_uid != os.geteuid():
+        with _Descriptor() as directory:
+            try:
+                directory.fd = os.open(build, _DIRECTORY_FLAGS, dir_fd=self.parent)
+            except FileNotFoundError:
+                return
+            if os.fstat(directory.fd).st_uid != os.geteuid():
                 _refuse("Shared lease build directory has another owner")
-            names = os.listdir(fd)
+            names = os.listdir(directory.fd)
             if not set(names) <= {"accelerator.lock", "state.json", "state.next"}:
                 _refuse("Shared lease build directory has unexpected entries")
             for name in names:
-                entry = os.open(name, _FILE_FLAGS, dir_fd=fd)
-                try:
-                    info = os.fstat(entry)
+                with _Descriptor() as entry:
+                    entry.fd = os.open(name, _FILE_FLAGS, dir_fd=directory.fd)
+                    info = os.fstat(entry.fd)
                     if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
                         _refuse("Shared lease build directory has unexpected entries")
-                finally:
-                    os.close(entry)
-                os.unlink(name, dir_fd=fd)
-        finally:
-            os.close(fd)
+                os.unlink(name, dir_fd=directory.fd)
         os.rmdir(build, dir_fd=self.parent)
 
     def record(self) -> None:
@@ -442,12 +458,9 @@ class _Registry:
                     pass
 
     def validate(self) -> None:
-        parent = _open_parent(self.parent_path)
-        try:
-            if _identity(os.fstat(parent)) != self.parent_identity:
+        with _open_parent(self.parent_path) as parent:
+            if _identity(os.fstat(parent.fd)) != self.parent_identity:
                 _refuse("Shared lease parent was replaced")
-        finally:
-            os.close(parent)
         identities = ((self.parent, self.anchor_name, self.anchor_identity),
                       (self.parent, self.leaf, self.identity["directory"]),
                       (self.directory, "accelerator.lock", self.identity["resource"]))
@@ -463,24 +476,20 @@ class _Registry:
         _state(self.value)
         # A previous coordinator can die during atomic replacement. The private
         # permanent anchor excludes every live writer before this stale temp is removed.
-        try:
-            stale = os.open("state.next", _FILE_FLAGS, dir_fd=self.directory)
-        except FileNotFoundError:
-            pass
-        else:
+        with _Descriptor() as stale:
             try:
-                _file_info(stale)
+                stale.fd = os.open("state.next", _FILE_FLAGS, dir_fd=self.directory)
+            except FileNotFoundError:
+                pass
+            else:
+                _file_info(stale.fd)
                 os.unlink("state.next", dir_fd=self.directory)
-            finally:
-                os.close(stale)
-        fd = os.open("state.next", _FILE_FLAGS | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=self.directory)
-        try:
-            os.fchmod(fd, 0o600)
-            _write(fd, self.value)
+        with _Descriptor() as fresh:
+            fresh.fd = os.open("state.next", _FILE_FLAGS | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=self.directory)
+            os.fchmod(fresh.fd, 0o600)
+            _write(fresh.fd, self.value)
             os.replace("state.next", "state.json", src_dir_fd=self.directory, dst_dir_fd=self.directory)
             os.fsync(self.directory)
-        finally:
-            os.close(fd)
 
     def unlink_ticket(self, item: dict) -> None:
         # Callers save a queue without this entry first, so a coordinator that dies
@@ -497,19 +506,19 @@ class _Registry:
         retained = []
         removed = []
         for item in self.value["queue"]:
-            try:
-                fd = os.open(item["ticket"] + ".ticket", _FILE_FLAGS, dir_fd=self.directory)
-            except FileNotFoundError:
-                # An earlier coordinator died after unlinking this ticket but before
-                # saving the queue. No requester can still hold a ticket lock on a
-                # file that no longer exists, and a live requester whose entry is
-                # gone reports lost-lease, so the entry is dropped, never waited on.
-                continue
-            try:
-                if _identity(_file_info(fd)) != item["inode"]:
+            with _Descriptor() as ticket:
+                try:
+                    ticket.fd = os.open(item["ticket"] + ".ticket", _FILE_FLAGS, dir_fd=self.directory)
+                except FileNotFoundError:
+                    # An earlier coordinator died after unlinking this ticket but before
+                    # saving the queue. No requester can still hold a ticket lock on a
+                    # file that no longer exists, and a live requester whose entry is
+                    # gone reports lost-lease, so the entry is dropped, never waited on.
+                    continue
+                if _identity(_file_info(ticket.fd)) != item["inode"]:
                     _refuse("Shared lease ticket identity changed")
                 try:
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(ticket.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     abandoned = True
                 except BlockingIOError:
                     abandoned = False
@@ -517,8 +526,6 @@ class _Registry:
                     removed.append(item)
                 else:
                     retained.append(item)
-            finally:
-                os.close(fd)
         if retained != self.value["queue"]:
             self.value["queue"] = retained
             self.save()
@@ -533,16 +540,14 @@ class _Registry:
         for name in names:
             if not name.endswith(".ticket") or not _token(name[:-7]) or name in known:
                 continue
-            fd = os.open(name, _FILE_FLAGS, dir_fd=self.directory)
-            try:
-                _file_info(fd)
+            with _Descriptor() as ticket:
+                ticket.fd = os.open(name, _FILE_FLAGS, dir_fd=self.directory)
+                _file_info(ticket.fd)
                 try:
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(ticket.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     continue
                 os.unlink(name, dir_fd=self.directory)
-            finally:
-                os.close(fd)
 
     def order(self) -> list[dict]:
         groups = {kind: sorted((item for item in self.value["queue"] if item["workload"] == kind),

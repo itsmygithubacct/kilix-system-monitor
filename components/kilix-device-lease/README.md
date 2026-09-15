@@ -90,10 +90,11 @@ anything else beside an empty anchor is refused. Dead queued requests are pruned
 ticket locks, without PID liveness guesses. Queue bookkeeping saves the queue
 before it removes a ticket file, and a queue entry whose ticket file is already
 gone is dropped, so a coordinator killed at any step cannot wedge the queue.
-A child forked without exec closes its copies of every registry and ticket
-descriptor the module has open, so it never keeps the registry locked or a dead
-requester's queue place alive, even when it was forked from a callback in the
-middle of a registry pass. A child that returns from a callback into its
+A child forked without exec closes its copies of every descriptor the module
+has open, registries and tickets and also those a registry pass opens for a
+single step, so it never keeps the registry locked or a dead requester's queue
+place alive, whether it was forked from a callback in the middle of a registry
+pass or by another thread at any point of one. A child that returns from a callback into its
 parent's `acquire` or `check` call is refused `lost-lease` at once, without
 withdrawing, taking or closing anything of its parent's request. A fork made
 outside Python's fork hooks, such as a raw `fork()` in a C extension, is not
