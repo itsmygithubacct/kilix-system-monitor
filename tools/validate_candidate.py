@@ -1443,25 +1443,51 @@ def startup_boundary_controls(launcher: Path, uv: Path) -> list[str]:
         if root_site_marker.exists() or root_user_marker.exists():
             errors.append("repository-root startup hook executed before validation")
 
+        # The launcher passes the canonical scratch root it accepted. TMPDIR
+        # escapes and unusable roots are all measured against that root.
+        scratch_root = hostile_environment.get("CANDIDATE_SCRATCH_ROOT", "")
+        if not scratch_root.startswith("/") or scratch_root == "/":
+            errors.append("startup controls did not receive the launcher's CANDIDATE_SCRATCH_ROOT")
+            scratch_root = str(temporary_root)
         traversal_environment = dict(hostile_environment)
-        traversal_environment["TMPDIR"] = "/home/pleb/scratch-workers/.."
+        traversal_environment["TMPDIR"] = scratch_root + "/.."
         expect_failure(
             "TMPDIR traversal control",
             control_root / "tools" / "validate_candidate",
             control_root,
-            b"TMPDIR must stay beneath /home/pleb/scratch-workers",
+            b"TMPDIR must stay beneath CANDIDATE_SCRATCH_ROOT",
             traversal_environment,
         )
         outside_link = temporary_root / "tmpdir-outside"
-        outside_link.symlink_to("/home/pleb", target_is_directory=True)
+        outside_link.symlink_to(os.path.dirname(scratch_root), target_is_directory=True)
         symlink_environment = dict(hostile_environment)
         symlink_environment["TMPDIR"] = str(outside_link)
         expect_failure(
             "TMPDIR symlink control",
             control_root / "tools" / "validate_candidate",
             control_root,
-            b"TMPDIR must stay beneath /home/pleb/scratch-workers",
+            b"TMPDIR must stay beneath CANDIDATE_SCRATCH_ROOT",
             symlink_environment,
+        )
+        absent_environment = dict(hostile_environment)
+        absent_environment.pop("CANDIDATE_SCRATCH_ROOT", None)
+        expect_failure(
+            "scratch root absent control",
+            control_root / "tools" / "validate_candidate",
+            control_root,
+            b"CANDIDATE_SCRATCH_ROOT must name a canonical scratch directory",
+            absent_environment,
+        )
+        root_link = temporary_root / "scratch-root-link"
+        root_link.symlink_to(scratch_root, target_is_directory=True)
+        linked_environment = dict(hostile_environment)
+        linked_environment["CANDIDATE_SCRATCH_ROOT"] = str(root_link)
+        expect_failure(
+            "scratch root symlink control",
+            control_root / "tools" / "validate_candidate",
+            control_root,
+            b"CANDIDATE_SCRATCH_ROOT must name a canonical scratch directory",
+            linked_environment,
         )
 
         candidate_site_marker = temporary_root / "candidate-site-marker"

@@ -89,14 +89,16 @@ cache needs nothing more. Then, offline, for a functional developer check:
 
     /absolute/path/to/release-pinned-uv-0.12.5 sync --locked --offline \
       --no-install-project --managed-python --no-python-downloads --python 3.12.8
-    TMPDIR=/home/pleb/scratch-workers \
+    CANDIDATE_SCRATCH_ROOT=/absolute/scratch/root TMPDIR=/absolute/scratch/root \
       make check UV=/absolute/path/to/release-pinned-uv-0.12.5
 
 The locked aggregate environment includes the exact uv-build 0.12.5 backend
 needed by the component sdists, and the root's setuptools backend is pinned by
 hash, so the package gate stays offline instead of depending on an unrelated
 cache hit.
-The validator refuses scratch roots outside `/home/pleb/scratch-workers`.
+The candidate gate requires `CANDIDATE_SCRATCH_ROOT` to name an existing,
+canonical scratch directory other than `/`, and refuses a `TMPDIR` that does
+not resolve beneath it.
 
 The current `tools/validate_candidate` shell path has useful partial isolation:
 it refuses an unpinned uv or Python, checks the candidate file set before
