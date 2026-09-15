@@ -159,6 +159,24 @@ class FirstCreationTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, "unavailable")
                 self.assertEqual(self.snapshot(), before)
 
+    def test_complete_namespace_whose_lock_holds_bytes_is_refused_untouched(self):
+        # Exactly what a creator killed before recording its anchor leaves, except
+        # that the lock file holds bytes. A creator never writes to the lock, so
+        # this directory is not one that no requester can have used.
+        namespace = self.temp.name + "/leases"
+        self.fresh_directory(namespace)
+        lock = Path(namespace) / "accelerator.lock"
+        with open(lock, "r+b") as handle:
+            handle.write(b"held")
+        self.assertEqual((lock.stat().st_mode & 0o777, lock.stat().st_nlink), (0o600, 1))
+        anchor = self.empty_anchor()
+        before = self.snapshot()
+        with self.assertRaises(leases.LeaseError) as caught:
+            self.acquire(namespace)
+        self.assertEqual(caught.exception.code, "unavailable")
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(anchor.stat().st_size, 0)
+
     def test_empty_anchor_beside_an_existing_directory_is_still_refused(self):
         namespace = self.temp.name + "/leases"
         anchor = Path(self.temp.name) / ".leases.lease-v1.anchor"
