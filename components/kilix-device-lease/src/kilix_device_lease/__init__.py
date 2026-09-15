@@ -66,29 +66,59 @@ class _CallerFailure(BaseException):
         self.error = error
 
 
+class _ForkedChild(BaseException):
+    """Stops a child forked inside a callback before it touches its parent's request."""
+
+
 def _call(callback: Callable[..., object], *args: object) -> object:
+    pid = os.getpid()
     try:
-        return callback(*args)
+        result = callback(*args)
     except BaseException as error:
         raise _CallerFailure(error) from None
+    if os.getpid() != pid:
+        raise _ForkedChild()
+    return result
 
 
-# Ticket descriptors of requests this process is waiting on. A child forked
-# without exec would otherwise share each ticket's lock, and keep a dead
-# requester's queue place alive for as long as the child runs.
-_TICKETS: set[int] = set()
+# Registries and tickets this process has open. A child forked without exec
+# shares each descriptor's open file description, and with it the anchor,
+# resource and ticket locks: the child would keep the registry locked, or a dead
+# requester's queue place alive, for as long as it runs. The child closes its
+# copies and forgets their numbers, so nothing in it can later close a number
+# it has reused.
+_OPEN: set = set()
 
 
-def _forget_tickets() -> None:
-    for fd in list(_TICKETS):
-        try:
+def _forget_in_child() -> None:
+    for holder in list(_OPEN):
+        holder.forget()
+    _OPEN.clear()
+
+
+os.register_at_fork(after_in_child=_forget_in_child)
+
+
+class _Ticket:
+    """A queued request's ticket descriptor, which only its requester may close."""
+
+    def __init__(self, fd: int) -> None:
+        self.fd = fd
+        _OPEN.add(self)
+
+    def forget(self) -> None:
+        fd, self.fd = self.fd, -1
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def close(self) -> None:
+        _OPEN.discard(self)
+        fd, self.fd = self.fd, -1
+        if fd >= 0:
             os.close(fd)
-        except OSError:
-            pass
-    _TICKETS.clear()
-
-
-os.register_at_fork(after_in_child=_forget_tickets)
 
 
 def _identity(info: os.stat_result) -> list[int]:
@@ -248,6 +278,7 @@ class _Registry:
                  cancelled: Callable[[], bool] | None = None,
                  disconnected: Callable[[], bool] | None = None, *, blocking: bool = True) -> None:
         self.parent = self.anchor = self.directory = self.resource = -1
+        _OPEN.add(self)
         self.path = path
         self.parent_path, self.leaf = os.path.split(path)
         try:
@@ -324,11 +355,22 @@ class _Registry:
         self.close()
 
     def close(self) -> None:
+        _OPEN.discard(self)
         for name in ("resource", "directory", "anchor", "parent"):
             fd = getattr(self, name)
             setattr(self, name, -1)
             if fd >= 0:
                 os.close(fd)
+
+    def forget(self) -> None:
+        for name in ("resource", "directory", "anchor", "parent"):
+            fd = getattr(self, name)
+            setattr(self, name, -1)
+            if fd >= 0:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
     def validate(self) -> None:
         parent = _open_parent(self.parent_path)
@@ -480,6 +522,8 @@ class Lease:
             return
         except _CallerFailure as failure:
             error = failure.error
+        except _ForkedChild:
+            error = LeaseError("lost-lease", "Shared lease belongs to the process that acquired it")
         raise error
 
     def _check(self) -> None:
@@ -553,6 +597,8 @@ def acquire(*, job_id: str, workload: str, device: str, deadline: float,
     An existing incomplete or replaced namespace is never silently recreated.
     An exception raised by a cancelled, disconnected or progress callback
     reaches the caller unchanged; it is never reported as a lease code.
+    A child forked inside a callback is refused ``lost-lease`` as soon as the
+    callback returns, without touching its parent's request.
     """
     try:
         return _acquire(job_id=job_id, workload=workload, device=device, deadline=deadline,
@@ -560,6 +606,8 @@ def acquire(*, job_id: str, workload: str, device: str, deadline: float,
                         namespace=namespace)
     except _CallerFailure as failure:
         error = failure.error
+    except _ForkedChild:
+        error = LeaseError("lost-lease", "Shared lease request belongs to the process that made it")
     raise error
 
 
@@ -577,15 +625,10 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
     _check_request(deadline, cancelled, disconnected)
     owner = os.getpid()
     item = None
-    ticket_fd = -1
+    ticket = None
     previous = None
     try:
         while True:
-            if os.getpid() != owner:
-                # A forked child resumed its parent's request. The parent still
-                # owns the queue entry, and the child's ticket copy is closed.
-                item, ticket_fd = None, -1
-                raise LeaseError("lost-lease", "Shared lease request belongs to the process that made it")
             _check_request(deadline, cancelled, disconnected)
             with _Registry(path, deadline, cancelled, disconnected) as registry:
                 registry.prune()
@@ -593,15 +636,14 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
                     if (len(registry.value["queue"]) >= MAX_QUEUE
                             or sum(row["workload"] == workload for row in registry.value["queue"]) >= MAX_WORKLOAD_QUEUE):
                         raise LeaseError("queue-full", "Shared accelerator queue is full")
-                    ticket = uuid.uuid4().hex
-                    ticket_fd = os.open(ticket + ".ticket", _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
-                                        0o600, dir_fd=registry.directory)
-                    _TICKETS.add(ticket_fd)
-                    os.fchmod(ticket_fd, 0o600)
-                    fcntl.flock(ticket_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    item = {"ticket": ticket, "job_id": job_id, "workload": workload, "device": device,
+                    name = uuid.uuid4().hex
+                    ticket = _Ticket(os.open(name + ".ticket", _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
+                                             0o600, dir_fd=registry.directory))
+                    os.fchmod(ticket.fd, 0o600)
+                    fcntl.flock(ticket.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    item = {"ticket": name, "job_id": job_id, "workload": workload, "device": device,
                             "sequence": registry.value["next"], "deadline": deadline,
-                            "inode": _identity(_file_info(ticket_fd))}
+                            "inode": _identity(_file_info(ticket.fd))}
                     registry.value["next"] += 1
                     registry.value["queue"].append(item)
                     registry.save()
@@ -629,10 +671,8 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
                         registry.unlink_ticket(item)
                         fd = os.dup(registry.resource)
                         lease = Lease(fd, registry, item, deadline, cancelled, disconnected)
-                        _TICKETS.discard(ticket_fd)
-                        os.close(ticket_fd)
-                        ticket_fd = -1
-                        item = None
+                        ticket.close()
+                        ticket = item = None
                         return lease
                 update = QueueStatus(VERSION, item["ticket"], "queued",
                                      1 + next(i for i, row in enumerate(ordered) if row["ticket"] == item["ticket"]))
@@ -643,6 +683,11 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
     except OSError as error:
         raise LeaseError("unavailable", "Shared lease filesystem or descriptor operation failed") from error
     finally:
+        if os.getpid() != owner:
+            # A child forked inside a callback. Its copies of the ticket and
+            # registry descriptors are already closed, and the request is its
+            # parent's, so it neither withdraws it nor closes anything.
+            item = ticket = None
         if item is not None:
             try:
                 # This request never acquired an engine grant. Refusal must
@@ -660,6 +705,5 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
             except (OSError, LeaseError):
                 # Preserve unproven namespace state; the next request refuses it.
                 pass
-        if ticket_fd >= 0:
-            _TICKETS.discard(ticket_fd)
-            os.close(ticket_fd)
+        if ticket is not None:
+            ticket.close()
