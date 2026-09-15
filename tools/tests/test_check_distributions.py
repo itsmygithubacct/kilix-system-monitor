@@ -1,7 +1,9 @@
 """package-check builds every distribution without leaving anything in the checkout."""
 from __future__ import annotations
 
+from contextlib import redirect_stdout
 import importlib.util
+import io
 import os
 from pathlib import Path
 import re
@@ -96,6 +98,37 @@ class PackageResidueTests(unittest.TestCase):
             self.assertEqual(distributions.residue(before, distributions.snapshot(watched), base), [])
             # ...so it is refused by name instead.
             self.assertEqual(distributions.build_residue(watched, base), ["components/one/dist", "stale.egg-info"])
+
+    def test_main_refuses_an_entry_its_run_added_beside_a_distribution(self):
+        # An entry that is not build output by name is caught only by main's
+        # before-and-after snapshot of each distribution directory.
+        for planted in (False, True):
+            with self.subTest(planted=planted), tempfile.TemporaryDirectory(prefix="main-residue-") as temporary:
+                base = Path(temporary)
+                packages = {}
+                for name in ("one", "two"):
+                    (base / name).mkdir()
+                    packages[name] = {"path": base / name, "modules": (), "version": "0.0.0",
+                                      "isolated_build": False}
+
+                def build(uv, name, details, destination, scratch, *, offline=True):
+                    (destination / f"{name}-0.0.0-py3-none-any.whl").write_bytes(b"")
+                    (destination / f"{name}-0.0.0.tar.gz").write_bytes(b"")
+                    if planted and name == "two":
+                        (details["path"] / "left-by-the-build.txt").write_text("stray", encoding="utf-8")
+
+                with mock.patch.multiple(distributions, PACKAGES=packages, build=build,
+                                         _inspect_wheel=mock.DEFAULT, _inspect_sdist=mock.DEFAULT,
+                                         distribution_version=lambda _name: distributions.BUILD_BACKEND_VERSION), \
+                        mock.patch.object(distributions.residue, "__defaults__", (base,)), \
+                        mock.patch.object(distributions.build_residue, "__defaults__", (base,)), \
+                        redirect_stdout(io.StringIO()):
+                    if planted:
+                        with self.assertRaises(RuntimeError) as caught:
+                            distributions.main([])
+                        self.assertIn("two/left-by-the-build.txt", str(caught.exception))
+                    else:
+                        self.assertEqual(distributions.main([]), 0)
 
 
 if __name__ == "__main__":
