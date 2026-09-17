@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import lease_containment
 import kilix_device_lease as leases
@@ -321,6 +322,34 @@ finally:
         self.assert_error("deadline", deadline.check)
         deadline.release(cleanup_complete=True)
         self.acquire().release(cleanup_complete=True)
+
+    def test_grant_revalidates_the_namespace_after_prune(self):
+        self.acquire().release(cleanup_complete=True)
+        original = leases._Registry.prune
+
+        def replace_lock(registry):
+            original(registry)
+            path = Path(self.namespace) / "accelerator.lock"
+            saved = path.with_name("saved-lock")
+            if not saved.exists():
+                path.rename(saved)
+                path.write_bytes(b"unrelated")
+                path.chmod(0o600)
+
+        lease = None
+        try:
+            with mock.patch.object(leases._Registry, "prune", replace_lock):
+                with self.assertRaises(leases.LeaseError) as caught:
+                    lease = self.acquire()
+                self.assertEqual(caught.exception.code, "unavailable")
+        finally:
+            if lease is not None:
+                try:
+                    lease.release(cleanup_complete=True)
+                except leases.LeaseError:
+                    lease.release()
+        self.assertEqual((Path(self.namespace) / "accelerator.lock").read_bytes(), b"unrelated")
+        self.assertTrue((Path(self.namespace) / "saved-lock").exists())
 
     def test_duplicate_or_unsupported_record_schema_is_refused(self):
         self.acquire().release(cleanup_complete=True)

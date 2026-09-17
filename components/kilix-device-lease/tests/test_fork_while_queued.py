@@ -67,8 +67,8 @@ if forked.get("child"):
 # module by the namespace anchor:
 #   outside-registry  no descriptor of the anchor is open in this process
 #   registry-opening  one is open and the anchor is not locked
-#   registry-locked   one is open and the anchor is locked, which for a lone
-#                     requester only happens inside its own registry pass
+# Those callbacks are never invoked while the registry lock is held. A fork
+# during a locked pass is covered by the other-thread tests.
 # The child either sleeps without returning (sleep), or returns False (continue)
 # or True (cancel) into the lease call and reports what that call did to it.
 FORKING_CALLBACK = r"""
@@ -365,6 +365,28 @@ print(json.dumps({"arm": BOX["arm"], "requester": outcome, "child_held": held,
       flush=True)
 """
 
+# A holder forks after the grant. The child tries to acknowledge cleanup of the
+# parent's lease and must be refused lost-lease; the parent still owns it.
+FORKING_ACK = r"""
+import json, os, sys, time
+import kilix_device_lease as leases
+lease = leases.acquire(job_id="holder", workload="stt-job", device="d", deadline=time.monotonic() + 30,
+                       namespace=sys.argv[1])
+pid = os.fork()
+if pid == 0:
+    try:
+        lease.release(cleanup_complete=True)
+        outcome = "released"
+    except BaseException as error:
+        outcome = error.code if isinstance(error, leases.LeaseError) else type(error).__name__
+    print(json.dumps({"role": "child", "outcome": outcome}), flush=True)
+    os._exit(0)
+os.waitpid(pid, 0)
+lease.check()
+lease.release(cleanup_complete=True)
+print(json.dumps({"role": "parent", "outcome": "released"}), flush=True)
+"""
+
 # A holder whose cancelled callback forks once while it checks its own lease. The
 # child returns False into the parent's check and reports what that check did.
 FORKING_CHECK = r"""
@@ -508,20 +530,15 @@ class ForkWhileQueuedTests(unittest.TestCase):
 
     def test_child_forked_inside_a_registry_pass_never_stalls_the_namespace(self):
         # The child keeps running without returning into the lease call. It must
-        # not keep the registry locked, whether it was forked while its parent's
-        # anchor descriptor was open or while that descriptor held the lock.
-        for site, kind in (("registry-opening", "cancelled"), ("registry-opening", "disconnected"),
-                           ("registry-locked", "cancelled"), ("registry-locked", "disconnected")):
+        # not keep the registry locked when it was forked while its parent's
+        # anchor descriptor was open. Callbacks are not invoked under the lock.
+        for site, kind in (("registry-opening", "cancelled"), ("registry-opening", "disconnected")):
             with self.subTest(site=site, kind=kind):
                 namespace, holder, requester = self.forking(site, kind, "sleep")
                 self.assertEqual(self.next_line(requester), {"role": "parent", "outcome": "queued"})
-                if site == "registry-opening":
-                    sleeper = self.forked_child([self.next_line(requester)])
-                    self.assertTrue(self.released_within_patience(holder),
-                                    "the holder's acknowledgement waited on the forked child")
-                else:
-                    holder.release(cleanup_complete=True)
-                    sleeper = self.forked_child([self.next_line(requester)])
+                sleeper = self.forked_child([self.next_line(requester)])
+                self.assertTrue(self.released_within_patience(holder),
+                                "the holder's acknowledgement waited on the forked child")
                 # The requester's own grant and acknowledgement follow.
                 self.assertEqual(self.next_line(requester), {"role": "parent", "outcome": "granted"})
                 self.acquire(namespace=namespace, job_id="successor", workload="stt-job",
@@ -529,18 +546,15 @@ class ForkWhileQueuedTests(unittest.TestCase):
                 self.assertTrue(os.path.exists(f"/proc/{sleeper}"), "the forked child must still be alive")
 
     def test_child_forked_inside_a_callback_never_acts_on_the_parents_request(self):
-        runs = [(site, mode) for site in ("outside-registry", "registry-opening", "registry-locked")
+        runs = [(site, mode) for site in ("outside-registry", "registry-opening")
                 for mode in ("continue", "cancel")]
         for index, (site, mode) in enumerate(runs):
             kind = ("cancelled", "disconnected")[index % 2]
             with self.subTest(site=site, mode=mode, kind=kind):
                 namespace, holder, requester = self.forking(site, kind, mode)
                 self.assertEqual(self.next_line(requester), {"role": "parent", "outcome": "queued"})
-                if site == "registry-locked":
-                    holder.release(cleanup_complete=True)
                 lines = [self.next_line(requester), self.next_line(requester)]
-                if site != "registry-locked":
-                    holder.release(cleanup_complete=True)
+                holder.release(cleanup_complete=True)
                 lines.append(self.next_line(requester))
                 self.forked_child(lines)
                 self.assertEqual(sorted((line["role"], line["outcome"], line.get("lost_fds")) for line in lines),
@@ -551,6 +565,16 @@ class ForkWhileQueuedTests(unittest.TestCase):
                                  (2, [], "forker", "releasing"))
                 self.acquire(namespace=namespace, job_id="successor", workload="stt-job",
                              deadline=time.monotonic() + PATIENCE_SECONDS).release(cleanup_complete=True)
+
+    def test_forked_child_cannot_acknowledge_its_parents_grant(self):
+        done = subprocess.run([sys.executable, "-c", FORKING_ACK, self.namespace], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, env=self.env, timeout=PATIENCE_SECONDS * 6)
+        self.assertEqual(done.returncode, 0, done.stderr[-4000:])
+        lines = [json.loads(line) for line in done.stdout.splitlines()]
+        self.assertEqual(sorted((line["role"], line["outcome"]) for line in lines),
+                         [("child", "lost-lease"), ("parent", "released")])
+        self.acquire(job_id="successor", workload="stt-job",
+                     deadline=time.monotonic() + PATIENCE_SECONDS).release(cleanup_complete=True)
 
     def test_child_forked_inside_a_check_callback_is_refused_lost_lease(self):
         done = subprocess.run([sys.executable, "-c", FORKING_CHECK, self.namespace], stdin=subprocess.DEVNULL,

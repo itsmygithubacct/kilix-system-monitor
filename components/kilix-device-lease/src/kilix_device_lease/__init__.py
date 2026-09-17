@@ -677,6 +677,7 @@ def acquire(*, job_id: str, workload: str, device: str, deadline: float,
     An existing incomplete or replaced namespace is never silently recreated.
     An exception raised by a cancelled, disconnected or progress callback
     reaches the caller unchanged; it is never reported as a lease code.
+    Those callbacks run only while the registry lock is not held.
     A child forked inside a callback is refused ``lost-lease`` as soon as the
     callback returns, without touching its parent's request.
     """
@@ -710,6 +711,7 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
     try:
         while True:
             _check_request(deadline, cancelled, disconnected)
+            lost = False
             with _Registry(path, deadline, cancelled, disconnected) as registry:
                 registry.prune()
                 if item is None:
@@ -729,33 +731,35 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
                     registry.save()
                 ordered = registry.order()
                 if not any(row["ticket"] == item["ticket"] for row in ordered):
-                    _check_request(deadline, cancelled, disconnected)
-                    raise LeaseError("lost-lease", "Queued shared lease ticket disappeared")
-                try:
-                    fcntl.flock(registry.resource, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    available = True
-                except BlockingIOError:
-                    available = False
-                if available:
-                    active = registry.value["active"]
-                    if active is not None and active["state"] == "held":
-                        _refuse("Previous accelerator cleanup is unproven; ownership is quarantined")
-                    if ordered[0]["ticket"] == item["ticket"]:
-                        _check_request(deadline, cancelled, disconnected)
-                        registry.validate()
-                        registry.value["active"] = {key: item[key] for key in ("ticket", "job_id", "workload", "device")}
-                        registry.value["active"]["state"] = "held"
-                        registry.value["last"] = workload
-                        registry.value["queue"] = [row for row in registry.value["queue"] if row["ticket"] != item["ticket"]]
-                        registry.save()
-                        registry.unlink_ticket(item)
-                        fd = os.dup(registry.resource)
-                        lease = Lease(fd, registry, item, deadline, cancelled, disconnected)
-                        ticket.close()
-                        ticket = item = None
-                        return lease
-                update = QueueStatus(VERSION, item["ticket"], "queued",
-                                     1 + next(i for i, row in enumerate(ordered) if row["ticket"] == item["ticket"]))
+                    lost = True
+                else:
+                    try:
+                        fcntl.flock(registry.resource, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        available = True
+                    except BlockingIOError:
+                        available = False
+                    if available:
+                        active = registry.value["active"]
+                        if active is not None and active["state"] == "held":
+                            _refuse("Previous accelerator cleanup is unproven; ownership is quarantined")
+                        if ordered[0]["ticket"] == item["ticket"]:
+                            registry.validate()
+                            registry.value["active"] = {key: item[key] for key in ("ticket", "job_id", "workload", "device")}
+                            registry.value["active"]["state"] = "held"
+                            registry.value["last"] = workload
+                            registry.value["queue"] = [row for row in registry.value["queue"] if row["ticket"] != item["ticket"]]
+                            registry.save()
+                            registry.unlink_ticket(item)
+                            fd = os.dup(registry.resource)
+                            lease = Lease(fd, registry, item, deadline, cancelled, disconnected)
+                            ticket.close()
+                            ticket = item = None
+                            return lease
+                    update = QueueStatus(VERSION, item["ticket"], "queued",
+                                         1 + next(i for i, row in enumerate(ordered) if row["ticket"] == item["ticket"]))
+            if lost:
+                _check_request(deadline, cancelled, disconnected)
+                raise LeaseError("lost-lease", "Queued shared lease ticket disappeared")
             if progress is not None and update != previous:
                 _call(progress, update)
             previous = update
