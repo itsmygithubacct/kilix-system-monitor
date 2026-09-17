@@ -39,8 +39,8 @@ starting with a letter or number. Use opaque identities; do not pass user paths,
 text, transcripts, audio, consent or prompts. The deadline is an absolute
 `time.monotonic()` value no more than one hour ahead. Cancellation/disconnect
 predicates must be nonblocking. They, and the queue progress callback, run only
-while the registry lock is not held, so a callback that blocks cannot stall
-other requesters. An exception raised by any of these callbacks reaches the
+while the registry lock is not held. A blocked head requester keeps its turn
+until its deadline. An exception raised by any of these callbacks reaches the
 caller unchanged, with the request withdrawn from the queue; it is never
 reported as a lease code. `QueueStatus` has version, opaque ticket, state and one-based
 position. Positions reflect workload rotation with FIFO order within each
@@ -97,7 +97,9 @@ single step, so it never keeps the registry locked or a dead requester's queue
 place alive, whether it was forked from a callback in the middle of a registry
 pass or by another thread at any point of one, including inside the close
 syscalls that still hold a locked anchor: tracking lasts until after those
-closes return. A child that returns from a callback into its
+closes return. The child closes a copied number only when fstat still names
+the same file the module opened, so a number reused after a close syscall is
+left alone. A child that returns from a callback into its
 parent's `acquire` or `check` call is refused `lost-lease` at once, without
 withdrawing, taking or closing anything of its parent's request. A fork made
 outside Python's fork hooks, such as a raw `fork()` in a C extension, is not

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import select
+import stat
 import subprocess
 import sys
 import tempfile
@@ -359,8 +360,121 @@ finally:
             state.write_bytes(value)
             self.assert_error("unavailable", self.acquire)
             self.assertEqual(state.read_bytes(), value)
+        # Duplicate active after a valid state: last-wins would still be a valid
+        # releasing record, so only the duplicate-field check refuses it.
+        value = json.loads(original)
+        held = dict(value["active"], state="held")
+        releasing = json.dumps(value["active"], separators=(",", ":"))
+        raw = json.dumps(value, separators=(",", ":"))[:-1] + ',"active":' + releasing + "}"
+        raw = raw.replace('"active":' + releasing, '"active":' + json.dumps(held, separators=(",", ":")), 1)
+        duplicate = raw.encode() + b"\n"
+        state.write_bytes(duplicate)
+        self.assert_error("unavailable", self.acquire)
+        self.assertEqual(state.read_bytes(), duplicate)
         state.write_bytes(original)
         self.acquire().release(cleanup_complete=True)
+
+    def test_non_sticky_world_writable_root_owned_ancestor_is_refused(self):
+        fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, fd)
+        real = os.fstat(fd)
+        fake = os.stat_result((stat.S_IFDIR | 0o777, real.st_ino, real.st_dev, 2, 0, 0, 0, 0, 0, 0))
+        with mock.patch.object(leases.os, "fstat", return_value=fake):
+            self.assert_error("unavailable", lambda: leases._directory(fd, private=False))
+
+    def test_symlinked_ancestor_is_refused(self):
+        real = Path(self.temp.name) / "real"
+        real.mkdir(mode=0o700)
+        link = Path(self.temp.name) / "link"
+        link.symlink_to(real, target_is_directory=True)
+        self.assert_error("unavailable", lambda: self.acquire(namespace=str(link / "leases")))
+
+    def test_queue_sequence_not_below_next_is_refused(self):
+        self.acquire().release(cleanup_complete=True)
+        state_path = Path(self.namespace) / "state.json"
+        value = json.loads(state_path.read_text())
+        value["queue"] = [{"ticket": "a" * 32, "job_id": "ghost", "workload": "llm-turn", "device": "d",
+                           "sequence": value["next"], "deadline": time.monotonic() + 60, "inode": [0, 0]}]
+        raw = json.dumps(value, separators=(",", ":")).encode() + b"\n"
+        next_path = Path(self.namespace) / "state.next"
+        next_path.write_bytes(raw)
+        next_path.chmod(0o600)
+        os.replace(next_path, state_path)
+        self.assert_error("unavailable", self.acquire)
+        self.assertEqual(state_path.read_bytes(), raw)
+
+    def test_active_ticket_also_queued_is_refused(self):
+        self.acquire().release(cleanup_complete=True)
+        state_path = Path(self.namespace) / "state.json"
+        value = json.loads(state_path.read_text())
+        value["queue"] = [{"ticket": value["active"]["ticket"], "job_id": "ghost", "workload": "llm-turn",
+                           "device": "d", "sequence": 0, "deadline": time.monotonic() + 60, "inode": [0, 0]}]
+        raw = json.dumps(value, separators=(",", ":")).encode() + b"\n"
+        next_path = Path(self.namespace) / "state.next"
+        next_path.write_bytes(raw)
+        next_path.chmod(0o600)
+        os.replace(next_path, state_path)
+        self.assert_error("unavailable", self.acquire)
+        self.assertEqual(state_path.read_bytes(), raw)
+
+    def test_replaced_ticket_file_is_not_unlinked(self):
+        self.acquire().release(cleanup_complete=True)
+        original = leases._Registry.unlink_ticket
+
+        def swap(registry, item):
+            path = Path(self.namespace) / (item["ticket"] + ".ticket")
+            if path.exists():
+                path.rename(path.with_name("moved-ticket"))
+                path.write_bytes(b"replacement")
+                path.chmod(0o600)
+            return original(registry, item)
+
+        with mock.patch.object(leases._Registry, "unlink_ticket", swap):
+            self.assert_error("unavailable", self.acquire)
+        self.assertTrue(any(name.endswith(".ticket") for name in os.listdir(self.namespace)))
+
+    def test_replaced_parent_is_refused_at_grant(self):
+        parent = Path(self.temp.name) / "p"
+        parent.mkdir(mode=0o700)
+        namespace = str(parent / "leases")
+        self.acquire(namespace=namespace).release(cleanup_complete=True)
+        original = leases._Registry.prune
+
+        def replace_parent(registry):
+            original(registry)
+            moved = Path(self.temp.name) / "p-old"
+            if not moved.exists():
+                parent.rename(moved)
+                parent.mkdir(mode=0o700)
+
+        lease = None
+        try:
+            with mock.patch.object(leases._Registry, "prune", replace_parent):
+                with self.assertRaises(leases.LeaseError) as caught:
+                    lease = self.acquire(namespace=namespace)
+                self.assertEqual(caught.exception.code, "unavailable")
+        finally:
+            if lease is not None:
+                try:
+                    lease.release(cleanup_complete=True)
+                except leases.LeaseError:
+                    lease.release()
+
+    def test_flooded_namespace_is_refused(self):
+        self.acquire().release(cleanup_complete=True)
+        for index in range(leases.MAX_QUEUE + 6):
+            path = Path(self.namespace) / ("junk-%02d" % index)
+            path.write_bytes(b"")
+            path.chmod(0o600)
+        self.assert_error("unavailable", self.acquire)
+
+    def test_check_after_external_close_is_lost_lease(self):
+        lease = self.acquire()
+        os.close(lease._fd)
+        try:
+            self.assert_error("lost-lease", lease.check)
+        finally:
+            lease._fd = -1
 
 
 if __name__ == "__main__":

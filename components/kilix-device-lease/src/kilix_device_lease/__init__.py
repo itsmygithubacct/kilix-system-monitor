@@ -90,8 +90,8 @@ def _call(callback: Callable[..., object], *args: object) -> object:
 # fork by another thread too, while a registry pass holds a descriptor it opened
 # for one step only, and while a close syscall still holds a locked descriptor.
 # A holder stays in this set until after its close syscalls return. The child
-# closes its copies and forgets their numbers, so nothing in it can later close
-# a number it has reused.
+# forgets a copied number only when fstat still names the same file this object
+# opened, so a number reused after a close syscall is left alone.
 _OPEN: set = set()
 
 
@@ -104,24 +104,60 @@ def _forget_in_child() -> None:
 os.register_at_fork(after_in_child=_forget_in_child)
 
 
+def _opened_identity(fd: int) -> tuple[int, int] | None:
+    """(st_dev, st_ino) of an open descriptor, or None if it is closed."""
+    if fd < 0:
+        return None
+    try:
+        info = os.fstat(fd)
+    except OSError:
+        return None
+    return (info.st_dev, info.st_ino)
+
+
+def _forget_copy(fd: int, recorded: tuple[int, int] | None) -> None:
+    """Close a forked copy only when it is still the file this object opened."""
+    if fd < 0:
+        return
+    try:
+        current = _opened_identity(fd)
+        if recorded is not None and current != recorded:
+            return
+        os.close(fd)
+    except OSError:
+        pass
+
+
 class _Descriptor:
     """A descriptor this module has open, which a forked child closes.
 
     It is tracked before a descriptor is opened into it, and a ``with`` block
-    closes it however the block ends.
+    closes it however the block ends. Assignment records (st_dev, st_ino) so a
+    child can refuse to close a number that has been reused since the close
+    syscall returned in another thread.
     """
 
     def __init__(self, fd: int = -1) -> None:
-        self.fd = fd
+        self._fd = -1
+        self._dev_ino = None
         _OPEN.add(self)
+        if fd >= 0:
+            self.fd = fd
+
+    @property
+    def fd(self) -> int:
+        return self._fd
+
+    @fd.setter
+    def fd(self, value: int) -> None:
+        self._fd = value
+        self._dev_ino = _opened_identity(value)
 
     def forget(self) -> None:
-        fd, self.fd = self.fd, -1
-        if fd >= 0:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
+        fd, recorded = self._fd, self._dev_ino
+        self._fd = -1
+        self._dev_ino = None
+        _forget_copy(fd, recorded)
 
     def close(self) -> None:
         fd = self.fd
@@ -308,6 +344,7 @@ class _Registry:
                  cancelled: Callable[[], bool] | None = None,
                  disconnected: Callable[[], bool] | None = None, *, blocking: bool = True) -> None:
         self.parent = self.anchor = self.directory = self.resource = -1
+        self._ids = {}
         _OPEN.add(self)
         self.path = path
         self.parent_path, self.leaf = os.path.split(path)
@@ -316,15 +353,16 @@ class _Registry:
                 _refuse("Invalid shared lease namespace")
             opened = _open_parent(self.parent_path)
             # Both hold the number until the registry does, so no fork misses it.
-            self.parent, opened.fd = opened.fd, -1
+            self._own("parent", opened.fd)
+            opened.fd = -1
             opened.close()
             self.parent_identity = _identity(os.fstat(self.parent))
             self.anchor_name = "." + self.leaf + ".lease-v1.anchor"
             try:
-                self.anchor = os.open(self.anchor_name, _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
-                                      0o600, dir_fd=self.parent)
+                self._own("anchor", os.open(self.anchor_name, _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
+                                            0o600, dir_fd=self.parent))
             except FileExistsError:
-                self.anchor = os.open(self.anchor_name, _FILE_FLAGS, dir_fd=self.parent)
+                self._own("anchor", os.open(self.anchor_name, _FILE_FLAGS, dir_fd=self.parent))
             while True:
                 _check_request(deadline, cancelled, disconnected)
                 try:
@@ -353,8 +391,8 @@ class _Registry:
                         or self.identity["version"] != VERSION
                         or not _inode(self.identity["directory"]) or not _inode(self.identity["resource"])):
                     _refuse("Shared lease namespace identity is invalid")
-                self.directory = os.open(self.leaf, _DIRECTORY_FLAGS, dir_fd=self.parent)
-                self.resource = os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory)
+                self._own("directory", os.open(self.leaf, _DIRECTORY_FLAGS, dir_fd=self.parent))
+                self._own("resource", os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory))
                 with _Descriptor() as state:
                     state.fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
                     self.value = _read(state.fd)
@@ -385,10 +423,10 @@ class _Registry:
             return
         self.remove_build(build)
         os.mkdir(build, mode=0o700, dir_fd=self.parent)
-        self.directory = os.open(build, _DIRECTORY_FLAGS, dir_fd=self.parent)
+        self._own("directory", os.open(build, _DIRECTORY_FLAGS, dir_fd=self.parent))
         os.fchmod(self.directory, 0o700)
-        self.resource = os.open("accelerator.lock", _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
-                                0o600, dir_fd=self.directory)
+        self._own("resource", os.open("accelerator.lock", _FILE_FLAGS | os.O_CREAT | os.O_EXCL,
+                                     0o600, dir_fd=self.directory))
         os.fchmod(self.resource, 0o600)
         self.value = _fresh()
         self.save()
@@ -397,11 +435,11 @@ class _Registry:
         self.record()
 
     def adopt(self) -> None:
-        self.directory = os.open(self.leaf, _DIRECTORY_FLAGS, dir_fd=self.parent)
+        self._own("directory", os.open(self.leaf, _DIRECTORY_FLAGS, dir_fd=self.parent))
         _directory(self.directory, private=True)
         if sorted(os.listdir(self.directory)) != _NAMESPACE_ENTRIES:
             _refuse("An existing incomplete shared lease namespace is never adopted")
-        self.resource = os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory)
+        self._own("resource", os.open("accelerator.lock", _FILE_FLAGS, dir_fd=self.directory))
         with _Descriptor() as state:
             state.fd = os.open("state.json", _FILE_FLAGS, dir_fd=self.directory)
             value = _read(state.fd)
@@ -436,6 +474,13 @@ class _Registry:
         _write(self.anchor, self.identity)
         os.fsync(self.parent)
 
+    def _own(self, name: str, fd: int) -> None:
+        setattr(self, name, fd)
+        if fd >= 0:
+            self._ids[name] = _opened_identity(fd)
+        else:
+            self._ids.pop(name, None)
+
     def __enter__(self) -> _Registry:
         return self
 
@@ -451,17 +496,15 @@ class _Registry:
             if fd >= 0:
                 os.close(fd)
             setattr(self, name, -1)
+            self._ids.pop(name, None)
         _OPEN.discard(self)
 
     def forget(self) -> None:
         for name in ("resource", "directory", "anchor", "parent"):
             fd = getattr(self, name)
+            recorded = self._ids.pop(name, None)
             setattr(self, name, -1)
-            if fd >= 0:
-                try:
-                    os.close(fd)
-                except OSError:
-                    pass
+            _forget_copy(fd, recorded)
 
     def validate(self) -> None:
         with _open_parent(self.parent_path) as parent:
@@ -658,7 +701,14 @@ class Lease:
                 os.close(fd)
 
     def __enter__(self) -> Lease:
-        self.check()
+        try:
+            self.check()
+        except BaseException:
+            try:
+                self.release()
+            except Exception:
+                pass
+            raise
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -678,6 +728,7 @@ def acquire(*, job_id: str, workload: str, device: str, deadline: float,
     An exception raised by a cancelled, disconnected or progress callback
     reaches the caller unchanged; it is never reported as a lease code.
     Those callbacks run only while the registry lock is not held.
+    A blocked head requester keeps its turn until its deadline.
     A child forked inside a callback is refused ``lost-lease`` as soon as the
     callback returns, without touching its parent's request.
     """
@@ -744,17 +795,36 @@ def _acquire(*, job_id: str, workload: str, device: str, deadline: float,
                             _refuse("Previous accelerator cleanup is unproven; ownership is quarantined")
                         if ordered[0]["ticket"] == item["ticket"]:
                             registry.validate()
-                            registry.value["active"] = {key: item[key] for key in ("ticket", "job_id", "workload", "device")}
-                            registry.value["active"]["state"] = "held"
-                            registry.value["last"] = workload
-                            registry.value["queue"] = [row for row in registry.value["queue"] if row["ticket"] != item["ticket"]]
-                            registry.save()
-                            registry.unlink_ticket(item)
                             fd = os.dup(registry.resource)
-                            lease = Lease(fd, registry, item, deadline, cancelled, disconnected)
-                            ticket.close()
-                            ticket = item = None
-                            return lease
+                            try:
+                                registry.value["active"] = {key: item[key] for key in ("ticket", "job_id", "workload", "device")}
+                                registry.value["active"]["state"] = "held"
+                                registry.value["last"] = workload
+                                registry.value["queue"] = [row for row in registry.value["queue"] if row["ticket"] != item["ticket"]]
+                                registry.save()
+                                registry.unlink_ticket(item)
+                                lease = Lease(fd, registry, item, deadline, cancelled, disconnected)
+                                ticket.close()
+                                ticket = item = None
+                                return lease
+                            except BaseException:
+                                if fd >= 0:
+                                    try:
+                                        os.close(fd)
+                                    except OSError:
+                                        pass
+                                    fd = -1
+                                try:
+                                    active = registry.value.get("active")
+                                    if (item is not None and type(active) is dict
+                                            and active.get("ticket") == item["ticket"]
+                                            and active.get("state") == "held"):
+                                        registry.value["active"] = dict(active)
+                                        registry.value["active"]["state"] = "releasing"
+                                        registry.save()
+                                except Exception:
+                                    pass
+                                raise
                     update = QueueStatus(VERSION, item["ticket"], "queued",
                                          1 + next(i for i, row in enumerate(ordered) if row["ticket"] == item["ticket"]))
             if lost:

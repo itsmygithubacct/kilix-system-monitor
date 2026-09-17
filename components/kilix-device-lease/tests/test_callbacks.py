@@ -219,3 +219,74 @@ class CallbackTests(unittest.TestCase):
         self.assertEqual(blocker_row["blocked_s"], 0.0, blocker_row)
         self.assertLess(waiter_row["elapsed_s"], 1.5, waiter_row)
         self.assertFalse(Path(marker).exists())
+
+    def test_readme_does_not_claim_a_blocking_callback_cannot_stall_others(self):
+        text = Path(__file__).resolve().parents[1].joinpath("README.md").read_text(encoding="utf-8")
+        self.assertNotIn("a callback that blocks cannot stall other requesters", text)
+        self.assertIn("A blocked head requester keeps its turn", text)
+        self.assertIn("until its deadline", text)
+
+    def test_blocked_head_keeps_its_turn_until_its_deadline(self):
+        env = lease_containment.child_env()
+        holder = self.acquire(job_id="holder", workload="llm-turn", deadline=time.monotonic() + 60)
+        children = []
+
+        def stop():
+            for child in children:
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=5)
+                for stream in (child.stdout, child.stderr):
+                    if stream and not stream.closed:
+                        stream.close()
+
+        self.addCleanup(stop)
+        head = r"""
+import json, sys, time
+import kilix_device_lease as leases
+namespace, block = sys.argv[1], float(sys.argv[2])
+def progress(status):
+    print(json.dumps({"b_queued": status.position}), flush=True)
+    time.sleep(block)
+began = time.monotonic()
+try:
+    lease = leases.acquire(job_id="b", workload="tts-utterance", device="b",
+                           deadline=time.monotonic() + 30, namespace=namespace, progress=progress)
+    lease.release(cleanup_complete=True)
+    print(json.dumps({"b": "granted", "b_elapsed": round(time.monotonic() - began, 2)}), flush=True)
+except leases.LeaseError as error:
+    print(json.dumps({"b": error.code}), flush=True)
+"""
+        later = r"""
+import json, sys, time
+import kilix_device_lease as leases
+began = time.monotonic()
+try:
+    leases.acquire(job_id="c", workload="stt-job", device="c", deadline=time.monotonic() + 1,
+                   namespace=sys.argv[1]).release(cleanup_complete=True)
+    print(json.dumps({"c": "granted", "c_elapsed": round(time.monotonic() - began, 2)}), flush=True)
+except leases.LeaseError as error:
+    print(json.dumps({"c": error.code, "c_elapsed": round(time.monotonic() - began, 2)}), flush=True)
+"""
+        try:
+            blocked = subprocess.Popen(
+                [sys.executable, "-c", head, self.namespace, "2.0"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                bufsize=1, env=env)
+            children.append(blocked)
+            self.assertEqual(json.loads(blocked.stdout.readline())["b_queued"], 1)
+            holder.release(cleanup_complete=True)
+            holder = None
+            later_done = subprocess.run(
+                [sys.executable, "-c", later, self.namespace],
+                capture_output=True, text=True, timeout=15, env=env)
+            self.assertEqual(later_done.returncode, 0, later_done.stderr)
+            later_row = json.loads(later_done.stdout.splitlines()[-1])
+            out, err = blocked.communicate(timeout=15)
+            self.assertEqual(blocked.returncode, 0, err)
+            head_row = json.loads(out.splitlines()[-1])
+        finally:
+            if holder is not None:
+                holder.release(cleanup_complete=True)
+        self.assertEqual(later_row["c"], "deadline", later_row)
+        self.assertEqual(head_row["b"], "granted", head_row)
