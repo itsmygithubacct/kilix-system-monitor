@@ -88,8 +88,10 @@ def _call(callback: Callable[..., object], *args: object) -> object:
 # the anchor, resource and ticket locks: the child would keep the registry locked,
 # or a dead requester's queue place alive, for as long as it runs. That holds for a
 # fork by another thread too, while a registry pass holds a descriptor it opened
-# for one step only. The child closes its copies and forgets their numbers, so
-# nothing in it can later close a number it has reused.
+# for one step only, and while a close syscall still holds a locked descriptor.
+# A holder stays in this set until after its close syscalls return. The child
+# closes its copies and forgets their numbers, so nothing in it can later close
+# a number it has reused.
 _OPEN: set = set()
 
 
@@ -122,10 +124,11 @@ class _Descriptor:
                 pass
 
     def close(self) -> None:
-        _OPEN.discard(self)
-        fd, self.fd = self.fd, -1
+        fd = self.fd
         if fd >= 0:
             os.close(fd)
+        self.fd = -1
+        _OPEN.discard(self)
 
     def __enter__(self) -> _Descriptor:
         return self
@@ -440,12 +443,15 @@ class _Registry:
         self.close()
 
     def close(self) -> None:
-        _OPEN.discard(self)
+        # os.close releases the GIL. Stay in _OPEN until every descriptor is
+        # closed, so a fork from another thread in that window still finds the
+        # locked anchor.
         for name in ("resource", "directory", "anchor", "parent"):
             fd = getattr(self, name)
-            setattr(self, name, -1)
             if fd >= 0:
                 os.close(fd)
+            setattr(self, name, -1)
+        _OPEN.discard(self)
 
     def forget(self) -> None:
         for name in ("resource", "directory", "anchor", "parent"):

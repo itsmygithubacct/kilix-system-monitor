@@ -248,6 +248,123 @@ os.fstat = real_fstat
 print(json.dumps({"outcome": outcome, "rows": rows}), flush=True)
 """
 
+# A queued requester whose second thread forks a sleeping child at one of two
+# moments, copied from the close-side stall probe:
+#   tracked     prune's os.listdir: the registry is open, locked, and still tracked
+#   close-side  inside _Registry.close, after it dropped itself from tracking and
+#               before it closes the still-locked anchor
+# The child lists namespace-path descriptors. The holder then releases and
+# reports how long acknowledgement took. A child that still holds the anchor
+# stalls that acknowledgement for the child's remaining lifetime.
+CLOSE_SIDE_STALL = r"""
+import json, os, signal, subprocess, sys, tempfile, threading, time, warnings
+import kilix_device_lease as leases
+warnings.simplefilter("ignore", DeprecationWarning)
+REAL_CLOSE = os.close
+HOLDER = r'''
+import sys, time
+import kilix_device_lease as leases
+lease = leases.acquire(job_id="holder", workload="llm-turn", device="h",
+                       deadline=time.monotonic() + 60, namespace=sys.argv[1])
+print("held", flush=True)
+sys.stdin.readline()
+started = time.monotonic()
+lease.release(cleanup_complete=True)
+print("ack %.2f" % (time.monotonic() - started), flush=True)
+'''
+BOX = {"arm": sys.argv[1], "armed": False, "child": None, "folder": "", "w": -1}
+
+
+def fork_sleeper():
+    def fork():
+        pid = os.fork()
+        if pid == 0:
+            held = []
+            for name in os.listdir("/proc/self/fd"):
+                try:
+                    target = os.readlink("/proc/self/fd/" + name)
+                except OSError:
+                    continue
+                if BOX["folder"] in target:
+                    held.append(target.replace(BOX["folder"], "<ns-folder>"))
+            os.write(BOX["w"], (json.dumps(sorted(held)) + "\n").encode())
+            time.sleep(6)
+            os._exit(0)
+        BOX["child"] = pid
+    BOX["armed"] = False
+    thread = threading.Thread(target=fork)
+    thread.start()
+    thread.join()
+
+
+def audit(event, args):
+    if (BOX["armed"] and BOX["arm"] == "tracked" and event == "os.listdir"
+            and threading.current_thread() is threading.main_thread()):
+        if sys._getframe(1).f_code.co_name == "prune":
+            fork_sleeper()
+
+
+sys.addaudithook(audit)
+
+
+def close(fd):
+    frame = sys._getframe(1)
+    if (BOX["armed"] and BOX["arm"] == "close-side" and frame.f_code.co_name == "close"
+            and type(frame.f_locals.get("self")).__name__ == "_Registry"):
+        fork_sleeper()
+    return REAL_CLOSE(fd)
+
+
+BOX["folder"] = tempfile.mkdtemp(prefix="closestall-" + BOX["arm"] + "-")
+ns = BOX["folder"] + "/leases"
+read_end, BOX["w"] = os.pipe()
+holder = subprocess.Popen([sys.executable, "-c", HOLDER, ns],
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+assert holder.stdout.readline().strip() == "held"
+passes = {"n": 0}
+
+
+def progress(_status):
+    if BOX["child"] is None:
+        BOX["armed"] = True
+
+
+def cancelled():
+    if BOX["child"] is not None:
+        passes["n"] += 1
+    return passes["n"] > 2
+
+
+os.close = close
+try:
+    leases.acquire(job_id="requester", workload="stt-job", device="r",
+                   deadline=time.monotonic() + 20, namespace=ns,
+                   progress=progress, cancelled=cancelled)
+    outcome = "granted?!"
+except leases.LeaseError as error:
+    outcome = error.code
+finally:
+    BOX["armed"] = False
+    os.close = REAL_CLOSE
+REAL_CLOSE(BOX["w"])
+raw = os.read(read_end, 65536).decode().splitlines()
+REAL_CLOSE(read_end)
+held = json.loads(raw[0]) if raw else None
+child_alive_at_release = BOX["child"] is not None and os.path.exists("/proc/%s" % BOX["child"])
+holder.stdin.write("\n")
+holder.stdin.flush()
+ack = holder.stdout.readline().strip()
+holder.wait(timeout=30)
+holder.stdin.close()
+holder.stdout.close()
+if BOX["child"] is not None:
+    os.kill(BOX["child"], signal.SIGKILL)
+    os.waitpid(BOX["child"], 0)
+print(json.dumps({"arm": BOX["arm"], "requester": outcome, "child_held": held,
+                  "child_alive_at_release": child_alive_at_release, "holder_ack": ack}),
+      flush=True)
+"""
+
 # A holder whose cancelled callback forks once while it checks its own lease. The
 # child returns False into the parent's check and reports what that check did.
 FORKING_CHECK = r"""
@@ -493,6 +610,23 @@ class ForkWhileQueuedTests(unittest.TestCase):
                      if row["stack"].endswith(">validate>_open_parent") and row["event"] == "open"]
         self.assertTrue(any("/" in held for held in traversal), traversal)
         self.assertFalse((Path(self.namespace) / orphan).exists())
+
+    def test_child_forked_inside_registry_close_does_not_stall_the_holder(self):
+        # A fork from another thread during _Registry.close must not copy the
+        # locked anchor. On the previous module the close-side child held it
+        # and the holder's release(cleanup_complete=True) waited out the sleep.
+        for arm in ("tracked", "close-side"):
+            with self.subTest(arm=arm):
+                done = subprocess.run([sys.executable, "-c", CLOSE_SIDE_STALL, arm],
+                                      stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                      env=self.env, timeout=PATIENCE_SECONDS * 6)
+                self.assertEqual(done.returncode, 0, done.stderr[-4000:])
+                report = json.loads(done.stdout.splitlines()[-1])
+                self.assertEqual(report["requester"], "cancelled")
+                self.assertTrue(report["child_alive_at_release"], report)
+                self.assertEqual(report["child_held"], [])
+                self.assertTrue(report["holder_ack"].startswith("ack "), report["holder_ack"])
+                self.assertLess(float(report["holder_ack"].split()[1]), 1.0, report["holder_ack"])
 
 if __name__ == "__main__":
     unittest.main()
