@@ -1,7 +1,7 @@
 [project]
 name = "plebian-model-sizer"
-version = "0.1.0"
-description = "Local development estimates for document-model training and inference"
+version = "0.2.0"
+description = "Local development resource planning for document and speech models"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

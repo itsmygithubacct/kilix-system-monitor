@@ -1,8 +1,8 @@
 # plebian-model-sizer
 
-Local resource estimates for choosing small document models. Version 0.1.0
-supports the `kilix-help-llm` candidate catalog, separate LoRA training and
-inference budgets, and both question answering and topic ranking.
+Local resource estimates for document and speech models. Version 0.2.0
+supports `kilix-help-llm` training/inference budgets and `kilix-voice` speech
+inference planning against measured reference profiles.
 
 The output includes a provisional resource shortlist, exact checkpoint/config
 identities, memory breakdowns, and the assumptions used. Quality and runtime
@@ -61,6 +61,9 @@ to the same assessed filesystem when implementing a training job.
 
 ## Accounting
 
+The following recipe applies to `help-llm`; speech uses the reference profiles
+described in the next section.
+
 The catalog supplies exact revisions, shard sizes/digests, upstream parameter
 counts, and architecture dimensions bound to each pinned config digest. Counts
 cover the entire checkpoint, including unused vision tensors, until a smaller
@@ -108,6 +111,51 @@ first is `provisional_candidate`; task evaluation must establish quality before
 selecting a model. `unknown` and `does-not-fit` rows include their failed checks.
 JSON consumers must inspect these fields: exit 0 means a report was produced,
 including when the shortlist is empty. Invalid input exits 2.
+
+## Speech models
+
+`kilix-tts --recommend` and `kilix-stt --recommend` send their current catalogs
+to this provider. The direct interface is:
+
+```sh
+plebian-model-sizer recommend voice --catalog /path/to/request.json --task both --json
+```
+
+`--catalog -` accepts bounded JSON on stdin. The request has schema
+`kilix.voice.sizing-request/v1` and a `models` list; each entry carries `id`,
+`task` (`tts` or `stt`), `backend` (`cpu` or `cuda`), `runtime_supported`
+(boolean), and `installed` (boolean or null). The response schema is
+`plebian.models.voice-sizing/v1-development`. Its `request_sha256` binds the
+complete request using the same sorted compact JSON convention as the LLM
+catalog digest. `--resources` supports explicit simulations; live collection
+uses the voice data root, honoring `KILIX_DATA_HOME`, `KILIX_STORAGE_HOME`, and
+`GPU_TERMINAL_HOME`. `--data-root` can select another filesystem explicitly.
+
+The package carries exact copies of the seven frozen `res02-measured` speech
+profile documents, each bound to its original SHA256. Tests compare every copy
+with the frozen source. eSpeak, MBROLA, Kristin Piper and the two Vosk profiles
+cover the current Voice catalog. CUDA Qwen/Whisper profiles remain available
+for consumers that support their exact IDs and backends; this does not add
+those runtimes to Voice. An unknown model, mismatched backend/architecture, or
+missing measurement cannot produce a fit. VibeVoice has no profile and remains
+unsupported in the current Voice runtime.
+
+Speech inference uses each profile's measured peak RAM/VRAM plus its declared
+safety margin (currently 20%). It reserves 256 MiB RAM and VRAM, and 128 MiB
+disk, while retaining the common cgroup, stale-snapshot and free-memory checks.
+These are estimates based on the **reference workload**, with exact local
+runtime/artifact identity unverified. Arbitrary utterances, other voices,
+concurrent models and latency/quality are not established by this comparison.
+
+`verdict` and `inference` assess runtime memory. `installation` separately
+requires known download, installed and temporary byte counts. Current profiles
+have unknown temporary space, so installation remains unknown even when
+inference fits. Installed status is displayed independently and does not waive
+the missing measurements. A runtime fit does not admit an installation.
+`shortlists` and `provisional_candidates` are keyed by speech task and ordered
+by the estimated RAM requirement, then ID. They rank resource cost, not quality.
+Unsupported consumer runtimes are excluded. Model selection, installation and
+execution remain separate; `selected_model` is null and qualification false.
 
 ## Development interface and checks
 

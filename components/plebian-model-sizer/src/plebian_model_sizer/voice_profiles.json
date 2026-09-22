@@ -1,0 +1,338 @@
+[
+  {
+    "document": {
+      "catalog_id": "kilix-voice-res02-measured",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "espeak-ng-data",
+            "content_sha256": null,
+            "license_decision_id": null,
+            "version": "1.52.0+dfsg-5"
+          },
+          "backend": "cpu",
+          "evidence": {
+            "command": "harness/res02_measure.py --arm espeak --runs 5 --warmup 1 --label measured",
+            "confidence": "measured",
+            "fixture": "res02-tts-paragraph-v1",
+            "measured_at": "2026-09-14T14:03:35.406806+00:00",
+            "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+            "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": 10.169,
+            "realtime_factor": 0.002566,
+            "tokens_per_second": null
+          },
+          "profile_id": "espeak-cpu-res02",
+          "provider": "kilix-voice",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 24152227,
+            "download_bytes": null,
+            "ram_peak_bytes": 16605184,
+            "temporary_bytes": null,
+            "vram_peak_bytes": 0
+          },
+          "task": "tts",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "espeak",
+    "source_sha256": "2224df32a03fef2d7815045325854b3bd30829aa5c0c808bd6d654e3d183292d"
+  },
+  {
+    "document": {
+      "catalog_id": "kilix-voice-res02-measured",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "vosk-model-en-us-0.22-lgraph",
+            "content_sha256": "d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334",
+            "license_decision_id": null,
+            "version": "0.22-lgraph"
+          },
+          "backend": "cpu",
+          "evidence": {
+            "command": "harness/res02_measure.py --arm lgraph-en-us --runs 5 --warmup 1 --label measured",
+            "confidence": "measured",
+            "fixture": "librispeech-dev-clean-84-121550-0014-clean",
+            "measured_at": "2026-09-14T14:02:48.955839+00:00",
+            "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+            "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": 1443.054,
+            "realtime_factor": 0.809953,
+            "tokens_per_second": null
+          },
+          "profile_id": "lgraph-en-us-cpu-res02",
+          "provider": "kilix-voice",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 214028616,
+            "download_bytes": 130557655,
+            "ram_peak_bytes": 678653952,
+            "temporary_bytes": null,
+            "vram_peak_bytes": 0
+          },
+          "task": "stt",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "lgraph-en-us",
+    "source_sha256": "7b435eaee13785a2eb342ad0e5594760c21ba63935907e61d2fc2ebd4386c98d"
+  },
+  {
+    "document": {
+      "catalog_id": "kilix-voice-res02-measured",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "mbrola-us1",
+            "content_sha256": null,
+            "license_decision_id": null,
+            "version": "0.3+repack2-5"
+          },
+          "backend": "cpu",
+          "evidence": {
+            "command": "harness/res02_measure.py --arm mbrola --runs 5 --warmup 1 --label measured",
+            "confidence": "measured",
+            "fixture": "res02-tts-paragraph-v1",
+            "measured_at": "2026-09-14T14:03:40.863911+00:00",
+            "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+            "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": 26.714,
+            "realtime_factor": 0.007669,
+            "tokens_per_second": null
+          },
+          "profile_id": "mbrola-us1-cpu-res02",
+          "provider": "kilix-voice",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 7238597,
+            "download_bytes": null,
+            "ram_peak_bytes": 20652032,
+            "temporary_bytes": null,
+            "vram_peak_bytes": 0
+          },
+          "task": "tts",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "mbrola",
+    "source_sha256": "028ae726e12dcd637d10aa78ba6a125d3aa19c8c56bd21dc9abe7da93fa7968a"
+  },
+  {
+    "document": {
+      "catalog_id": "kilix-voice-res02-measured",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "piper-en-us-kristin-medium",
+            "content_sha256": "5849957f929cbf720c258f8458692d6103fff2f0e3d3b19c8259474bb06a18d4",
+            "license_decision_id": null,
+            "version": "39ab474be869e9181350af6a65e4953eef67aaa0"
+          },
+          "backend": "cpu",
+          "evidence": {
+            "command": "harness/res02_measure.py --arm piper-en-us-kristin-medium --runs 5 --warmup 1 --label measured",
+            "confidence": "measured",
+            "fixture": "res02-tts-paragraph-v1",
+            "measured_at": "2026-09-14T14:03:50.213875+00:00",
+            "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+            "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": 260.425,
+            "realtime_factor": 0.076652,
+            "tokens_per_second": null
+          },
+          "profile_id": "piper-en-us-kristin-medium-cpu-res02",
+          "provider": "kilix-piper-tts",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 63537632,
+            "download_bytes": 63536826,
+            "ram_peak_bytes": 420659200,
+            "temporary_bytes": null,
+            "vram_peak_bytes": 0
+          },
+          "task": "tts",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "piper-en-us-kristin-medium",
+    "source_sha256": "1ecc1ebc1c9f61d241bbc2bdb57a7adda9dd02e1891aac7ddbbd30bdb8f7f632"
+  },
+  {
+    "document": {
+      "catalog_id": "kilix-voice-res02-measured",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "qwen3-tts-0.6b-base",
+            "content_sha256": "a67d49412234a0a44a62bcf7a257b8689d52720960d059c37b072181d952073b",
+            "license_decision_id": null,
+            "version": "5d83992436eae1d760afd27aff78a71d676296fc"
+          },
+          "backend": "cuda",
+          "evidence": {
+            "command": "harness/res02_measure.py --arm qwen3-tts-0.6b-base-cuda --runs 5 --warmup 1 --label measured",
+            "confidence": "measured",
+            "fixture": "res02-qwen-hello-there-v1",
+            "measured_at": "2026-09-14T14:05:11.054934+00:00",
+            "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+            "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": null,
+            "realtime_factor": 2.28123,
+            "tokens_per_second": null
+          },
+          "profile_id": "qwen3-tts-0.6b-base-cuda-res02",
+          "provider": "kilix-qwen-tts",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 2516106051,
+            "download_bytes": null,
+            "ram_peak_bytes": 4166164480,
+            "temporary_bytes": null,
+            "vram_peak_bytes": 2799697920
+          },
+          "task": "tts",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "qwen3-tts-0.6b-base-cuda",
+    "source_sha256": "4beaac1df73e1a49e7a1952426e76cea0d6056dfcc27968517103e71b7a35d36"
+  },
+  {
+    "document": {
+      "catalog_id": "kilix-voice-res02-measured",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "vosk-model-small-en-us-0.15",
+            "content_sha256": "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498",
+            "license_decision_id": null,
+            "version": "0.15"
+          },
+          "backend": "cpu",
+          "evidence": {
+            "command": "harness/res02_measure.py --arm small-en-us --runs 5 --warmup 1 --label measured",
+            "confidence": "measured",
+            "fixture": "librispeech-dev-clean-84-121550-0014-clean",
+            "measured_at": "2026-09-14T14:02:25.166105+00:00",
+            "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+            "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": 283.058,
+            "realtime_factor": 0.180475,
+            "tokens_per_second": null
+          },
+          "profile_id": "small-en-us-cpu-res02",
+          "provider": "kilix-voice",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 70910667,
+            "download_bytes": 41205931,
+            "ram_peak_bytes": 266670080,
+            "temporary_bytes": null,
+            "vram_peak_bytes": 0
+          },
+          "task": "stt",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "small-en-us",
+    "source_sha256": "cad2a651a5587ed91d46ef3eb9cbf9fd41f54d8587bf71bdc188fef3d2cbe21f"
+  },
+  {
+    "document": {
+      "catalog_id": "kilix-voice-res02-measured",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "openai-whisper-tiny",
+            "content_sha256": "65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9",
+            "license_decision_id": null,
+            "version": "tiny"
+          },
+          "backend": "cuda",
+          "evidence": {
+            "command": "harness/res02_measure.py --arm whisper-tiny-cuda --runs 5 --warmup 1 --label measured",
+            "confidence": "measured",
+            "fixture": "librispeech-dev-clean-84-121550-0014-clean",
+            "measured_at": "2026-09-14T14:10:16.245974+00:00",
+            "raw_evidence_sha256": "4ff037142014df81287230ab7e052f8a9e4d65281bb401e0b23ef386107953df",
+            "reference_hardware_class": "h2-nvidia-rtx3070-8gib",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": null,
+            "realtime_factor": 0.096184,
+            "tokens_per_second": null
+          },
+          "profile_id": "openai-whisper-tiny-cuda-res02",
+          "provider": "openai-whisper",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 75572083,
+            "download_bytes": null,
+            "ram_peak_bytes": 1026093056,
+            "temporary_bytes": null,
+            "vram_peak_bytes": 463470592
+          },
+          "task": "stt",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "whisper-tiny-cuda",
+    "source_sha256": "d0193d38310921bf403f92ff8b63c64d9879adfe034366800f10c39c069cac35"
+  }
+]

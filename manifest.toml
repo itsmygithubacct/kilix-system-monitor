@@ -29,5 +29,5 @@ interface = "contracts/kilix.device-lease-v1.interface.json"
 [[components]]
 id = "plebian-model-sizer"
 path = "components/plebian-model-sizer"
-version = "0.1.0"
+version = "0.2.0"
 status = "development-estimates-unqualified"

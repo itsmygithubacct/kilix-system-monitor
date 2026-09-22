@@ -75,8 +75,10 @@ PACKAGES = {
             "plebian_model_sizer/cli.py",
             "plebian_model_sizer/estimate.py",
             "plebian_model_sizer/resources.py",
+            "plebian_model_sizer/voice.py",
+            "plebian_model_sizer/voice_profiles.json",
         ),
-        "version": "0.1.0",
+        "version": "0.2.0",
         "isolated_build": False,
     },
 }

@@ -6,6 +6,7 @@ identifiers, cgroup paths, filesystem paths or command output are returned.
 from __future__ import annotations
 
 import os
+import platform
 import re
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -117,6 +118,13 @@ def data_root() -> Path:
     return Path(os.environ.get("GPU_TERMINAL_HOME", "~/.local/gpu_terminal")).expanduser() / "kilix-help-llm"
 
 
+def voice_data_root() -> Path:
+    shared = Path(os.environ.get("GPU_TERMINAL_HOME") or "~/.local/gpu_terminal").expanduser()
+    storage = Path(os.environ.get("KILIX_STORAGE_HOME") or str(shared / "kilix")).expanduser()
+    data = Path(os.environ.get("KILIX_DATA_HOME") or str(storage / "data")).expanduser()
+    return data / "voice"
+
+
 def collect(storage: Path | None = None) -> dict:
     memory, _ = probe._memory()
     available, total = memory["available_bytes"], memory["total_bytes"]
@@ -126,6 +134,7 @@ def collect(storage: Path | None = None) -> dict:
     elif limit is not None:
         available = min(available, limit)
     return {"schema": SCHEMA, "observed_at": datetime.now(timezone.utc).isoformat(),
+            "architecture": platform.machine(),
             "ram_total_bytes": total, "ram_available_bytes": available,
             "cgroup_status": status, "gpus": gpu_headroom(),
             "disk_available_bytes": storage_headroom(storage or data_root())}
@@ -164,8 +173,11 @@ def validate(snapshot: dict) -> None:
         raise ValueError("snapshot requires a timestamp with timezone") from None
 
 
-def budgets(snapshot: dict, backend: str, gpu: int | None = None, *, now: datetime | None = None) -> dict:
+def budgets(snapshot: dict, backend: str, gpu: int | None = None, *, now: datetime | None = None,
+            ram_reserve: int = 2 * GIB, vram_reserve: int = GIB // 2, disk_reserve: int = GIB) -> dict:
     validate(snapshot)
+    if any(type(value) is not int or value < 0 for value in (ram_reserve, vram_reserve, disk_reserve)):
+        raise ValueError("resource reserves must be nonnegative integers")
     now = now or datetime.now(timezone.utc)
     age = (now - datetime.fromisoformat(snapshot["observed_at"])).total_seconds()
     fresh = 0 <= age <= 300
@@ -182,6 +194,6 @@ def budgets(snapshot: dict, backend: str, gpu: int | None = None, *, now: dateti
     disk = snapshot.get("disk_available_bytes")
     return {"backend": backend, "gpu_index": device["index"] if device and backend == "cuda" else None,
             "fresh": fresh,
-            "ram_bytes": max(0, ram - 2 * GIB) if fresh and ram is not None else None,
-            "vram_bytes": max(0, vram - GIB // 2) if fresh and vram is not None else None,
-            "disk_bytes": max(0, disk - GIB) if fresh and disk is not None else None}
+            "ram_bytes": max(0, ram - ram_reserve) if fresh and ram is not None else None,
+            "vram_bytes": max(0, vram - vram_reserve) if fresh and vram is not None else None,
+            "disk_bytes": max(0, disk - disk_reserve) if fresh and disk is not None else None}

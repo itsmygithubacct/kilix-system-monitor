@@ -12,8 +12,8 @@ that couple them:
   or capacity.
 - components/plebian-hardware implements the currently open, unprivileged D2
   observation surface.
-- components/plebian-model-sizer provides development estimates and a provisional
-  help-model shortlist for LoRA training and inference. Its additive commands
+- components/plebian-model-sizer provides development estimates and provisional
+  document/speech model shortlists for training and inference. Its additive commands
   do not change the frozen release contracts or close F100 U5 **0/1**.
 
 The parent is public at `refs/heads/work/0.2.1-f106`. Its telemetry history was

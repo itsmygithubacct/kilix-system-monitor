@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import json
 from pathlib import Path
 import sys
 
 from .estimate import Workload, recommend
-from .resources import collect
+from .resources import collect, voice_data_root
+from .voice import recommend_voice, format_report
 
 
 def read_json(path: Path) -> dict:
@@ -18,7 +20,7 @@ def read_json(path: Path) -> dict:
                 raise ValueError("duplicate JSON key")
             result[key] = value
         return result
-    with path.open("rb") as handle:
+    with (nullcontext(sys.stdin.buffer) if str(path) == "-" else path.open("rb")) as handle:
         raw = handle.read(4 * 1024 * 1024 + 1)
     if len(raw) > 4 * 1024 * 1024:
         raise ValueError("JSON input exceeds 4 MiB")
@@ -35,12 +37,16 @@ def parser() -> argparse.ArgumentParser:
     snapshot = commands.add_parser("snapshot", help="observe current resources without saving them")
     snapshot.add_argument("--json", action="store_true")
     snapshot.add_argument("--data-root", type=Path, help="filesystem to assess (default: help module user data)")
-    command = commands.add_parser("recommend", help="produce a provisional resource shortlist")
-    command.add_argument("domain", choices=["help-llm"])
-    command.add_argument("--catalog", required=True, type=Path)
-    command.add_argument("--resources", type=Path, help="explicit snapshot for simulation; at most five minutes old")
-    command.add_argument("--data-root", type=Path)
-    command.add_argument("--json", action="store_true")
+    recommendations = commands.add_parser("recommend", help="produce a provisional resource shortlist")
+    domains = recommendations.add_subparsers(dest="domain", required=True)
+    command = domains.add_parser("help-llm", help="document-model training and inference")
+    voice = domains.add_parser("voice", help="speech inference from measured reference profiles")
+    for subcommand in (command, voice):
+        subcommand.add_argument("--catalog", required=True, type=Path, help="catalog/request JSON file, or - for stdin")
+        subcommand.add_argument("--resources", type=Path, help="explicit snapshot for simulation; at most five minutes old")
+        subcommand.add_argument("--data-root", type=Path)
+        subcommand.add_argument("--json", action="store_true")
+    voice.add_argument("--task", choices=["tts", "stt", "both"], default="both")
     command.add_argument("--task", choices=["answer", "rank", "both"], default="both")
     command.add_argument("--phase", choices=["train", "infer", "both"], default="both")
     command.add_argument("--context", type=int, default=2048)
@@ -65,11 +71,17 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if args.resources and args.data_root:
                 raise ValueError("--resources and --data-root are mutually exclusive")
-            values = {key: getattr(args, key) for key in Workload.__dataclass_fields__}
-            workload = Workload(**values)
             catalog = read_json(args.catalog)
-            resources = read_json(args.resources) if args.resources else collect(args.data_root)
-            result = recommend(catalog, resources, workload, source="provided" if args.resources else "live")
+            data_path = args.data_root
+            if args.domain == "voice" and data_path is None:
+                data_path = voice_data_root()
+            resources = read_json(args.resources) if args.resources else collect(data_path)
+            source = "provided" if args.resources else "live"
+            if args.domain == "voice":
+                result = recommend_voice(catalog, resources, task=args.task, source=source)
+            else:
+                values = {key: getattr(args, key) for key in Workload.__dataclass_fields__}
+                result = recommend(catalog, resources, Workload(**values), source=source)
     except (OSError, ValueError, RecursionError) as error:
         # Do not echo local paths or arbitrary input content in diagnostics.
         message = str(error) if isinstance(error, ValueError) and not isinstance(error, UnicodeError) else type(error).__name__
@@ -80,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.json or args.command == "snapshot":
         print(json.dumps(result, indent=2, allow_nan=False))
+    elif args.domain == "voice":
+        print(format_report(result))
     else:
         print("Development resource estimates; task quality and runtime support are unverified.")
         print(f"{'Candidate':24} {'Verdict':18} {'Train RAM/VRAM GiB':22} Infer RAM/VRAM GiB")

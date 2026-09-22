@@ -7,6 +7,7 @@ import json
 import re
 
 from .resources import GIB, budgets, validate
+from . import __version__
 
 RECIPE = "lora-all-linear-checkpointed-v1"
 
@@ -262,7 +263,7 @@ def recommend(catalog: dict, snapshot: dict, workload: Workload, *, source: str 
     fitting = [row for row in rows if row["verdict"] == "estimated-fit"]
     fitting.sort(key=lambda row: (max(p["parameters"] for p in row["profiles"]), row["id"]))
     digest = hashlib.sha256(json.dumps(catalog, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
-    return {"schema": "plebian.models.llm-sizing/v1-development", "provider_version": "0.1.0",
+    return {"schema": "plebian.models.llm-sizing/v1-development", "provider_version": __version__,
             "catalog_sha256": digest, "resource_source": source,
             "observed_at": snapshot["observed_at"], "workload": asdict(workload),
             "budgets": phase_budgets, "candidates": rows,
