@@ -88,6 +88,13 @@ class SizingTests(unittest.TestCase):
         self.assertGreater(unchecked["vram_peak_bytes"], baseline["vram_peak_bytes"])
         self.assertEqual(baseline["breakdown_bytes"]["adapter_and_optimizer"], baseline["trainable_parameters"] * 16)
 
+    def test_fp32_answer_runtime_accounts_for_weights_and_cache(self):
+        half = estimate(checkpoint(), "answer", "infer", "cpu", Workload(quant="f16"))
+        full = estimate(checkpoint(), "answer", "infer", "cpu", Workload(quant="f32"))
+        self.assertEqual(full["breakdown_bytes"]["weights"], checkpoint()["sizing"]["parameters"] * 4)
+        self.assertEqual(full["breakdown_bytes"]["kv_cache"], 2 * half["breakdown_bytes"]["kv_cache"])
+        self.assertGreater(full["ram_peak_bytes"], half["ram_peak_bytes"])
+
     def test_hybrid_counts_only_full_attention_kv_and_adds_recurrence(self):
         ck = checkpoint()
         ck["sizing"].update(model_type="qwen3_5_text", layer_types=["linear_attention"] * 18 + ["full_attention"] * 6,

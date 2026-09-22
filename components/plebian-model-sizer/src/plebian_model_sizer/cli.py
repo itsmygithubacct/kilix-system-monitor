@@ -53,7 +53,7 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--batch", type=int, default=1)
     command.add_argument("--lora-rank", type=int, default=16)
     command.add_argument("--topics", type=int, default=128)
-    command.add_argument("--quant", choices=["q4", "q8", "f16"], default="q4")
+    command.add_argument("--quant", choices=["q4", "q8", "f16", "f32"], default="q4")
     command.add_argument("--train-backend", choices=["auto", "cpu", "cuda"], default="auto")
     command.add_argument("--infer-backend", choices=["auto", "cpu", "cuda"], default="auto")
     command.add_argument("--gpu", type=int)

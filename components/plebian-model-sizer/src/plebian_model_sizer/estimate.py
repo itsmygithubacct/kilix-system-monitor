@@ -37,7 +37,7 @@ class Workload:
     def __post_init__(self):
         for name, choices in {"task": {"answer", "rank", "both"},
                               "phase": {"train", "infer", "both"},
-                              "quant": {"q4", "q8", "f16"},
+                              "quant": {"q4", "q8", "f16", "f32"},
                               "train_backend": {"auto", "cpu", "cuda"},
                               "infer_backend": {"auto", "cpu", "cuda"}}.items():
             if getattr(self, name) not in choices:
@@ -180,9 +180,9 @@ def estimate(checkpoint: dict, task: str, phase: str, backend: str, workload: Wo
             # Planning budgets, not GGUF file sizes. Keep both embedding/output
             # matrices at FP16 even if a future artifact quantizes/ties them.
             embeddings = min(g["parameters"], 2 * h * g["vocab_size"])
-            numerator, denominator = {"q4": (3, 4), "q8": (9, 8), "f16": (2, 1)}[workload.quant]
-            parts["weights"] = embeddings * 2 + ((g["parameters"] - embeddings) * numerator + denominator - 1) // denominator
-            kv_width = 2
+            numerator, denominator = {"q4": (3, 4), "q8": (9, 8), "f16": (2, 1), "f32": (4, 1)}[workload.quant]
+            kv_width = 4 if workload.quant == "f32" else 2
+            parts["weights"] = embeddings * kv_width + ((g["parameters"] - embeddings) * numerator + denominator - 1) // denominator
         else:
             parts["weights"] = max(g["parameters"] * width, checkpoint["checkpoint_bytes"])
             kv_width = width

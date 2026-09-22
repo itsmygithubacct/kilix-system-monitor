@@ -1,5 +1,9 @@
 # plebian-model-sizer
 
+Answer inference supports `--quant f32` for an unquantized FP32 CPU runtime,
+including four-byte model weights and KV cache. Quantized defaults describe a
+different runtime and must not be used to admit FP32 help-model experiments.
+
 Local resource estimates for document and speech models. Version 0.2.0
 supports `kilix-help-llm` training/inference budgets and `kilix-voice` speech
 inference planning against measured reference profiles.
@@ -38,7 +42,7 @@ Useful options:
 | `--context N`, `--batch N` | Total sequence tokens (including generation space), concurrent sequences/microbatch |
 | `--lora-rank N` | All-linear adapter rank; default 16 |
 | `--topics N` | Dense scoring-head outputs; default 128 |
-| `--quant q4/q8/f16` | Answer inference weight estimate; default q4; training/ranking weights are unchanged |
+| `--quant q4/q8/f16/f32` | Answer inference weight estimate; default q4; training/ranking weights are unchanged |
 | `--co-resident` | Sum both inference workloads instead of sequential maximum |
 | `--no-checkpointing` | Retain training activations across all layers |
 | `--document-bytes N` | Reserve four times this amount for documents/preprocessing |
