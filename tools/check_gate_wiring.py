@@ -29,7 +29,7 @@ GATES = {
     "profile measurement suite": ("python -m unittest discover -s tools/measure/tests",),
     "capacity evidence validator": ("python tools/validate_h2_capacity_evidence.py",),
     "launcher consumer readiness": ("python tools/check_trusted_launcher_consumer_readiness.py --self-test",),
-    "model sizer block": ("python tools/check_model_sizer_block.py",),
+    "model sizer suite": ("cd components/plebian-model-sizer", "unittest discover -s tests"),
     "gate wiring check": ("python tools/check_gate_wiring.py",),
 }
 

@@ -12,9 +12,9 @@ that couple them:
   or capacity.
 - components/plebian-hardware implements the currently open, unprivileged D2
   observation surface.
-- components/plebian-model-sizer is an intentionally non-executable skeleton.
-  The F100-C0 capacity fixtures are frozen **3/3**; fit, recommendation and
-  planning code remains blocked until F100 passes U5 **0/1**.
+- components/plebian-model-sizer provides development estimates and a provisional
+  help-model shortlist for LoRA training and inference. Its additive commands
+  do not change the frozen release contracts or close F100 U5 **0/1**.
 
 The parent is public at `refs/heads/work/0.2.1-f106`. Its telemetry history was
 imported from the exact public source with a prefix-only rewrite; MIGRATION.md
@@ -114,7 +114,7 @@ fixtures, the imported telemetry suite, the shared accelerator lease's
 real-process controls and interface-document binding, the hardware unit boundaries, live
 inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
 consumer readiness, the unqualified provider-profile intake validator, and
-the intentional model-sizer block. Hardware checks use no network and no
+the model-sizer resource accounting and refusal cases. Hardware checks use no network and no
 privilege. `tools/measure/profile.py` records **1/1** provider-owned evidence
 record against **3/3** exact input-byte identities, promotes **0/9** provider
 measurement fields, and keeps qualification acceptance at **0/1**. Provider
@@ -142,9 +142,17 @@ cache, symlink-refusing descriptor-relative replacement, redacted snapshot diff
 and cache-aware doctor primitives. Not implemented or claimed: the shared
 trusted-launcher profiles, P1 freeze, privileged DMI, SMART/NVMe,
 device-bound ROCm/Vulkan/OpenCL success, D3 telemetry vNext,
-D4 sizing, D5 consumers, or D6 hardware qualification. H3 physical inventory,
+release-qualified D4 sizing, D5 consumers, or D6 hardware qualification. H3 physical inventory,
 H3 model performance, and AMD/ROCm fit/performance/support remain unqualified
 for 0.2.1.
+
+The [model-sizer component](components/plebian-model-sizer/README.md) adds
+read-only development commands for current RAM, cgroup-v2 headroom, CUDA free
+memory and model-storage capacity. It estimates the independent training and
+inference costs of exact help-model candidates, including sequential or combined
+inference residency. A resource shortlist is not model quality, runtime support,
+an execution reservation, or release qualification. Its tests replace the old
+absence-of-implementation gate; the frozen schemas and their fixtures are unchanged.
 
 F120-C11 also remains open: frozen F120 v1 does not prove that a staged model
 payload conveys its required licence/notice bytes or represent different

@@ -1,8 +1,8 @@
 UV ?= uv
 
-.PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked prefetch
+.PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-check prefetch
 
-check: contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-blocked
+check: contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-check
 	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_gate_wiring.py
 
 contracts-check:
@@ -32,8 +32,8 @@ capacity-evidence-check:
 launcher-consumer-readiness:
 	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_trusted_launcher_consumer_readiness.py --self-test
 
-model-sizer-blocked:
-	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_model_sizer_block.py
+model-sizer-check:
+	cd components/plebian-model-sizer && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tests -v
 
 # Online, once: fill the uv cache that make check reads offline. uv verifies every
 # download against uv.lock, and the root's build backend against tools/build-constraints.txt.
@@ -42,4 +42,5 @@ prefetch:
 	cd components/kilix-telemetry && $(UV) sync --locked
 	cd components/kilix-device-lease && $(UV) sync --locked
 	cd components/plebian-hardware && $(UV) sync --locked
+	cd components/plebian-model-sizer && $(UV) sync --locked
 	UV=$(UV) PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked python tools/check_distributions.py --prefetch

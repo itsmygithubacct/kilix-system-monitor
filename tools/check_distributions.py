@@ -68,6 +68,17 @@ PACKAGES = {
         "version": "1.0.0",
         "isolated_build": False,
     },
+    "plebian-model-sizer": {
+        "path": ROOT / "components" / "plebian-model-sizer",
+        "modules": (
+            "plebian_model_sizer/__init__.py",
+            "plebian_model_sizer/cli.py",
+            "plebian_model_sizer/estimate.py",
+            "plebian_model_sizer/resources.py",
+        ),
+        "version": "0.1.0",
+        "isolated_build": False,
+    },
 }
 BUILD_BACKEND_VERSION = "0.12.5"
 BUILD_CONSTRAINTS = ROOT / "tools" / "build-constraints.txt"

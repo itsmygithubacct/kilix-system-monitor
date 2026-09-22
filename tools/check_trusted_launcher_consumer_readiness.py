@@ -439,8 +439,20 @@ def _validate_consumer_paths(consumers: list[dict[str, Any]]) -> None:
         raise ReadinessFailure("TD-HW: staged plebian-hardware entry point changed")
 
     model_sizer = ROOT / "components" / "plebian-model-sizer"
-    if (model_sizer / "pyproject.toml").exists():
-        raise ReadinessFailure("TD-HW: blocked model-sizer gained a project entry point")
+    with (model_sizer / "pyproject.toml").open("rb") as handle:
+        sizer_project = tomllib.load(handle)
+    if sizer_project.get("project", {}).get("scripts") != {
+        "plebian-model-sizer": "plebian_model_sizer.cli:main"
+    }:
+        raise ReadinessFailure("development model-sizer entry point changed")
+    with (ROOT / "manifest.toml").open("rb") as handle:
+        manifest = tomllib.load(handle)
+    sizers = [component for component in manifest.get("components", [])
+              if component.get("id") == "plebian-model-sizer"]
+    if len(sizers) != 1 or sizers[0].get("status") != "development-estimates-unqualified":
+        raise ReadinessFailure("development model-sizer was promoted to release authority")
+    # Its additive development CLI is not a TD-HW staged child. The exact
+    # profile/child populations below still refuse adding any D4 authority.
 
 
 def _validate_invocations() -> None:
