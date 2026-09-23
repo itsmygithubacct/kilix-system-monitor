@@ -27,7 +27,7 @@ class SpeechSizingTests(unittest.TestCase):
     def test_packaged_profiles_equal_frozen_source_documents(self):
         root = Path(__file__).resolve().parents[3] / "contracts/v1/profiles/res02-measured"
         profiles = load_profiles()
-        self.assertEqual(len(profiles), 12)
+        self.assertEqual(len(profiles), 13)
         for name, entry in profiles.items():
             directory = root.parent / "tts-auditions-20260923" if name.startswith("audition-") else root
             raw = (directory / (name + ".json")).read_bytes()
@@ -41,7 +41,11 @@ class SpeechSizingTests(unittest.TestCase):
              "installed": True, "runtime_supported": True} for name in names]}
         self.resources.update(ram_total_bytes=32 * GIB, ram_available_bytes=20 * GIB)
         result = recommend_voice(doc, self.resources, task="tts")
-        self.assertEqual(len(result["shortlists"]["tts"]), 5)
+        self.assertEqual(len(result["shortlists"]["tts"]), 6)
+        pocket = next(row for row in result["candidates"]
+                      if row["id"] == "audition-pocket-tts-english-python-alba-cpu")
+        self.assertEqual(pocket["inference"]["resources"]["ram"]["required_bytes"],
+                         (1026977792 * 12000 + 9999) // 10000)
         self.resources["ram_available_bytes"] = 800 * MIB
         result = recommend_voice(doc, self.resources, task="tts")
         self.assertEqual(set(result["shortlists"]["tts"]),

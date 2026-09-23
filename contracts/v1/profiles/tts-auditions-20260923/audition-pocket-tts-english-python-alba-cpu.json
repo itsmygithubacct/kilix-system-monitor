@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-tts-auditions-2026-09-23",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "pocket-tts-english-python-alba",
+        "content_sha256": null,
+        "license_decision_id": null,
+        "version": "local-installed-2026-09-23"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": "bench/pocket_reply.py --runs 6 --threads 4 --model-dir ADMITTED_MODEL --output RESEARCH_RESULT",
+        "confidence": "measured",
+        "fixture": "pocket-short-sentence-first-plus-five-warm-v1",
+        "measured_at": "2026-09-23T16:58:58.531709+00:00",
+        "raw_evidence_sha256": "136f70c41defdf6df1dd45ede770cb7a6549439a9b96cd862fb2d049863d7f1d",
+        "reference_hardware_class": "x86_64-i7-9850h-cpu",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": 3272.4070989061147,
+        "realtime_factor": 1.1690883202060254,
+        "tokens_per_second": null
+      },
+      "profile_id": "audition-pocket-tts-english-python-alba-cpu-20260923",
+      "provider": "kilix-voice-interactive",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 225282959,
+        "download_bytes": null,
+        "ram_peak_bytes": 1026977792,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 0
+      },
+      "task": "tts",
+      "version": "0.2.2-development"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}
