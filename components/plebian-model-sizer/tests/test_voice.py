@@ -27,11 +27,27 @@ class SpeechSizingTests(unittest.TestCase):
     def test_packaged_profiles_equal_frozen_source_documents(self):
         root = Path(__file__).resolve().parents[3] / "contracts/v1/profiles/res02-measured"
         profiles = load_profiles()
-        self.assertEqual(len(profiles), 7)
+        self.assertEqual(len(profiles), 12)
         for name, entry in profiles.items():
-            raw = (root / (name + ".json")).read_bytes()
+            directory = root.parent / "tts-auditions-20260923" if name.startswith("audition-") else root
+            raw = (directory / (name + ".json")).read_bytes()
             self.assertEqual(entry["source_sha256"], hashlib.sha256(raw).hexdigest())
             self.assertEqual(entry["document"], json.loads(raw))
+
+    def test_audition_cpu_and_cuda_reference_profiles(self):
+        names = [name for name in load_profiles() if name.startswith("audition-")]
+        doc = {"schema": REQUEST_SCHEMA, "models": [
+            {"id": name, "task": "tts", "backend": "cuda" if name.endswith("-cuda") else "cpu",
+             "installed": True, "runtime_supported": True} for name in names]}
+        self.resources.update(ram_total_bytes=32 * GIB, ram_available_bytes=20 * GIB)
+        result = recommend_voice(doc, self.resources, task="tts")
+        self.assertEqual(len(result["shortlists"]["tts"]), 5)
+        self.resources["ram_available_bytes"] = 800 * MIB
+        result = recommend_voice(doc, self.resources, task="tts")
+        self.assertEqual(set(result["shortlists"]["tts"]),
+                         {"audition-espeak", "audition-mbrola", "audition-piper-en-us-kristin-medium"})
+        self.resources["ram_available_bytes"] = None
+        self.assertEqual(recommend_voice(doc, self.resources, task="tts")["shortlists"]["tts"], [])
 
     def test_known_memory_fits_do_not_promote_unknown_install_costs(self):
         result = recommend_voice(request(), self.resources)

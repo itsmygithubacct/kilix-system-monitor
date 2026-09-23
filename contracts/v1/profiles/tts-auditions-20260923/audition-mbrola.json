@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-tts-auditions-2026-09-23",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "mbrola",
+        "content_sha256": null,
+        "license_decision_id": null,
+        "version": "local-installed-2026-09-23"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": "bench.py --kind mbrola --id mbrola",
+        "confidence": "measured",
+        "fixture": "tts-short-sentence-first-plus-three-warm-v1",
+        "measured_at": "2026-09-23T01:47:59.296612+00:00",
+        "raw_evidence_sha256": "d0ab3a81e188ff18bc9b0e615f35f268f27002189a547f592cc639ad55452d2d",
+        "reference_hardware_class": "x86_64-i7-9850h-cpu",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": 38.917481899261475,
+        "realtime_factor": 0.003628227197240589,
+        "tokens_per_second": null
+      },
+      "profile_id": "audition-mbrola-20260923",
+      "provider": "kilix-voice-interactive",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": null,
+        "download_bytes": null,
+        "ram_peak_bytes": 48005120,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 0
+      },
+      "task": "tts",
+      "version": "0.2.2-development"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

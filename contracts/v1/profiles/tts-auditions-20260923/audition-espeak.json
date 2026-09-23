@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-tts-auditions-2026-09-23",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "espeak",
+        "content_sha256": null,
+        "license_decision_id": null,
+        "version": "local-installed-2026-09-23"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": "bench.py --kind espeak --id espeak",
+        "confidence": "measured",
+        "fixture": "tts-short-sentence-first-plus-three-warm-v1",
+        "measured_at": "2026-09-23T01:47:59.071056+00:00",
+        "raw_evidence_sha256": "52b2bf827403a4e6980ba96bb400a8ff109eb73fa0e05dacc559ac367a655f2f",
+        "reference_hardware_class": "x86_64-i7-9850h-cpu",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": 50.351246958598495,
+        "realtime_factor": 0.003114202555732273,
+        "tokens_per_second": null
+      },
+      "profile_id": "audition-espeak-20260923",
+      "provider": "kilix-voice-interactive",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": null,
+        "download_bytes": null,
+        "ram_peak_bytes": 52748288,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 0
+      },
+      "task": "tts",
+      "version": "0.2.2-development"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}

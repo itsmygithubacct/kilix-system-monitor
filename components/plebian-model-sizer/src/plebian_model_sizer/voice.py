@@ -20,6 +20,7 @@ def digest(value: dict) -> str:
 
 def load_profiles() -> dict:
     entries = json.loads(files(__package__).joinpath("voice_profiles.json").read_bytes())
+    entries += json.loads(files(__package__).joinpath("tts_audition_profiles.json").read_bytes())
     result = {}
     for entry in entries:
         document = entry["document"]
@@ -30,6 +31,8 @@ def load_profiles() -> dict:
                 or document["qualification_eligible"] is not False
                 or len(document["profiles"]) != 1):
             raise ValueError("invalid bundled speech profile")
+        if entry["id"] in result:
+            raise ValueError("duplicate bundled speech profile")
         result[entry["id"]] = entry
     return result
 

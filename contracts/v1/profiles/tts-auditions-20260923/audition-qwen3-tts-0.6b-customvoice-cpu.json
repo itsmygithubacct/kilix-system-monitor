@@ -1,0 +1,44 @@
+{
+  "catalog_id": "kilix-tts-auditions-2026-09-23",
+  "fixture_kind": "provider-catalog",
+  "profiles": [
+    {
+      "artifact": {
+        "artifact_id": "qwen3-tts-0.6b-customvoice",
+        "content_sha256": null,
+        "license_decision_id": null,
+        "version": "local-installed-2026-09-23"
+      },
+      "backend": "cpu",
+      "evidence": {
+        "command": "bench.py --kind qwen --id qwen3-tts-0.6b-customvoice-cpu",
+        "confidence": "measured",
+        "fixture": "tts-short-sentence-first-plus-three-warm-v1",
+        "measured_at": "2026-09-23T01:51:15.896442+00:00",
+        "raw_evidence_sha256": "113787754d3d662426532bd633db1019cd2feeea82ea1839a0ebca4d65906e91",
+        "reference_hardware_class": "x86_64-i7-9850h-cpu",
+        "safety_margin_basis_points": 2000
+      },
+      "performance": {
+        "first_result_ms": 83027.80818915926,
+        "realtime_factor": 9.66134375000062,
+        "tokens_per_second": null
+      },
+      "profile_id": "audition-qwen3-tts-0.6b-customvoice-cpu-20260923",
+      "provider": "kilix-voice-interactive",
+      "qualification": "unqualified",
+      "requirements": {
+        "architecture": "x86_64",
+        "disk_installed_bytes": 2498388392,
+        "download_bytes": null,
+        "ram_peak_bytes": 5943091200,
+        "temporary_bytes": null,
+        "vram_peak_bytes": 0
+      },
+      "task": "tts",
+      "version": "0.2.2-development"
+    }
+  ],
+  "qualification_eligible": false,
+  "schema": "plebian.models.profiles/v1"
+}
