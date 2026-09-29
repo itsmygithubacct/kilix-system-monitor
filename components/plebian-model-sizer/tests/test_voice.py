@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from plebian_model_sizer.resources import GIB, MIB, voice_data_root
-from plebian_model_sizer.voice import load_profiles, recommend_voice, REQUEST_SCHEMA, validate_request
+from plebian_model_sizer.voice import load_profiles, observe_cpu, recommend_voice, REQUEST_SCHEMA, validate_request
 from test_sizing import snapshot
 
 
@@ -27,9 +27,10 @@ class SpeechSizingTests(unittest.TestCase):
     def test_packaged_profiles_equal_frozen_source_documents(self):
         root = Path(__file__).resolve().parents[3] / "contracts/v1/profiles/res02-measured"
         profiles = load_profiles()
-        self.assertEqual(len(profiles), 13)
+        self.assertEqual(len(profiles), 14)
         for name, entry in profiles.items():
             directory = root.parent / "tts-auditions-20260923" if name.startswith("audition-") else root
+            directory = root.parent / "stt-bench-20260929" if name == "whisper-small-en" else directory
             raw = (directory / (name + ".json")).read_bytes()
             self.assertEqual(entry["source_sha256"], hashlib.sha256(raw).hexdigest())
             self.assertEqual(entry["document"], json.loads(raw))
@@ -116,6 +117,47 @@ class SpeechSizingTests(unittest.TestCase):
     def test_voice_storage_environment_precedence(self):
         with patch.dict("os.environ", {"GPU_TERMINAL_HOME": "/data", "KILIX_STORAGE_HOME": "/storage", "KILIX_DATA_HOME": "/datasets"}):
             self.assertEqual(voice_data_root(), Path("/datasets/voice"))
+
+    def test_whisper_small_is_the_default_only_on_capable_hardware(self):
+        doc = request()
+        doc["models"].insert(3, {"id": "whisper-small-en", "task": "stt", "backend": "cpu",
+                                 "installed": False, "runtime_supported": True})
+        capable = {"logical_cpus": 12, "flags": ["avx", "avx2", "sse4_2"]}
+        self.resources.update(ram_total_bytes=62 * GIB, ram_available_bytes=40 * GIB)
+        result = recommend_voice(doc, self.resources, cpu=capable)
+        self.assertEqual(result["defaults"], {"stt": "whisper-small-en"})
+        self.assertIsNone(result["selected_model"])
+        whisper = next(row for row in result["candidates"] if row["id"] == "whisper-small-en")
+        self.assertEqual(whisper["inference"]["resources"]["ram"]["required_bytes"],
+                         (1649479680 * 12000 + 9999) // 10000)
+        self.assertEqual(whisper["installation"]["profile_bytes"]["download_bytes"], 486100128)
+        # Each unmet class requirement falls back to the small Vosk model.
+        for cpu, total in (({"logical_cpus": 4, "flags": ["avx2"]}, 62 * GIB),
+                           ({"logical_cpus": 12, "flags": ["avx", "sse4_2"]}, 62 * GIB),
+                           ({"logical_cpus": 12, "flags": ["avx2"]}, 8 * GIB),
+                           (None, 62 * GIB),
+                           ({"logical_cpus": None, "flags": None}, 62 * GIB)):
+            with self.subTest(cpu=cpu, total=total):
+                self.resources.update(ram_total_bytes=total, ram_available_bytes=min(total, 6 * GIB))
+                self.assertEqual(recommend_voice(doc, self.resources, cpu=cpu)["defaults"], {"stt": "small-en-us"})
+        # Capable hardware whose free memory cannot hold Whisper falls back too.
+        self.resources.update(ram_total_bytes=62 * GIB, ram_available_bytes=1 * GIB)
+        self.assertEqual(recommend_voice(doc, self.resources, cpu=capable)["defaults"], {"stt": "small-en-us"})
+        # A runtime that cannot run Whisper never makes it the default.
+        self.resources["ram_available_bytes"] = 40 * GIB
+        doc["models"][3]["runtime_supported"] = False
+        self.assertEqual(recommend_voice(doc, self.resources, cpu=capable)["defaults"], {"stt": "small-en-us"})
+        self.assertEqual(recommend_voice(doc, self.resources, task="tts", cpu=capable)["defaults"], {})
+        doc["models"] = [row for row in doc["models"] if row["task"] == "tts" or row["id"] == "lgraph-en-us"]
+        self.assertEqual(recommend_voice(doc, self.resources, cpu=capable)["defaults"], {"stt": None})
+
+    def test_observe_cpu_reads_flags(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            info = Path(tmp) / "cpuinfo"
+            info.write_text("processor\t: 0\nflags\t\t: fpu avx2 sse2 avx2\nprocessor\t: 1\nflags\t\t: ignored\n")
+            self.assertEqual(observe_cpu(str(info))["flags"], ["avx2", "fpu", "sse2"])
+            self.assertIsNone(observe_cpu(str(Path(tmp) / "missing"))["flags"])
 
 
 if __name__ == "__main__":

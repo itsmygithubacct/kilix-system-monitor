@@ -9,7 +9,7 @@ import sys
 
 from .estimate import Workload, recommend
 from .resources import collect, voice_data_root
-from .voice import recommend_voice, format_report
+from .voice import observe_cpu, recommend_voice, format_report
 
 
 def read_json(path: Path) -> dict:
@@ -78,7 +78,8 @@ def main(argv: list[str] | None = None) -> int:
             resources = read_json(args.resources) if args.resources else collect(data_path)
             source = "provided" if args.resources else "live"
             if args.domain == "voice":
-                result = recommend_voice(catalog, resources, task=args.task, source=source)
+                result = recommend_voice(catalog, resources, task=args.task, source=source,
+                                         cpu=observe_cpu() if source == "live" else None)
             else:
                 values = {key: getattr(args, key) for key in Workload.__dataclass_fields__}
                 result = recommend(catalog, resources, Workload(**values), source=source)
