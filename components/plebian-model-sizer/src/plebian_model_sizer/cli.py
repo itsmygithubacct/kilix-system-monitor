@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 from .estimate import Workload, recommend
+from .chat import recommend_chat
 from .resources import collect, voice_data_root
 from .voice import recommend_voice, format_report
 
@@ -40,8 +41,9 @@ def parser() -> argparse.ArgumentParser:
     recommendations = commands.add_parser("recommend", help="produce a provisional resource shortlist")
     domains = recommendations.add_subparsers(dest="domain", required=True)
     command = domains.add_parser("help-llm", help="document-model training and inference")
+    chat = domains.add_parser("avatar-chat", help="installed CPU chat model resource shortlist")
     voice = domains.add_parser("voice", help="speech inference from measured reference profiles")
-    for subcommand in (command, voice):
+    for subcommand in (command, chat, voice):
         subcommand.add_argument("--catalog", required=True, type=Path, help="catalog/request JSON file, or - for stdin")
         subcommand.add_argument("--resources", type=Path, help="explicit snapshot for simulation; at most five minutes old")
         subcommand.add_argument("--data-root", type=Path)
@@ -79,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
             source = "provided" if args.resources else "live"
             if args.domain == "voice":
                 result = recommend_voice(catalog, resources, task=args.task, source=source)
+            elif args.domain == "avatar-chat":
+                result = recommend_chat(catalog, resources, source=source)
             else:
                 values = {key: getattr(args, key) for key in Workload.__dataclass_fields__}
                 result = recommend(catalog, resources, Workload(**values), source=source)
@@ -94,6 +98,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2, allow_nan=False))
     elif args.domain == "voice":
         print(format_report(result))
+    elif args.domain == "avatar-chat":
+        for row in result["candidates"]:
+            print(f"{row['id']}: {row['verdict']}; RAM {row['required_ram_bytes'] / 1024**3:.2f} GiB; installed {row['installed']}")
+        print("Provisional resource candidate: " + (result["provisional_candidate"] or "none"))
+        print("Avatar selection still requires an installed, evaluated model.")
     else:
         print("Development resource estimates; task quality and runtime support are unverified.")
         print(f"{'Candidate':24} {'Verdict':18} {'Train RAM/VRAM GiB':22} Infer RAM/VRAM GiB")

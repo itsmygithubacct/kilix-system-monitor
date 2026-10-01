@@ -6,7 +6,8 @@ different runtime and must not be used to admit FP32 help-model experiments.
 
 Local resource estimates for document and speech models. Version 0.2.0
 supports `kilix-help-llm` training/inference budgets and `kilix-voice` speech
-inference planning against measured reference profiles.
+inference planning against measured reference profiles. The development CLI
+also offers an avatar-chat CPU shortlist for already installed Ollama models.
 
 The output includes a provisional resource shortlist, exact checkpoint/config
 identities, memory breakdowns, and the assumptions used. Quality and runtime
@@ -115,6 +116,23 @@ first is `provisional_candidate`; task evaluation must establish quality before
 selecting a model. `unknown` and `does-not-fit` rows include their failed checks.
 JSON consumers must inspect these fields: exit 0 means a report was produced,
 including when the shortlist is empty. Invalid input exits 2.
+
+## Avatar chat (development)
+
+`recommend avatar-chat --catalog - --json` accepts a bounded
+`kilix.avatar-chat.sizing-request/v1` object on stdin. Each model supplies an
+Ollama model ID, its observed model byte size, parameter count, and caller-known
+installed/runtime-supported flags. The report is bound to the complete request
+by SHA-256. The fixed target is one CPU chat session at 8192 context tokens.
+
+The provisional shortlist uses a deliberately conservative estimate of twice
+the model bytes plus 512 MiB, while reserving two GiB and at least half of the
+remaining live RAM for the desktop, speech, other applications and unmodelled
+spikes. It orders fitting installed candidates by parameter count, largest
+first. This is not a measured peak, latency or quality result; the caller must
+verify model identity, evaluate answers and perform the actual selection.
+`selected_model` remains null. No download, installation or runtime mutation
+occurs. Stale or unknown RAM observations produce no shortlist.
 
 ## Speech models
 
