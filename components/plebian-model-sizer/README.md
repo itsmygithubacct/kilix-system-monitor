@@ -179,6 +179,18 @@ by the estimated RAM requirement, then ID. They rank resource cost, not quality.
 Unsupported consumer runtimes are excluded. Model selection, installation and
 execution remain separate; `selected_model` is null and qualification false.
 
+`defaults.stt` (present when the STT task is assessed) names the dictation
+model to offer by default: the first of `whisper-small-en`, `small-en-us` that
+is on the STT shortlist and whose hardware class the host meets. Whisper
+small.en requires x86-64 with AVX2, at least 8 logical CPUs and at least 16 GiB
+of total RAM; below that a sentence takes several seconds, too slow for
+dictation. The CPU class comes from `/proc/cpuinfo` and is echoed as `cpu`; it
+is observed only for live snapshots, so a provided snapshot never qualifies
+Whisper. The default is an offer for the desktop to present, never a selection
+or an installation; `selected_model` stays null. Its profile was measured on
+the owner's dictation (25 prompts, i7-9850H, 4 threads) in
+`contracts/v1/profiles/stt-bench-20260929/`.
+
 ## Development interface and checks
 
 `snapshot` emits `plebian.models.resources/v1-development` and `recommend

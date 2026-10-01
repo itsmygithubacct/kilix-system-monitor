@@ -1,0 +1,50 @@
+[
+  {
+    "document": {
+      "catalog_id": "kilix-stt-bench-2026-09-29",
+      "fixture_kind": "provider-catalog",
+      "profiles": [
+        {
+          "artifact": {
+            "artifact_id": "faster-whisper-small-en",
+            "content_sha256": "62b2a45b05ee59acb4a5341b33ee35e041395d378d418a18acfe4c9e768ee37a",
+            "license_decision_id": null,
+            "version": "d1d751a5f8271d482d14ca55d9e2deeebbae577f"
+          },
+          "backend": "cpu",
+          "evidence": {
+            "command": "bench.py (worker.py whisper MODEL --threads 4 --passes 2)",
+            "confidence": "measured",
+            "fixture": "owner-dictation-25-prompts-126s-v1",
+            "measured_at": "2026-09-29T12:35:10+00:00",
+            "raw_evidence_sha256": "0ad90358a4b4498a90c0a8d5a62b41aa5a2fdbd224a4ad0334535c237c5999b6",
+            "reference_hardware_class": "x86_64-i7-9850h-cpu",
+            "safety_margin_basis_points": 2000
+          },
+          "performance": {
+            "first_result_ms": 1390.7028322599765,
+            "realtime_factor": 0.27659096556740387,
+            "tokens_per_second": null
+          },
+          "profile_id": "whisper-small-en-cpu-20260929",
+          "provider": "kilix-whisper-stt",
+          "qualification": "unqualified",
+          "requirements": {
+            "architecture": "x86_64",
+            "disk_installed_bytes": 486100128,
+            "download_bytes": 486100128,
+            "ram_peak_bytes": 1649479680,
+            "temporary_bytes": 0,
+            "vram_peak_bytes": 0
+          },
+          "task": "stt",
+          "version": "0.2.2"
+        }
+      ],
+      "qualification_eligible": false,
+      "schema": "plebian.models.profiles/v1"
+    },
+    "id": "whisper-small-en",
+    "source_sha256": "e1452a12fd7a34bd62f8b9ad4cf3e89612a81fd1eefcc410c6b75a4e4a3c373f"
+  }
+]

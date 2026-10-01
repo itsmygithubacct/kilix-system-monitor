@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 from importlib.resources import files
 import json
+import os
 import re
 
 from . import __version__
@@ -21,6 +22,7 @@ def digest(value: dict) -> str:
 def load_profiles() -> dict:
     entries = json.loads(files(__package__).joinpath("voice_profiles.json").read_bytes())
     entries += json.loads(files(__package__).joinpath("tts_audition_profiles.json").read_bytes())
+    entries += json.loads(files(__package__).joinpath("stt_bench_profiles.json").read_bytes())
     result = {}
     for entry in entries:
         document = entry["document"]
@@ -35,6 +37,46 @@ def load_profiles() -> dict:
             raise ValueError("duplicate bundled speech profile")
         result[entry["id"]] = entry
     return result
+
+
+# Default dictation model, most preferred first. A model is the default only
+# when it fits and the host meets its hardware class; the sizer still never
+# selects or installs anything (selected_model stays null).
+STT_DEFAULTS = (
+    # Whisper small.en decodes a whole utterance at once; below this class a
+    # sentence takes several seconds, which is too slow for dictation.
+    ("whisper-small-en", {"architecture": "x86_64", "cpu_flags": ("avx2",),
+                          "logical_cpus": 8, "ram_total_bytes": 16 * 1024 ** 3}),
+    ("small-en-us", {}),
+)
+
+
+def observe_cpu(cpuinfo: str = "/proc/cpuinfo") -> dict:
+    """Logical CPU count and instruction-set flags; unknown values are None."""
+    flags = None
+    try:
+        with open(cpuinfo, encoding="ascii", errors="replace") as handle:
+            for line in handle:
+                key, _, value = line.partition(":")
+                if key.strip() == "flags":
+                    flags = sorted(set(value.split()))
+                    break
+    except OSError:
+        pass
+    return {"logical_cpus": os.cpu_count(), "flags": flags}
+
+
+def hardware_class_met(rule: dict, snapshot: dict, cpu: dict | None) -> bool:
+    cpu = cpu or {}
+    if "architecture" in rule and snapshot.get("architecture") != rule["architecture"]:
+        return False
+    if "ram_total_bytes" in rule and (snapshot.get("ram_total_bytes") or 0) < rule["ram_total_bytes"]:
+        return False
+    if "logical_cpus" in rule and (cpu.get("logical_cpus") or 0) < rule["logical_cpus"]:
+        return False
+    if "cpu_flags" in rule and not set(rule["cpu_flags"]) <= set(cpu.get("flags") or ()):
+        return False
+    return True
 
 
 def validate_request(request: dict) -> None:
@@ -58,7 +100,8 @@ def validate_request(request: dict) -> None:
             raise ValueError("voice availability must be boolean or unknown")
 
 
-def recommend_voice(request: dict, snapshot: dict, *, task: str = "both", source: str = "live") -> dict:
+def recommend_voice(request: dict, snapshot: dict, *, task: str = "both", source: str = "live",
+                    cpu: dict | None = None) -> dict:
     validate_request(request)
     validate(snapshot)
     if task not in ("tts", "stt", "both"):
@@ -118,10 +161,15 @@ def recommend_voice(request: dict, snapshot: dict, *, task: str = "both", source
         fitting = [row for row in rows if row["task"] == name and row["verdict"] == "estimated-fit"]
         fitting.sort(key=lambda row: (row["inference"]["resources"]["ram"]["required_bytes"], row["id"]))
         shortlists[name] = [row["id"] for row in fitting]
+    defaults = {}
+    if "stt" in tasks:
+        defaults["stt"] = next((name for name, rule in STT_DEFAULTS
+                                if name in shortlists["stt"] and hardware_class_met(rule, snapshot, cpu)), None)
     return {"schema": RESPONSE_SCHEMA, "provider_version": __version__, "request_sha256": digest(request),
             "task": task, "resource_source": source, "observed_at": snapshot["observed_at"],
             "candidates": rows, "shortlists": shortlists,
             "provisional_candidates": {key: ids[0] if ids else None for key, ids in shortlists.items()},
+            "defaults": defaults, "cpu": cpu,
             "selected_model": None, "qualification_eligible": False,
             "notes": ["Reference-workload memory plus the profile margin; exact local runtime/artifact identity is unverified.",
                       "Each candidate is assessed independently. This is not a co-resident TTS/STT budget.",
@@ -139,5 +187,7 @@ def format_report(report: dict) -> str:
         lines.append(f"{row['id']:30} {row['verdict']:18} {ram:>8}  {installed:9} {row['installation']['verdict']}")
     for task, candidate in report["provisional_candidates"].items():
         lines.append(f"Provisional {task} candidate: {candidate or 'none'}")
+    for task, model in report.get("defaults", {}).items():
+        lines.append(f"Default {task} model for this hardware: {model or 'none'}")
     lines.append("Resource planning only; model choice and installation remain explicit.")
     return "\n".join(lines)
