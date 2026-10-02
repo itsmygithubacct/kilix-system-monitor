@@ -1,0 +1,23 @@
+{
+  "architecture": "x86_64",
+  "backend": "cpu",
+  "evidence": {
+    "artifact_sha256": {
+      "yolox_nano.onnx": "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d"
+    },
+    "confidence": "reference-process-observation",
+    "harness_sha256": "9639d77b1973d42dbd19fa73b230c752ee76c026cbc960ae92449e6de76af1cf",
+    "method": "Linux per-process ru_maxrss; not aggregate memory or frozen performance",
+    "raw_evidence_sha256": "7aaf5fc81f7b42f4e1c6792e4367f89052fa390b5c655291b1e5b4404cd56c8a",
+    "runtime_source_commit": "029ea556082d07772848f82c1f5bed9e3ffff4b4"
+  },
+  "id": "yolox_nano",
+  "manifest_digest": "75acdeb64914ba7265965360ed859f2d1c2a94cd00ae5e2e8ef1b8812525bf73",
+  "qualification_eligible": false,
+  "ram_peak_bytes": 94818304,
+  "safety_margin_basis_points": 2500,
+  "schema": "plebian.models.runtime-profile/v1-development",
+  "task": "vision",
+  "vram_peak_bytes": 0,
+  "workload": "320x320 BGRA, original catalog ONNX graph, 2 threads, 20 deterministic frames"
+}

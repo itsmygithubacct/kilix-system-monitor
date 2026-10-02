@@ -1,0 +1,26 @@
+{
+  "architecture": "x86_64",
+  "backend": "cpu",
+  "evidence": {
+    "artifact_sha256": {
+      "decoder_frame_op17.onnx": "e0c2bc574a50e910f7d0daa7c1598c237cec0a4365eb229ecfbaf9c06dd397b1",
+      "encoder_frame_op17.onnx": "2fad822a1ab98a9b7d83340121c7cd7c8bb0a6cb2457b70aa458e6ef9022e27a",
+      "manifest.json": "2ce5225dc458dd30fe91854755dcfb360300fe3cee7d0c5682e7be684eae7a87",
+      "rvq-codebooks.f32le": "4304cd8e3c8a9b59733224311aa405e0b04bd9b6c6737c32d8f682f9b255594f"
+    },
+    "confidence": "reference-process-observation",
+    "harness_sha256": "9639d77b1973d42dbd19fa73b230c752ee76c026cbc960ae92449e6de76af1cf",
+    "method": "Linux per-process ru_maxrss; not aggregate memory or frozen performance",
+    "raw_evidence_sha256": "4fcb3a2d84d232ce2e1d843bc5790ec91cff37a79c55a86ad160646b4d0d0bf8",
+    "runtime_source_commit": "e0655faaf57cc5f14baf449afe937fcbe87d204b"
+  },
+  "id": "encodec-48khz-frame",
+  "manifest_digest": "094aaa19f86e7959bf0adc403dfef275458a2a9a0c9a401d031dd62c0f9b5b59",
+  "qualification_eligible": false,
+  "ram_peak_bytes": 341098496,
+  "safety_margin_basis_points": 2500,
+  "schema": "plebian.models.runtime-profile/v1-development",
+  "task": "audio",
+  "vram_peak_bytes": 0,
+  "workload": "native CPU 2 threads, 24 kb/s, 10 stereo 48 kHz frames"
+}

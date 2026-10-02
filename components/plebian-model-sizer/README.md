@@ -189,7 +189,33 @@ is observed only for live snapshots, so a provided snapshot never qualifies
 Whisper. The default is an offer for the desktop to present, never a selection
 or an installation; `selected_model` stays null. Its profile was measured on
 the owner's dictation (25 prompts, i7-9850H, 4 threads) in
-`contracts/v1/profiles/stt-bench-20260929/`.
+`profiles/stt-bench-20260929/`. Development audition and dictation profiles
+live outside the checksum-frozen `contracts/v1` bundle; their exact source
+document hashes are checked independently.
+
+## Vision, audio and image reference estimates
+
+`recommend runtime --catalog - --json` accepts a
+`kilix.runtime.sizing-request/v1` object. Each model carries `id`, `task`
+(`vision`, `audio` or `image`) and its exact Content `manifest_digest`.
+The response is `plebian.models.runtime-sizing/v1-development`, bound to the
+complete request by `request_sha256`. A changed catalog manifest, different
+architecture, unknown headroom or missing measurement cannot confirm a fit.
+
+The YOLOX and EnCodec profiles use separate reference-process RSS observations,
+a 25% margin and a 256 MiB RAM reserve. They cover two CPU inference threads
+and the documented reference workload, not arbitrary inputs or simultaneous
+models. Vision prefers S, then Tiny, then Nano among fitting candidates; audio
+prefers 24 kHz. The documents in
+`profiles/rc5-runtime-reference/` record the exact runtime source,
+artifact and private raw evidence digests. These development observations are
+not accepted aggregate-memory measurements or release qualification.
+
+Bonsai ternary reports the pinned upstream card's approximate 1024×1024 VRAM
+peak with the same margin. Local RAM is unknown, so the image page never
+receives a confirmed default from this profile. The binary alternate remains
+unknown. Memory estimates do not establish CUDA kernel compatibility, speed,
+installed runtime identity or installation readiness.
 
 ## Development interface and checks
 

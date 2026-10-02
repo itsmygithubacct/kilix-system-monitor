@@ -1,0 +1,31 @@
+{
+  "architecture": "x86_64",
+  "backend": "cpu",
+  "evidence": {
+    "artifact_sha256": {
+      "decoder_stateful_op17.onnx": "90cb4f26f05df4ad3537cfc2ab495fa4e6f9074b5f32303cdf4b89dbe548722a",
+      "encoder_stateful_op17.onnx": "19c6f57f0d39d2660942c958a797133fa0eedd4120cccf5daecc5726427b8269",
+      "manifest.json": "bb615145d4a33dbfa4c07c1ff3283303b461af1c6fc83dbf50b59bcf6489f81b",
+      "rvq_decode_12kbps_op17.onnx": "5e0db494814c629326fe4d82ce799915fdb45f841d3d99526bf126468849b9b2",
+      "rvq_decode_3kbps_op17.onnx": "776ab1b5a3990fb9b96a6eca43010356b08dc6f9c423af32601fb67f84a8a322",
+      "rvq_decode_6kbps_op17.onnx": "505b6e01f75e6e966499be4e20a42d282959320653978a951cf44094aae7b2c0",
+      "rvq_encode_12kbps_op17.onnx": "cf1c80c23955255809ba90f564e6f30e0911851a298c4622f180585b4a4c5a37",
+      "rvq_encode_3kbps_op17.onnx": "a873a3264a134df0d61557e0e751ac3702f15ad5a8fb97d53712ab746d533ad0",
+      "rvq_encode_6kbps_op17.onnx": "938a494c90dcb185a01e18457a9c08d6b6184785e8099baca29499cf5dbd020c"
+    },
+    "confidence": "reference-process-observation",
+    "harness_sha256": "9639d77b1973d42dbd19fa73b230c752ee76c026cbc960ae92449e6de76af1cf",
+    "method": "Linux per-process ru_maxrss; not aggregate memory or frozen performance",
+    "raw_evidence_sha256": "5224857e6d1836878b075c8de2ac85ed601fa7dfb28ec45715beb6d5334cda60",
+    "runtime_source_commit": "e0655faaf57cc5f14baf449afe937fcbe87d204b"
+  },
+  "id": "encodec-24khz-stateful",
+  "manifest_digest": "6dafa4dc6ae0fe92580ab2e3ee21941c09fee8c39d07c54089ac32234c095b32",
+  "qualification_eligible": false,
+  "ram_peak_bytes": 288305152,
+  "safety_margin_basis_points": 2500,
+  "schema": "plebian.models.runtime-profile/v1-development",
+  "task": "audio",
+  "vram_peak_bytes": 0,
+  "workload": "native CPU 2 threads, 6 kb/s C5-R4, 100 mono packets"
+}

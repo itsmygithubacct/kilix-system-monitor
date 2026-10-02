@@ -1,0 +1,19 @@
+{
+  "architecture": "x86_64",
+  "backend": "cuda",
+  "evidence": {
+    "confidence": "upstream-reported",
+    "method": "upstream model card reports approximately 6.8 GiB peak HBM; not a local measurement",
+    "raw_evidence_sha256": "742dbbcc4ecb979e11f8377bdadfb312a2b1437c5b4950d7a3fb155f71c82f20",
+    "source_url": "https://huggingface.co/prism-ml/bonsai-image-ternary-4B-gemlite-2bit/resolve/bf047aa80569f193d2c4960033af6ba2629988fa/README.md"
+  },
+  "id": "bonsai-image-4b-ternary-gemlite",
+  "manifest_digest": "6426900bf975e56520dc2fa4a970ca9f07aa84208712a7ac636b75c7442c8526",
+  "qualification_eligible": false,
+  "ram_peak_bytes": null,
+  "safety_margin_basis_points": 2500,
+  "schema": "plebian.models.runtime-profile/v1-development",
+  "task": "image",
+  "vram_peak_bytes": 7301444404,
+  "workload": "upstream reported RTX 3080 peak at 1024x1024, 4 steps; local RAM and kernel support unmeasured"
+}

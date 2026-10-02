@@ -26,11 +26,12 @@ class SpeechSizingTests(unittest.TestCase):
 
     def test_packaged_profiles_equal_frozen_source_documents(self):
         root = Path(__file__).resolve().parents[3] / "contracts/v1/profiles/res02-measured"
+        development = Path(__file__).resolve().parents[1] / "profiles"
         profiles = load_profiles()
         self.assertEqual(len(profiles), 14)
         for name, entry in profiles.items():
-            directory = root.parent / "tts-auditions-20260923" if name.startswith("audition-") else root
-            directory = root.parent / "stt-bench-20260929" if name == "whisper-small-en" else directory
+            directory = development / "tts-auditions-20260923" if name.startswith("audition-") else root
+            directory = development / "stt-bench-20260929" if name == "whisper-small-en" else directory
             raw = (directory / (name + ".json")).read_bytes()
             self.assertEqual(entry["source_sha256"], hashlib.sha256(raw).hexdigest())
             self.assertEqual(entry["document"], json.loads(raw))
