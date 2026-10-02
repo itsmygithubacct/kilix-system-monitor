@@ -61,6 +61,23 @@ class ResourceTests(unittest.TestCase):
             self.assertEqual(resources.storage_headroom(absent), expected.f_bavail * expected.f_frsize)
             self.assertFalse(absent.parent.exists())
 
+    def test_cuda_mapping_requires_single_unmasked_physical_zero(self):
+        device={'index':0,'backend':'cuda','total_bytes':6*resources.GIB,
+                'available_bytes':6*resources.GIB}
+        cases=[([device],{},'single-unmasked-gpu-zero'),
+               ([device],{'CUDA_VISIBLE_DEVICES':'0'},'unverified'),
+               ([device],{'CUDA_DEVICE_ORDER':'PCI_BUS_ID'},'unverified'),
+               ([device,{**device,'index':1}],{},'unverified'),
+               ([{**device,'index':1}],{},'unverified')]
+        for devices,environment,expected in cases:
+            with self.subTest(environment=environment,devices=devices), \
+                 patch.dict(os.environ,environment,clear=True), \
+                 patch.object(resources.probe,'_memory',return_value=({'total_bytes':1000,'available_bytes':900},'unknown')), \
+                 patch.object(resources,'cgroup_headroom',return_value=(None,'unlimited')), \
+                 patch.object(resources,'gpu_headroom',return_value=devices), \
+                 patch.object(resources,'storage_headroom',return_value=1000):
+                self.assertEqual(resources.collect()['cuda_device_mapping'],expected)
+
     def test_json_duplicate_nan_and_size_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "input.json"

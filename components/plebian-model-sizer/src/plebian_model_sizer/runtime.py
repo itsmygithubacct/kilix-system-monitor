@@ -37,6 +37,14 @@ def load_profiles():
         margin = document["safety_margin_basis_points"]
         if type(margin) is not int or not 0 <= margin <= 10000:
             raise ValueError("invalid runtime profile margin")
+        device = document.get('device_scope')
+        if device is not None:
+            if (document['backend'] != 'cuda' or not isinstance(device,dict)
+                    or set(device) != {'gpu_index','minimum_total_bytes','maximum_total_bytes'}
+                    or any(type(value) is not int for value in device.values())
+                    or not 0 <= device['gpu_index'] <= 255
+                    or not 0 < device['minimum_total_bytes'] <= device['maximum_total_bytes'] <= 2**63):
+                raise ValueError('invalid runtime profile device scope')
         result[document["id"]] = entry
     return result
 
@@ -78,8 +86,18 @@ def recommend_runtime(request, snapshot, *, source="live"):
                 row["reasons"].append("profile-catalog-mismatch")
             elif snapshot.get("architecture") != profile["architecture"]:
                 row["reasons"].append("profile-architecture-mismatch-or-unknown")
+            elif profile.get('device_scope') and (
+                    snapshot.get('cuda_device_mapping')!='single-unmasked-gpu-zero'
+                    or len(snapshot['gpus'])!=1):
+                row['reasons'].append('profile-device-mapping-unverified')
+            elif profile.get('device_scope') and not any(
+                    gpu['index']==profile['device_scope']['gpu_index']
+                    and profile['device_scope']['minimum_total_bytes'] <= gpu['total_bytes']
+                    <= profile['device_scope']['maximum_total_bytes'] for gpu in snapshot['gpus']):
+                row['reasons'].append('profile-device-mode-unmeasured')
             else:
-                budget = budgets(snapshot, profile["backend"], ram_reserve=256 * MIB,
+                budget = budgets(snapshot, profile["backend"],
+                                 gpu=profile.get('device_scope',{}).get('gpu_index'),ram_reserve=256 * MIB,
                                  vram_reserve=256 * MIB, disk_reserve=128 * MIB)
                 margin = 10000 + profile["safety_margin_basis_points"]
                 needs = {}
@@ -112,4 +130,4 @@ def recommend_runtime(request, snapshot, *, source="live"):
             "selected_model": None, "qualification_eligible": False,
             "notes": ["Reference workload memory with margin; local runtime identity and speed remain unverified.",
                       "Candidates are assessed separately; this is not a co-resident memory budget.",
-                      "Reported upstream image VRAM is not a local RAM measurement or a confirmed runtime fit."]}
+                      "Image profiles cover the measured GPU-0 CPU-VAE 512x512 preview only; other modes and resolutions remain unmeasured."]}

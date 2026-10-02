@@ -149,23 +149,80 @@
     "document": {
       "architecture": "x86_64",
       "backend": "cuda",
+      "device_scope": {
+        "gpu_index": 0,
+        "maximum_total_bytes": 8589934591,
+        "minimum_total_bytes": 1
+      },
       "evidence": {
-        "confidence": "upstream-reported",
-        "method": "upstream model card reports approximately 6.8 GiB peak HBM; not a local measurement",
-        "raw_evidence_sha256": "742dbbcc4ecb979e11f8377bdadfb312a2b1437c5b4950d7a3fb155f71c82f20",
-        "source_url": "https://huggingface.co/prism-ml/bonsai-image-ternary-4B-gemlite-2bit/resolve/bf047aa80569f193d2c4960033af6ba2629988fa/README.md"
+        "confidence": "development-observation",
+        "cuda_observer_sha256": "a2d383b012b8e93b3bc65907a0c4b9392a8f1e86255a029973a188b7742224a6",
+        "device_mapping_observation_sha256": "750b24b67d9b5c9229e0a165fab0f0c5c352cb1e3123cbd088961cc4071af708",
+        "hardware": "Quadro RTX3000, compute capability7.5,6144MiB VRAM",
+        "memory_observation_sha256": "3aecf9df35c25326ca6651dc0813d3f99329e0f006bb1fd4cf7d19b6b5d7112f",
+        "method": "Process RSS plus full declared sealed-model population as conservative RAM bound; max of Torch allocator peaks and0.4s sampled own-PID CUDA peak. Sampling is a lower bound; margin25percent plus256MiB planner reserve. Not aggregate-cgroup measurement or qualification.",
+        "preview_png_sha256": "4e572a99a54db32b4d01668ff9544693ce360dd70e52eb56a94d38a3724b9891",
+        "python_version": "3.12.8",
+        "ram_process_rss_peak_bytes": 16442867712,
+        "runtime_files": {
+          "runtime/image/uv.lock": "6afe3c10f8d936fb703a0fcbfc18ea2274bf0948c7d8d3236d7dc0eed3d48ec2",
+          "src/kilix_bonsai/runtime/installed_image.py": "e8c13ed9ca29cee7e9bf1c27792fd99ae3c4573071a8337dd8082601555b7e20",
+          "src/kilix_bonsai/runtime/local_image.py": "805fa4e9a10c786c68ef34a7d539ab787b1c7a281d0b363fc6cf3c3cb68519ea"
+        },
+        "runtime_repository": "https://github.com/itsmygithubacct/kilix-bonsai",
+        "runtime_revision": "630da3cf64d28b35fb65cafd4e7c8a4ad54b8685",
+        "sealed_model_bytes": 4547318162
       },
       "id": "bonsai-image-4b-ternary-gemlite",
       "manifest_digest": "6426900bf975e56520dc2fa4a970ca9f07aa84208712a7ac636b75c7442c8526",
       "qualification_eligible": false,
-      "ram_peak_bytes": null,
+      "ram_peak_bytes": 20990185874,
       "safety_margin_basis_points": 2500,
       "schema": "plebian.models.runtime-profile/v1-development",
       "task": "image",
-      "vram_peak_bytes": 7301444404,
-      "workload": "upstream reported RTX 3080 peak at 1024x1024, 4 steps; local RAM and kernel support unmeasured"
+      "vram_peak_bytes": 5140119552,
+      "workload": "512x512 text-to-image, 4 steps, seed17; CPU float32 VAE, CUDA GPU0 below8GiB; other modes/resolutions unmeasured"
     },
-    "id": "bonsai-image-4b-ternary-gemlite",
-    "source_sha256": "f039fa9fa0759f96fbaa930b80e97e6b0b311a0b37f1e359ff4d383d3681b023"
+    "source_sha256": "da95d4a69e00a30578a4470023e07227adc34e401903fc7da732f020afed1346"
+  },
+  {
+    "document": {
+      "architecture": "x86_64",
+      "backend": "cuda",
+      "device_scope": {
+        "gpu_index": 0,
+        "maximum_total_bytes": 8589934591,
+        "minimum_total_bytes": 1
+      },
+      "evidence": {
+        "confidence": "development-observation",
+        "cuda_observer_sha256": "53b52d6967988ff52c33192c7cfca98e6477aa5810b4ff8fa4502de450949f17",
+        "device_mapping_observation_sha256": "750b24b67d9b5c9229e0a165fab0f0c5c352cb1e3123cbd088961cc4071af708",
+        "hardware": "Quadro RTX3000, compute capability7.5,6144MiB VRAM",
+        "memory_observation_sha256": "f6ffce35ca07d7d7ca96ef8dfd533b603ea935c95ff23beba1afabc36350eeb4",
+        "method": "Process RSS plus full declared sealed-model population as conservative RAM bound; max of Torch allocator peaks and0.4s sampled own-PID CUDA peak. Sampling is a lower bound; margin25percent plus256MiB planner reserve. Not aggregate-cgroup measurement or qualification.",
+        "preview_png_sha256": "296a1ff5cba483735d11745b42cda47051c6942edf96eb84455fc71b68a979ab",
+        "python_version": "3.12.8",
+        "ram_process_rss_peak_bytes": 16443101184,
+        "runtime_files": {
+          "runtime/image/uv.lock": "6afe3c10f8d936fb703a0fcbfc18ea2274bf0948c7d8d3236d7dc0eed3d48ec2",
+          "src/kilix_bonsai/runtime/installed_image.py": "e8c13ed9ca29cee7e9bf1c27792fd99ae3c4573071a8337dd8082601555b7e20",
+          "src/kilix_bonsai/runtime/local_image.py": "805fa4e9a10c786c68ef34a7d539ab787b1c7a281d0b363fc6cf3c3cb68519ea"
+        },
+        "runtime_repository": "https://github.com/itsmygithubacct/kilix-bonsai",
+        "runtime_revision": "630da3cf64d28b35fb65cafd4e7c8a4ad54b8685",
+        "sealed_model_bytes": 4087255225
+      },
+      "id": "bonsai-image-4b-binary-gemlite",
+      "manifest_digest": "4381f37d91dcba6be1938c8eb289dc7f148ce924f913008c07e78e94fc913b90",
+      "qualification_eligible": false,
+      "ram_peak_bytes": 20530356409,
+      "safety_margin_basis_points": 2500,
+      "schema": "plebian.models.runtime-profile/v1-development",
+      "task": "image",
+      "vram_peak_bytes": 4657774592,
+      "workload": "512x512 text-to-image, 4 steps, seed17; CPU float32 VAE, CUDA GPU0 below8GiB; other modes/resolutions unmeasured"
+    },
+    "source_sha256": "00df4442d2c14185d4d70f7447d18bffb99da4841f3a44b7e056b51151ae5992"
   }
 ]

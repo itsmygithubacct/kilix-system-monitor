@@ -133,16 +133,23 @@ def collect(storage: Path | None = None) -> dict:
         available = None
     elif limit is not None:
         available = min(available, limit)
+    devices = gpu_headroom()
+    mapping = ('single-unmasked-gpu-zero' if len(devices)==1 and devices[0]['index']==0
+               and not any(key in os.environ for key in ('CUDA_VISIBLE_DEVICES','CUDA_DEVICE_ORDER'))
+               else 'unverified')
     return {"schema": SCHEMA, "observed_at": datetime.now(timezone.utc).isoformat(),
             "architecture": platform.machine(),
             "ram_total_bytes": total, "ram_available_bytes": available,
-            "cgroup_status": status, "gpus": gpu_headroom(),
+            "cgroup_status": status, "gpus": devices, 'cuda_device_mapping':mapping,
             "disk_available_bytes": storage_headroom(storage or data_root())}
 
 
 def validate(snapshot: dict) -> None:
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SCHEMA:
         raise ValueError("expected a development resource snapshot")
+    mapping = snapshot.get('cuda_device_mapping','unverified')
+    if not isinstance(mapping,str) or mapping not in {'unverified','single-unmasked-gpu-zero'}:
+        raise ValueError('invalid CUDA device mapping')
     for key in ("ram_total_bytes", "ram_available_bytes", "disk_available_bytes"):
         value = snapshot.get(key)
         if value is not None and (type(value) is not int or not 0 <= value <= 2**63):

@@ -18,7 +18,8 @@ def request(*names):
 
 class RuntimeSizingTests(unittest.TestCase):
     def setUp(self):
-        self.resources = {**snapshot(), "architecture": "x86_64"}
+        self.resources = {**snapshot(), "architecture": "x86_64",
+                          'cuda_device_mapping':'single-unmasked-gpu-zero'}
 
     def test_profiles_match_source_documents_and_remain_unqualified(self):
         root = Path(__file__).resolve().parents[1] / "profiles/rc5-runtime-reference"
@@ -61,20 +62,50 @@ class RuntimeSizingTests(unittest.TestCase):
             self.assertEqual(row["verdict"], "unknown")
             self.assertIsNone(row["required_ram_bytes"])
 
-    def test_image_missing_ram_cannot_become_fit_even_with_large_gpu(self):
+    def test_image_profiles_do_not_cover_gpu_vae_mode(self):
         self.resources.update(ram_total_bytes=64 * GIB, ram_available_bytes=48 * GIB)
         self.resources["gpus"][0].update(total_bytes=24 * GIB, available_bytes=20 * GIB)
         result = recommend_runtime(request("bonsai-image-4b-ternary-gemlite"), self.resources)
         row = result["candidates"][0]
         self.assertEqual(row["verdict"], "unknown")
-        self.assertIn("missing-memory-measurement", row["reasons"])
+        self.assertIn("profile-device-mode-unmeasured", row["reasons"])
         self.assertIsNone(result["defaults"]["image"])
         self.resources["gpus"][0].update(total_bytes=6 * GIB, available_bytes=6 * GIB)
         self.assertEqual(recommend_runtime(request("bonsai-image-4b-ternary-gemlite"), self.resources)["candidates"][0]["verdict"], "does-not-fit")
 
+    def test_six_gib_image_default_uses_binary_with_margin(self):
+        self.resources.update(ram_total_bytes=64*GIB,ram_available_bytes=48*GIB)
+        self.resources['gpus'][0].update(index=0,total_bytes=6*GIB,available_bytes=6*GIB)
+        result=recommend_runtime(request('bonsai-image-4b-ternary-gemlite',
+                                          'bonsai-image-4b-binary-gemlite'),self.resources)
+        self.assertEqual(result['defaults']['image'],'bonsai-image-4b-binary-gemlite')
+        self.assertEqual([row['verdict'] for row in result['candidates']],
+                         ['does-not-fit','estimated-fit'])
+        self.resources['ram_available_bytes']=16*GIB
+        self.assertIsNone(recommend_runtime(request('bonsai-image-4b-binary-gemlite'),
+                                            self.resources)['defaults']['image'])
+
+    def test_image_budget_uses_runtime_gpu_zero_not_another_free_device(self):
+        self.resources.update(ram_total_bytes=64*GIB,ram_available_bytes=48*GIB)
+        self.resources['gpus']=[{'index':0,'backend':'cuda','total_bytes':6*GIB,
+                                 'available_bytes':2*GIB},
+                               {'index':1,'backend':'cuda','total_bytes':6*GIB,
+                                 'available_bytes':6*GIB}]
+        result=recommend_runtime(request('bonsai-image-4b-binary-gemlite'),self.resources)
+        self.assertEqual(result['candidates'][0]['verdict'],'unknown')
+        self.assertIn('profile-device-mapping-unverified',result['candidates'][0]['reasons'])
+        self.assertIsNone(result['defaults']['image'])
+
+    def test_image_mapping_unknown_never_selects_a_default(self):
+        self.resources.update(ram_total_bytes=64*GIB,ram_available_bytes=48*GIB,
+                              cuda_device_mapping='unverified')
+        self.resources['gpus'][0].update(index=0,total_bytes=6*GIB,available_bytes=6*GIB)
+        self.assertIsNone(recommend_runtime(request('bonsai-image-4b-binary-gemlite'),
+                                            self.resources)['defaults']['image'])
+
     def test_unknown_alternate_never_inherits_other_model_measurement(self):
         doc = request("bonsai-image-4b-ternary-gemlite")
-        doc["models"][0]["id"] = "bonsai-image-4b-binary-gemlite"
+        doc["models"][0]["id"] = "bonsai-image-unmeasured"
         row = recommend_runtime(doc, self.resources)["candidates"][0]
         self.assertEqual(row["verdict"], "unknown")
         self.assertEqual(row["reasons"], ["no-resource-profile"])
