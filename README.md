@@ -8,8 +8,8 @@ unprivileged hardware observation and model resource estimates.
 (release candidate `v0.2.3-rc6`) holds `KILIX_SYSTEM_MONITOR_REF=9316bc26`
 from 0.2.2 in `releases/0.2.3.env`, and Kilix pins the same commit: on first
 use Kilix fetches it to run `plebian-model-sizer` (speech and local-model
-sizing) and the `kilix-device-lease` module (local-model and transcription
-providers). The telemetry daemon Kilix runs comes from the standalone
+sizing) and the `kilix-device-lease` module (the text-to-speech and
+transcription providers). The telemetry daemon Kilix runs comes from the standalone
 [kilix-telemetry](https://github.com/itsmygithubacct/kilix-telemetry#readme)
 repository, a Kilix submodule. The default branch is `main`.
 
@@ -70,7 +70,7 @@ covers. Each component also runs from its source tree, for example
 | `plebian-hardware show` | coarse, privacy-safe hardware summary |
 | `plebian-hardware inventory --json` / `gpu --json` | machine inventory or GPU observation as JSON |
 | `plebian-model-sizer snapshot` | current RAM, cgroup headroom, CUDA free memory and model storage |
-| `plebian-model-sizer recommend help-llm\|avatar-chat\|voice\|runtime` | provisional resource shortlist for one domain |
+| `plebian-model-sizer recommend help-llm\|avatar-chat\|voice\|runtime --catalog FILE` | provisional resource shortlist for one domain |
 | `make check` | every offline gate (contracts, telemetry, lease, hardware, packages, profiles, evidence, launcher readiness, model sizer) |
 | `make prefetch` | fill the uv cache that `make check` reads offline |
 
@@ -85,7 +85,7 @@ module that providers import.
                                       │
                                       ▼
  measured profiles ──▶ plebian-model-sizer ──▶ provisional shortlists (Kilix model and voice setup)
- model / transcription providers ──▶ kilix_device_lease ──▶ one exclusive accelerator grant
+ speech / transcription providers ──▶ kilix_device_lease ──▶ one exclusive accelerator grant
 ```
 
 `kilix-telemetry` runs one sampler per user that reads `/proc` and `/sys` and
