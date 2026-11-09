@@ -1,5 +1,20 @@
 # kilix-system-monitor
 
+A parent repository for the components that observe a Plebian-OS machine and
+size work for it: live telemetry, the shared accelerator execution lease,
+unprivileged hardware observation and model resource estimates.
+
+**Status:** a parent repository pinned by Plebian-OS. Plebian-OS 0.2.3
+(release candidate `v0.2.3-rc6`) holds `KILIX_SYSTEM_MONITOR_REF=9316bc26`
+from 0.2.2 in `releases/0.2.3.env`, and Kilix pins the same commit: on first
+use Kilix fetches it to run `plebian-model-sizer` (speech and local-model
+sizing) and the `kilix-device-lease` module (local-model and transcription
+providers). The telemetry daemon Kilix runs comes from the standalone
+[kilix-telemetry](https://github.com/itsmygithubacct/kilix-telemetry#readme)
+repository, a Kilix submodule. The default branch is `main`.
+
+## What it contains
+
 kilix-system-monitor is the F106 provider monorepo for Plebian OS and Kilix.
 It keeps four separately versioned components beside the contract fixtures
 that couple them:
@@ -22,148 +37,112 @@ records the source, rewrite tool, complete commit map, equivalence checks and
 split-back procedure. The source repository and consumer pin remain unchanged;
 this parent now has its own public origin.
 
-## Contract state
+| Component | Version | Status (`manifest.toml`) | README |
+| --- | --- | --- | --- |
+| `kilix-telemetry` | 0.1.2 | history-imported | [components/kilix-telemetry](components/kilix-telemetry/README.md) |
+| `kilix-device-lease` | 1.0.0 | imported, awaiting interface acceptance | [components/kilix-device-lease](components/kilix-device-lease/README.md) |
+| `plebian-hardware` | 0.1.0 | unprivileged D2 | [components/plebian-hardware](components/plebian-hardware/README.md) |
+| `plebian-model-sizer` | 0.2.0 | development estimates, unqualified | [components/plebian-model-sizer](components/plebian-model-sizer/README.md) |
 
-contracts/p1-candidate contains the pre-freeze schemas, redacted fixtures,
-invocation contract and replay binaries. Those bytes are installed for coupled
-testing, but they are not P1-frozen and they make no hardware, backend, model,
-fit or performance qualification claim. They move to a frozen root schema
-surface only after all named consumers sign identical bytes.
+## Quick start
 
-The successor candidate retains the additive privacy, checkpoint-licence and
-exact F104/F105 weight-evidence designs, and closes the F107-B R2 return's
-**4/4 contract findings**. Its **9/9 invocations** use absolute installed
-executables; install binds exact reviewed plan bytes by SHA-256; **2/2** status
-and cancellation calls share a bounded resumable transaction schema; and
-renderer populations carry explicit schema maxima. These remain D-side
-proposals until the same P1 signoff occurs. The weight evidence is explicitly
-digest-enumerated with no wildcard inheritance; it authorizes no selection,
-fit, staging or transfer.
+The checks use the release-pinned uv 0.12.5 and its managed CPython 3.12.8.
+Fill the uv cache once with network access, then run the gate offline:
 
-contracts/v1 is the frozen F106 resource-profile bundle: the
-`plebian.models.profiles/v1` and `plebian.hardware/v1` schemas, byte-identical
-to the candidate bytes consumers acknowledged, **7/7** measured provider
-profile rows, **3/3** valid and **9/9** refused profile fixtures, and
-`FROZEN-SHA256SUMS`, whose digest `tools/validate_frozen_contracts.py` pins.
-The builder landed those bytes; the non-author review, cross-family
-acceptance, consumer signoff and owner signoff that complete the freeze are
-recorded outside this repository. Every measured row stays unqualified.
+```sh
+git clone https://github.com/itsmygithubacct/kilix-system-monitor.git
+cd kilix-system-monitor
+make prefetch UV=/absolute/path/to/uv-0.12.5
+CANDIDATE_SCRATCH_ROOT=/absolute/scratch/root TMPDIR=/absolute/scratch/root \
+  make check UV=/absolute/path/to/uv-0.12.5
+```
 
-contracts/kilix.device-lease-v1.interface.json records the lease interface:
-version, workloads, queue bounds, maximum wait, label pattern, default
-namespace, error codes, release semantics, guard-descriptor inheritance and
-exclusive, non-co-residential admission. The component suite holds the module
-to those exact values. F100 acceptance of the interface bytes is a separate
-record and has not been given by anything in this repository.
+[docs/checks.md](docs/checks.md) has the full sequence and what each gate
+covers. Each component also runs from its source tree, for example
+`components/plebian-model-sizer/plebian-model-sizer snapshot`.
 
-integration/f120-registration.json is the exact pre-repository scaffold from
-the published F120 handoff. Its zero commit and metadata sentinels are retained
-until the parent has a reviewed public install surface. An F120 development
-manifest is therefore expected to be dirty/unresolved; qualification and
-staging must refuse.
+## Usage
 
-integration/trusted-launcher-consumer-requirements.json records the final Track
-D TD-P1 and TD-HW capability/child-table requirements without defining or
-copying a launcher profile. The companion consumer campaign fixes the complete
-case-family, inner-variant, evidence and verdict population, and
-integration/TRUSTED-LAUNCHER-CONSUMER.md is the human-readable contract for
-Track H. OD-13 assigns the ID-04 implementation to reviewer2 and OD-14 assigns
-the non-forking interface to Track H, but the shared result packet and
-independently reviewed interface have not returned. The readiness check
-therefore validates the complete consumer input while accepting **0/20**
-interface mappings and **0/2** upstream exports and consuming **0/8** required
-returned identities.
+| Command | Effect |
+| --- | --- |
+| `kilix-telemetryd` / `kilix-telemetry serve` | run the single per-user sampler |
+| `kilix-telemetry snapshot` / `pane` / `history` / `status` | read the newest sample, one process tree, recent samples, or daemon and ring health |
+| `plebian-hardware show` | coarse, privacy-safe hardware summary |
+| `plebian-hardware inventory --json` / `gpu --json` | machine inventory or GPU observation as JSON |
+| `plebian-model-sizer snapshot` | current RAM, cgroup headroom, CUDA free memory and model storage |
+| `plebian-model-sizer recommend help-llm\|avatar-chat\|voice\|runtime` | provisional resource shortlist for one domain |
+| `make check` | every offline gate (contracts, telemetry, lease, hardware, packages, profiles, evidence, launcher readiness, model sizer) |
+| `make prefetch` | fill the uv cache that `make check` reads offline |
 
-## Checks
+`kilix-device-lease` has no command; it is the `kilix_device_lease` Python
+module that providers import.
 
-`make check` runs offline. With network access, fill the uv cache it reads
-once, using the release-pinned uv 0.12.5 and its managed CPython 3.12.8:
+## How it works
 
-    make prefetch UV=/absolute/path/to/release-pinned-uv-0.12.5
+```text
+ /proc, /sys ──▶ kilix-telemetryd ──▶ private mmap ring ──▶ Kilix chrome, dashboards, desktops
+ /proc, /sys, DRM/PCI ──▶ plebian-hardware ──▶ plebian.hardware/v1 JSON
+                                      │
+                                      ▼
+ measured profiles ──▶ plebian-model-sizer ──▶ provisional shortlists (Kilix model and voice setup)
+ model / transcription providers ──▶ kilix_device_lease ──▶ one exclusive accelerator grant
+```
 
-prefetch syncs the root and component environments from PyPI, and uv verifies
-every download against the hashes in each `uv.lock`. It then runs the package
-gate online once, so the root's isolated setuptools build fetches the backend
-pinned by hash in `tools/build-constraints.txt`. A fresh clone with an empty
-cache needs nothing more. Then, offline, for a functional developer check:
+`kilix-telemetry` runs one sampler per user that reads `/proc` and `/sys` and
+writes versioned, compressed, CRC-checked snapshots to a bounded ring; clients
+read the ring instead of each walking the process table. `plebian-hardware`
+reads CPU, memory, GPU, bus, firmware, power, thermal and pressure state
+without privilege or network and refuses identifier-named files and unsafe
+probe targets. `plebian-model-sizer` combines that observation with measured
+reference profiles to estimate training and inference cost; a shortlist is an
+estimate, not a reservation or a qualification. `kilix-device-lease` is a
+cooperative per-user lock that serializes accelerator use across providers.
 
-    /absolute/path/to/release-pinned-uv-0.12.5 sync --locked --offline \
-      --no-install-project --managed-python --no-python-downloads --python 3.12.8
-    CANDIDATE_SCRATCH_ROOT=/absolute/scratch/root TMPDIR=/absolute/scratch/root \
-      make check UV=/absolute/path/to/release-pinned-uv-0.12.5
+The contracts that couple these components live under `contracts/`: the
+pre-freeze `p1-candidate` bundle, the frozen `v1` resource-profile bundle and
+the device-lease interface. [docs/contracts.md](docs/contracts.md) explains
+each one and what has and has not been accepted.
 
-The locked aggregate environment includes the exact uv-build 0.12.5 backend
-needed by the component sdists, and the root's setuptools backend is pinned by
-hash, so the package gate stays offline instead of depending on an unrelated
-cache hit.
-The candidate gate requires `CANDIDATE_SCRATCH_ROOT` to name an existing,
-canonical scratch directory other than `/`, and refuses a `TMPDIR` that does
-not resolve beneath it.
+## Documentation
 
-The current `tools/validate_candidate` shell path has useful partial isolation:
-it refuses an unpinned uv or Python, checks the candidate file set before
-Python, then starts the semantic validator with `-I -S -B` from a private empty
-directory. It is not release authority. The normative startup contract also
-requires an independently accepted launcher/bootstrap, a retained no-follow
-subject descriptor, exact first-process envelope checks, a canonical result
-channel and complete causal mutations. The self-test's two replay helpers still
-select Python through `/usr/bin/env` and inherited `PATH`.
+| Document | Contents |
+| --- | --- |
+| [docs/contracts.md](docs/contracts.md) | contract state: candidate, frozen v1, device lease, F120 and trusted-launcher records |
+| [docs/checks.md](docs/checks.md) | prefetch, the offline developer gate and what it exercises |
+| [docs/boundaries.md](docs/boundaries.md) | what is implemented, constructed but non-qualifying, and not claimed |
+| [MIGRATION.md](MIGRATION.md) | the kilix-telemetry history import and the kilix-device-lease import |
+| [integration/README.md](integration/README.md) | the F120 development registration and trusted-launcher readiness |
+| [integration/TRUSTED-LAUNCHER-CONSUMER.md](integration/TRUSTED-LAUNCHER-CONSUMER.md) | the trusted-launcher consumer contract |
+| [LICENSES/README.md](LICENSES/README.md) | licensing layout |
 
-The aggregate developer check exercises contract integrity and negative
-fixtures, the imported telemetry suite, the shared accelerator lease's
-real-process controls and interface-document binding, the hardware unit boundaries, live
-inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
-consumer readiness, the unqualified provider-profile intake validator, and
-the model-sizer resource accounting and refusal cases. Hardware checks use no network and no
-privilege. `tools/measure/profile.py` records **1/1** provider-owned evidence
-record against **3/3** exact input-byte identities, promotes **0/9** provider
-measurement fields, and keeps qualification acceptance at **0/1**. Provider
-execution is outside this validator.
+## Related repositories
 
-The public H2 capacity observation under `evidence/` carries the exact
-`/proc/loadavg` values at both ends of **4/4** measurement windows. It records
-the causal Debian `nvidia-smi` repair and one exact committed-source observation
-without naming the host. The validator keeps installer-media evidence at
-**0/1**, model-performance evidence at **0/1**, and qualification at **0/1**.
+- [Kilix](https://github.com/itsmygithubacct/kilix#readme) fetches this
+  repository at its pinned commit for the model sizer and the device lease, and
+  carries [kilix-telemetry](https://github.com/itsmygithubacct/kilix-telemetry#readme)
+  as a submodule.
+- [Plebian-OS](https://github.com/itsmygithubacct/plebian-os#readme) pins this
+  repository as a release root.
+- [kilix-voice](https://github.com/itsmygithubacct/kilix-voice#readme) and
+  [kilix-help-llm](https://github.com/itsmygithubacct/kilix-help-llm#readme):
+  the speech and help-model workloads the sizer estimates.
+- [kilix-desktop-sdk](https://github.com/itsmygithubacct/kilix-desktop-sdk#readme)
+  and [kilix-media-sdk](https://github.com/itsmygithubacct/kilix-media-sdk#readme):
+  the other parent repositories Plebian-OS pins.
 
-## Current boundaries
+## Part of Plebian-OS
 
-Implemented now: history-preserving local parent creation, aggregate contract
-tooling, exact F120 development registration, and unprivileged D2 probes for
-CPU/RAM/cgroup/topology/cache/frequency/ISA, DRM/PCI GPUs, bounded backend
-commands, device-bound NVIDIA driver/VRAM evidence, buses, anonymous network
-links, firmware/IOMMU state, power/battery, thermal/fans, PSI and
-virtualization. Identifier-named files and final-component symlinks are refused
-at the common read boundary. Optional command probes refuse resolved targets
-outside the fixed system path and group- or world-writable executables.
+kilix-system-monitor is one of the repositories behind
+[Plebian-OS](https://github.com/itsmygithubacct/plebian-os#readme), a Debian
+install whose desktop is [Kilix](https://github.com/itsmygithubacct/kilix#readme)
+running the [Kilix 95](https://github.com/itsmygithubacct/kilix-95#readme)
+desktop through [Pleb](https://github.com/itsmygithubacct/pleb#readme).
+Plebian-OS pins it in `releases/0.2.3.env`, and Kilix fetches the same commit
+on first use for model sizing and the device lease. The map of every
+repository and how it ships is on the
+[components page](https://github.com/itsmygithubacct/plebian-os/blob/main/docs/components.md).
 
-Implemented as non-qualifying D2 construction: a private 0600 canonical snapshot
-cache, symlink-refusing descriptor-relative replacement, redacted snapshot diff
-and cache-aware doctor primitives. Not implemented or claimed: the shared
-trusted-launcher profiles, P1 freeze, privileged DMI, SMART/NVMe,
-device-bound ROCm/Vulkan/OpenCL success, D3 telemetry vNext,
-release-qualified D4 sizing, D5 consumers, or D6 hardware qualification. H3 physical inventory,
-H3 model performance, and AMD/ROCm fit/performance/support remain unqualified
-for 0.2.1.
+## License
 
-The [model-sizer component](components/plebian-model-sizer/README.md) adds
-read-only development commands for current RAM, cgroup-v2 headroom, CUDA free
-memory and model-storage capacity. It estimates the independent training and
-inference costs of exact help-model candidates, including sequential or combined
-inference residency. A resource shortlist is not model quality, runtime support,
-an execution reservation, or release qualification. Its tests replace the old
-absence-of-implementation gate; the frozen schemas and their fixtures are unchanged.
-
-F120-C11 also remains open: frozen F120 v1 does not prove that a staged model
-payload conveys its required licence/notice bytes or represent different
-obligations per payload in one component. D's licence-evidence fixtures remain
-transfer-ineligible until the release authority's strict-v1/new-identity choice
-is implemented; the existing S120 source/code-provider path remains usable.
-
-Track H causally proved that the old F120 launch shape can return forged zero
-and PASS output before its real validator or tests run. Track D has the same
-shape at its staged console/test and replay boundaries. No `make check` result
-from this repository is qualification or P1-freeze evidence until Track H's
-reference trusted launcher is published and the Track D candidate-validator,
-replay-helper and authority-bearing staged-probe profiles pass the normative
-mutation packet.
+MIT; see [LICENSE](LICENSE). The imported kilix-telemetry component keeps its
+original MIT licence; see [LICENSES/README.md](LICENSES/README.md).
