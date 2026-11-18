@@ -33,7 +33,7 @@
               "slope": 16837.52
             },
             "x86_64-i7-6820hq-8t-32g": {
-              "intercept": 1035324849,
+              "intercept": 1043298979,
               "points": [
                 [
                   512,
@@ -50,9 +50,17 @@
                 [
                   32768,
                   1503940608
+                ],
+                [
+                  131072,
+                  2832289792
+                ],
+                [
+                  262144,
+                  4609019904
                 ]
               ],
-              "slope": 14344.9
+              "slope": 13617.16
             }
           }
         },
@@ -69,10 +77,10 @@
         "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
         "weights_bytes": 833592096
       },
-      "profile_sha256": "4816828e8e35ef72bc560d69fcdf2a5d10b2af94456f2c92e422af2af65e5dc4",
+      "profile_sha256": "5f96cdf8154740063de4b6862523444716e08aeb9a090b175d817e5353f22f03",
       "ram": {
-        "fixed_bytes": 1048006656,
-        "per_token_bytes": 14395
+        "fixed_bytes": 1057542144,
+        "per_token_bytes": 13623
       },
       "standin_adapter": {
         "bytes": 21671008,
@@ -277,6 +285,32 @@
                 ]
               ],
               "slope": 13626.48
+            },
+            "x86_64-i7-6820hq-8t-32g": {
+              "intercept": 1375301093,
+              "points": [
+                [
+                  512,
+                  1380159488
+                ],
+                [
+                  2048,
+                  1402818560
+                ],
+                [
+                  8192,
+                  1487339520
+                ],
+                [
+                  32768,
+                  1821384704
+                ],
+                [
+                  128000,
+                  3109969920
+                ]
+              ],
+              "slope": 13556.24
             }
           }
         },
@@ -293,10 +327,10 @@
         "sha256": "bf035d5876eb8ef0b1a87cf0cf30d9717e4cc628d483c5b49b342603d5f2ee67",
         "weights_bytes": 1246252768
       },
-      "profile_sha256": "e896a74e98e0fedb0641d389db802312d55d2b3cdfb5e64a54a9a1347928cdc4",
+      "profile_sha256": "0127e75dab15cde7a3965a5233ad36b4cae253e25c17582b4457d4817df68cf5",
       "ram": {
-        "fixed_bytes": 1375303680,
-        "per_token_bytes": 13627
+        "fixed_bytes": 1376985088,
+        "per_token_bytes": 13562
       },
       "standin_adapter": {
         "bytes": 22229824,
@@ -446,6 +480,36 @@
                 ]
               ],
               "slope": 313.53
+            },
+            "x86_64-i7-6820hq-8t-32g": {
+              "intercept": 26135351,
+              "points": [
+                [
+                  64,
+                  26038272
+                ],
+                [
+                  254,
+                  26210304
+                ],
+                [
+                  512,
+                  26488832
+                ],
+                [
+                  1023,
+                  26259456
+                ],
+                [
+                  1998,
+                  26394624
+                ],
+                [
+                  3998,
+                  27000832
+                ]
+              ],
+              "slope": 201.33
             }
           }
         },
@@ -463,10 +527,10 @@
         "sha256": "a2df5d661606957d2ff0e8abd4af31ee2953e759ce84e8e5921b6e8d13bd0e16",
         "weights_bytes": 14888896
       },
-      "profile_sha256": "3086e4f000e734ab345d7c5ecc1113371c08e89783d0ec4d0fe3c44ba43bed08",
+      "profile_sha256": "3c1177a50073fa67e0ef39a927689d052a8682e288d357616d6903a342d4277b",
       "ram": {
-        "fixed_bytes": 26393600,
-        "per_token_bytes": 314
+        "fixed_bytes": 26422272,
+        "per_token_bytes": 258
       },
       "standin_adapter": {
         "bytes": 0,
