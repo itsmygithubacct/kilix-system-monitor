@@ -1,0 +1,481 @@
+{
+  "profiles": [
+    {
+      "architecture": "x86_64",
+      "bytes_per_token": 3.688,
+      "engine": {
+        "backend": "cpu",
+        "build": "kilix-llm build-runtime.sh, GGML_NATIVE=ON, 0 patches",
+        "id": "llama.cpp@8ea290247c87ced2ab245b056ffe96dbcf90d36c",
+        "server_flags": "-fa on --parallel 1 --fit off --cache-ram 0 -ngl 0 --device none, KV f16"
+      },
+      "engine_cap_tokens": null,
+      "evidence": {
+        "bytes_per_token": "1768 OneBit items (c3caf8c1 set), user messages: 369980 bytes / 100332 tokens",
+        "hosts": {
+          "ram": {
+            "x86_64-i7-10700f-16t-48g": {
+              "intercept": 1029826560,
+              "points": [
+                [
+                  512,
+                  1031131136
+                ],
+                [
+                  2048,
+                  1073455104
+                ],
+                [
+                  8192,
+                  1165930496
+                ]
+              ],
+              "slope": 16837.52
+            },
+            "x86_64-i7-6820hq-8t-32g": {
+              "intercept": 1035324849,
+              "points": [
+                [
+                  512,
+                  1031659520
+                ],
+                [
+                  2048,
+                  1072713728
+                ],
+                [
+                  8192,
+                  1157275648
+                ],
+                [
+                  32768,
+                  1503940608
+                ]
+              ],
+              "slope": 14344.9
+            }
+          }
+        },
+        "measured_at": "2026-11-18",
+        "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
+        "peak": "VmHWM of llama-server after one completion whose prompt fills the context (ctx - 8 tokens)",
+        "template": "kilix-llm judge contract prompt, Qwen chat template, thinking off: 178 tokens"
+      },
+      "id": "qwen3.5-0.8b-q8_0.llama.cpp-8ea2902.cpu.x86_64",
+      "margin_basis_points": 500,
+      "model": {
+        "id": "qwen3.5-0.8b-q8_0",
+        "n_ctx_train": 262144,
+        "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
+        "weights_bytes": 833592096
+      },
+      "profile_sha256": "4816828e8e35ef72bc560d69fcdf2a5d10b2af94456f2c92e422af2af65e5dc4",
+      "ram": {
+        "fixed_bytes": 1048006656,
+        "per_token_bytes": 14395
+      },
+      "standin_adapter": {
+        "bytes": 21671008,
+        "rank": 8,
+        "sha256": "67031dfc1dfe7142de57a9bd9761100a6cfa87f427f3b41ee8b82562a3ecd010"
+      },
+      "template_tokens": 178,
+      "vram": null
+    },
+    {
+      "architecture": "aarch64",
+      "bytes_per_token": 3.688,
+      "engine": {
+        "backend": "cpu",
+        "build": "kilix-llm build-runtime.sh, GGML_NATIVE=ON, 0 patches, built natively on the board",
+        "id": "llama.cpp@8ea290247c87ced2ab245b056ffe96dbcf90d36c",
+        "server_flags": "-fa on --parallel 1 --fit off --cache-ram 0 -ngl 0 --device none, KV f16"
+      },
+      "engine_cap_tokens": null,
+      "evidence": {
+        "hosts": {
+          "ram": {
+            "aarch64-rk3399-6c-4g": {
+              "intercept": 1028026368,
+              "points": [
+                [
+                  512,
+                  1027944448
+                ],
+                [
+                  2048,
+                  1069568000
+                ],
+                [
+                  8192,
+                  1152323584
+                ]
+              ],
+              "slope": 15416.38
+            }
+          }
+        },
+        "measured_at": "2026-11-18",
+        "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
+        "peak": "VmHWM of llama-server after one completion whose prompt fills the context (ctx - 8 tokens)",
+        "template": "kilix-llm judge contract prompt, Qwen chat template, thinking off: 178 tokens"
+      },
+      "id": "qwen3.5-0.8b-q8_0.llama.cpp-8ea2902.cpu.aarch64",
+      "margin_basis_points": 500,
+      "model": {
+        "id": "qwen3.5-0.8b-q8_0",
+        "n_ctx_train": 262144,
+        "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
+        "weights_bytes": 833592096
+      },
+      "profile_sha256": "61327a12eff4eaf23c5b41d0c7c596861ab8ae944367d600dc2049e8ca2253bf",
+      "ram": {
+        "fixed_bytes": 1037993984,
+        "per_token_bytes": 15417
+      },
+      "standin_adapter": {
+        "bytes": 21671008,
+        "rank": 8,
+        "sha256": "67031dfc1dfe7142de57a9bd9761100a6cfa87f427f3b41ee8b82562a3ecd010"
+      },
+      "template_tokens": 178,
+      "vram": null
+    },
+    {
+      "architecture": "x86_64",
+      "bytes_per_token": 3.688,
+      "engine": {
+        "backend": "cuda",
+        "build": "kilix-bench engine, CUDA",
+        "id": "llama.cpp@7be2c65dc",
+        "server_flags": "-fa on --parallel 1 --fit off --cache-ram 0 -ngl 99, KV f16"
+      },
+      "engine_cap_tokens": null,
+      "evidence": {
+        "hosts": {
+          "ram": {
+            "x86_64-i7-10700f-rtx3070-8g": {
+              "intercept": 1148092500,
+              "points": [
+                [
+                  512,
+                  1148825600
+                ],
+                [
+                  2048,
+                  1149394944
+                ],
+                [
+                  8192,
+                  1148932096
+                ],
+                [
+                  32768,
+                  1149194240
+                ],
+                [
+                  131072,
+                  1148723200
+                ],
+                [
+                  262144,
+                  1160658944
+                ]
+              ],
+              "slope": 39.32
+            }
+          },
+          "vram": {
+            "x86_64-i7-10700f-rtx3070-8g": {
+              "intercept": 1083944036,
+              "points": [
+                [
+                  512,
+                  983564288
+                ],
+                [
+                  2048,
+                  1149239296
+                ],
+                [
+                  8192,
+                  1231028224
+                ],
+                [
+                  32768,
+                  1558183936
+                ],
+                [
+                  131072,
+                  2866806784
+                ],
+                [
+                  262144,
+                  4611637248
+                ]
+              ],
+              "slope": 13501.97
+            }
+          }
+        },
+        "measured_at": "2026-11-18",
+        "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
+        "peak": "RAM: VmHWM; VRAM: per-process nvidia-smi used memory sampled every 0.5 s while the context is filled"
+      },
+      "id": "qwen3.5-0.8b-q8_0.llama.cpp-7be2c65.cuda.x86_64",
+      "margin_basis_points": 500,
+      "model": {
+        "id": "qwen3.5-0.8b-q8_0",
+        "n_ctx_train": 262144,
+        "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
+        "weights_bytes": 833592096
+      },
+      "profile_sha256": "5ff5745c5aaccb8e9eb85f0e8f69dfe426ab40eda2d1f5f6e1369ae994103937",
+      "ram": {
+        "fixed_bytes": 1150173184,
+        "per_token_bytes": 40
+      },
+      "standin_adapter": {
+        "bytes": 21671008,
+        "rank": 8,
+        "sha256": "67031dfc1dfe7142de57a9bd9761100a6cfa87f427f3b41ee8b82562a3ecd010"
+      },
+      "template_tokens": 178,
+      "vram": {
+        "fixed_bytes": 1121587200,
+        "per_token_bytes": 13502
+      }
+    },
+    {
+      "architecture": "x86_64",
+      "bytes_per_token": 3.746,
+      "engine": {
+        "backend": "cpu",
+        "build": "kilix-llm build-runtime.sh, GGML_NATIVE=ON, 0 patches",
+        "id": "llama.cpp@8ea290247c87ced2ab245b056ffe96dbcf90d36c",
+        "server_flags": "-fa on --parallel 1 --fit off --cache-ram 0 -ngl 0 --device none, KV f16"
+      },
+      "engine_cap_tokens": null,
+      "evidence": {
+        "bytes_per_token": "1768 OneBit items: 369980 bytes / 98757 tokens",
+        "hosts": {
+          "ram": {
+            "x86_64-i7-10700f-16t-48g": {
+              "intercept": 1373930155,
+              "points": [
+                [
+                  512,
+                  1379807232
+                ],
+                [
+                  2048,
+                  1403211776
+                ],
+                [
+                  8192,
+                  1485283328
+                ]
+              ],
+              "slope": 13626.48
+            }
+          }
+        },
+        "measured_at": "2026-11-18",
+        "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
+        "peak": "VmHWM of llama-server after one completion whose prompt fills the context (ctx - 8 tokens)",
+        "template": "kilix-llm judge contract prompt, LFM2 chat template: 176 tokens"
+      },
+      "id": "lfm2-1.2b-tool-q8_0.llama.cpp-8ea2902.cpu.x86_64",
+      "margin_basis_points": 500,
+      "model": {
+        "id": "lfm2-1.2b-tool-q8_0",
+        "n_ctx_train": 128000,
+        "sha256": "bf035d5876eb8ef0b1a87cf0cf30d9717e4cc628d483c5b49b342603d5f2ee67",
+        "weights_bytes": 1246252768
+      },
+      "profile_sha256": "e896a74e98e0fedb0641d389db802312d55d2b3cdfb5e64a54a9a1347928cdc4",
+      "ram": {
+        "fixed_bytes": 1375303680,
+        "per_token_bytes": 13627
+      },
+      "standin_adapter": {
+        "bytes": 22229824,
+        "rank": 8,
+        "sha256": "f40213b430d4aee99646bc50b6b02af7d283f211831c8d901a4c3c94f8d34150"
+      },
+      "template_tokens": 176,
+      "vram": null
+    },
+    {
+      "architecture": "x86_64",
+      "bytes_per_token": 3.746,
+      "engine": {
+        "backend": "cuda",
+        "build": "kilix-bench engine, CUDA",
+        "id": "llama.cpp@7be2c65dc",
+        "server_flags": "-fa on --parallel 1 --fit off --cache-ram 0 -ngl 99, KV f16"
+      },
+      "engine_cap_tokens": null,
+      "evidence": {
+        "hosts": {
+          "ram": {
+            "x86_64-i7-10700f-rtx3070-8g": {
+              "intercept": 1493515590,
+              "points": [
+                [
+                  512,
+                  1493340160
+                ],
+                [
+                  2048,
+                  1493536768
+                ],
+                [
+                  8192,
+                  1493803008
+                ],
+                [
+                  32768,
+                  1493254144
+                ],
+                [
+                  128000,
+                  1493250048
+                ]
+              ],
+              "slope": -2.3
+            }
+          },
+          "vram": {
+            "x86_64-i7-10700f-rtx3070-8g": {
+              "intercept": 1526078193,
+              "points": [
+                [
+                  512,
+                  1526726656
+                ],
+                [
+                  2048,
+                  1549795328
+                ],
+                [
+                  8192,
+                  1642070016
+                ],
+                [
+                  32768,
+                  1969225728
+                ],
+                [
+                  128000,
+                  3235905536
+                ]
+              ],
+              "slope": 13370.64
+            }
+          }
+        },
+        "measured_at": "2026-11-18",
+        "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
+        "peak": "RAM: VmHWM; VRAM: per-process nvidia-smi used memory sampled every 0.5 s while the context is filled"
+      },
+      "id": "lfm2-1.2b-tool-q8_0.llama.cpp-7be2c65.cuda.x86_64",
+      "margin_basis_points": 500,
+      "model": {
+        "id": "lfm2-1.2b-tool-q8_0",
+        "n_ctx_train": 128000,
+        "sha256": "bf035d5876eb8ef0b1a87cf0cf30d9717e4cc628d483c5b49b342603d5f2ee67",
+        "weights_bytes": 1246252768
+      },
+      "profile_sha256": "0bdb6308f21ffe7c59858bd320bacf21a421fe68fd1928d511ec09694266280d",
+      "ram": {
+        "fixed_bytes": 1493803008,
+        "per_token_bytes": 0
+      },
+      "standin_adapter": {
+        "bytes": 22229824,
+        "rank": 8,
+        "sha256": "f40213b430d4aee99646bc50b6b02af7d283f211831c8d901a4c3c94f8d34150"
+      },
+      "template_tokens": 176,
+      "vram": {
+        "fixed_bytes": 1532534784,
+        "per_token_bytes": 13371
+      }
+    },
+    {
+      "architecture": "x86_64",
+      "bytes_per_token": 3.031,
+      "engine": {
+        "backend": "cpu",
+        "build": "Cactus-Compute/needle2 @32e9e3a linux-x86_64 binary (weights built in)",
+        "id": "needle2@a2df5d661606957d2ff0e8abd4af31ee2953e759ce84e8e5921b6e8d13bd0e16",
+        "server_flags": "--serve, one answer tool"
+      },
+      "engine_cap_tokens": null,
+      "evidence": {
+        "bytes_per_token": "1768 OneBit items as Needle requests (lead-in, newlines as ' / '): 421558 bytes / 139083 tokens",
+        "hosts": {
+          "ram": {
+            "x86_64-i7-10700f-16t-48g": {
+              "intercept": 25929863,
+              "points": [
+                [
+                  64,
+                  25497600
+                ],
+                [
+                  254,
+                  26128384
+                ],
+                [
+                  512,
+                  26554368
+                ],
+                [
+                  1023,
+                  26357760
+                ],
+                [
+                  1998,
+                  26255360
+                ],
+                [
+                  3998,
+                  27246592
+                ]
+              ],
+              "slope": 313.53
+            }
+          }
+        },
+        "measured_at": "2026-11-18",
+        "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
+        "peak": "VmHWM of the engine after one request of N tokens (its sentencepiece tokenizer)",
+        "template": "5 lead-in tokens ('Answer the question: ') + the engine's default 256-token response budget, minus the 1 output token the formula already counts: 260",
+        "trained_context": "config.json max_position_embeddings 2048; the engine itself answered 4,000-token inputs"
+      },
+      "id": "needle2.needle2-a2df5d66.cpu.x86_64",
+      "margin_basis_points": 500,
+      "model": {
+        "id": "needle2",
+        "n_ctx_train": 2048,
+        "sha256": "a2df5d661606957d2ff0e8abd4af31ee2953e759ce84e8e5921b6e8d13bd0e16",
+        "weights_bytes": 14888896
+      },
+      "profile_sha256": "3086e4f000e734ab345d7c5ecc1113371c08e89783d0ec4d0fe3c44ba43bed08",
+      "ram": {
+        "fixed_bytes": 26393600,
+        "per_token_bytes": 314
+      },
+      "standin_adapter": {
+        "bytes": 0,
+        "note": "Needle tunings are QAT exports of the whole model; no runtime adapter",
+        "rank": 0
+      },
+      "template_tokens": 260,
+      "vram": null
+    }
+  ],
+  "schema": "plebian.models.binary-judge-profiles/v1-development"
+}

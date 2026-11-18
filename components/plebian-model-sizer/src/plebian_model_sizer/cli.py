@@ -12,6 +12,7 @@ from .chat import recommend_chat
 from .resources import collect, voice_data_root
 from .voice import observe_cpu, recommend_voice, format_report
 from .runtime import recommend_runtime
+from . import binary_judge
 
 
 def read_json(path: Path) -> dict:
@@ -50,6 +51,18 @@ def parser() -> argparse.ArgumentParser:
         subcommand.add_argument("--resources", type=Path, help="explicit snapshot for simulation; at most five minutes old")
         subcommand.add_argument("--data-root", type=Path)
         subcommand.add_argument("--json", action="store_true")
+    judge = domains.add_parser("binary-judge", help="longest input a one-token judge model takes here")
+    judge.add_argument("--model", required=True, help="profiled base model id, e.g. qwen3.5-0.8b-q8_0")
+    judge.add_argument("--model-sha256", required=True, help="sha256 of the base GGUF that will run")
+    judge.add_argument("--engine", required=True, help="engine identity, e.g. llama.cpp@<commit>")
+    judge.add_argument("--backend", choices=binary_judge.BACKENDS, default="cpu")
+    judge.add_argument("--adapter", help="adapter id, recorded in the report")
+    judge.add_argument("--adapter-bytes", type=int, default=0, help="size of the adapter file")
+    judge.add_argument("--reserve-mb", type=int, default=binary_judge.DEFAULT_RESERVE_MB,
+                       help="memory kept free (default 1024)")
+    judge.add_argument("--template-tokens", type=int, help="prompt template tokens (default: the profile's)")
+    judge.add_argument("--resources", type=Path, help="explicit snapshot for simulation; at most five minutes old")
+    judge.add_argument("--json", action="store_true")
     voice.add_argument("--task", choices=["tts", "stt", "both"], default="both")
     command.add_argument("--task", choices=["answer", "rank", "both"], default="both")
     command.add_argument("--phase", choices=["train", "infer", "both"], default="both")
@@ -72,6 +85,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "snapshot":
             result = collect(args.data_root)
+        elif args.domain == "binary-judge":
+            resources = read_json(args.resources) if args.resources else collect()
+            result = binary_judge.recommend_binary_judge(
+                resources, model=args.model, model_sha256=args.model_sha256, engine=args.engine,
+                backend=args.backend, adapter_bytes=args.adapter_bytes, adapter=args.adapter,
+                reserve_mb=args.reserve_mb, template_tokens=args.template_tokens,
+                source="provided" if args.resources else "live")
         else:
             if args.resources and args.data_root:
                 raise ValueError("--resources and --data-root are mutually exclusive")
@@ -101,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.json or args.command == "snapshot":
         print(json.dumps(result, indent=2, allow_nan=False))
+    elif args.domain == "binary-judge":
+        print(binary_judge.format_report(result))
     elif args.domain == "voice":
         print(format_report(result))
     elif args.domain == "avatar-chat":
