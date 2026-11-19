@@ -15,7 +15,7 @@
         "hosts": {
           "ram": {
             "x86_64-i7-10700f-16t-48g": {
-              "intercept": 1029826560,
+              "intercept": 1039894511,
               "points": [
                 [
                   512,
@@ -28,12 +28,16 @@
                 [
                   8192,
                   1165930496
+                ],
+                [
+                  262144,
+                  4708133984
                 ]
               ],
-              "slope": 16837.52
+              "slope": 13994.61
             },
             "x86_64-i7-6820hq-8t-32g": {
-              "intercept": 1043298979,
+              "intercept": 1034672756,
               "points": [
                 [
                   512,
@@ -58,12 +62,36 @@
                 [
                   262144,
                   4609019904
+                ],
+                [
+                  262144,
+                  4802157664
                 ]
               ],
-              "slope": 13617.16
+              "slope": 13974.28
             }
           }
         },
+        "judge_proof_checks": {
+          "ram": [
+            {
+              "ctx": 262144,
+              "headroom_bytes": 94023680,
+              "host": "x86_64-i7-10700f-16t-48g",
+              "peak": 4708133984
+            },
+            {
+              "ctx": 262144,
+              "headroom_bytes": 0,
+              "host": "x86_64-i7-6820hq-8t-32g",
+              "peak": 4802157664
+            }
+          ]
+        },
+        "judge_proofs": "two real `kilix-llm judge` runs at 261,965 input tokens (base only; the stand-in's bytes added): the judge's render/tokenize of an oversized input costs ~170 MB more than a token-list prompt at 262,144",
+        "judge_proofs_used": [
+          "ram"
+        ],
         "measured_at": "2026-11-18",
         "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
         "peak": "VmHWM of llama-server after one completion whose prompt fills the context (ctx - 8 tokens)",
@@ -77,10 +105,10 @@
         "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
         "weights_bytes": 833592096
       },
-      "profile_sha256": "5f96cdf8154740063de4b6862523444716e08aeb9a090b175d817e5353f22f03",
+      "profile_sha256": "abde8ed584e728c8f40733f442abeacf9b553c06eab3d4de00d22c7876fce393",
       "ram": {
-        "fixed_bytes": 1057542144,
-        "per_token_bytes": 13623
+        "fixed_bytes": 1137908832,
+        "per_token_bytes": 13978
       },
       "standin_adapter": {
         "bytes": 21671008,
@@ -123,6 +151,17 @@
             }
           }
         },
+        "judge_proof_checks": {
+          "ram": [
+            {
+              "ctx": 80896,
+              "headroom_bytes": 108177312,
+              "host": "aarch64-rk3399-6c-4g",
+              "peak": 2176990304
+            }
+          ]
+        },
+        "judge_proofs": "one real `kilix-llm judge` run at the board's memory-bound limit, 80,717 input tokens (base only; the stand-in's bytes added)",
         "measured_at": "2026-11-18",
         "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
         "peak": "VmHWM of llama-server after one completion whose prompt fills the context (ctx - 8 tokens)",
@@ -136,7 +175,7 @@
         "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
         "weights_bytes": 833592096
       },
-      "profile_sha256": "61327a12eff4eaf23c5b41d0c7c596861ab8ae944367d600dc2049e8ca2253bf",
+      "profile_sha256": "ac0f6cc7e3f0b92b2cda012e5f6100e667fa3e9dc02b7a439a59ec9ad2242dc2",
       "ram": {
         "fixed_bytes": 1037993984,
         "per_token_bytes": 15417

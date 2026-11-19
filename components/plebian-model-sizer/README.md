@@ -239,7 +239,10 @@ backend and CPU architecture. Each was measured by loading the exact base GGUF
 plus a rank-8 stand-in LoRA in the engine's server with the judge's flags (one
 slot, flash attention, f16 KV, no prompt cache), filling the context with one
 prompt and reading the process's peak RSS (`VmHWM`) and, on CUDA, its peak VRAM.
-The fit is an upper envelope: the pooled least-squares slope per token and the
+Where they exist, real `kilix-llm judge` runs at the reported limit count too
+(their engine peak plus the stand-in's bytes): the judge renders and tokenizes
+its whole input in the server, which at 262k tokens cost ~170 MB more than a
+ready-made token prompt. The fit is an upper envelope: the pooled least-squares slope per token and the
 smallest fixed part that keeps every measured peak under the line. Then
 
     budget      = MemAvailable (free VRAM on a GPU backend) - reserve
