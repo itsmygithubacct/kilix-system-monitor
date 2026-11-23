@@ -182,8 +182,17 @@ from the Kilix kitty fork's `kitty/kilix_gpu.py` at commit
 `work/0.2.3-rc9-*` and `work/0.2.4-*` branches. The source file is blob
 `23ad1b04bd2055b4d6269de0dd526f4ade0c3ee5`, SHA-256
 `4ac623bd46390c387ed9ebbf4f5856a7f121a1140c727b945182fb7e67aa1483`, 1018
-lines, written under this account and MIT-licensed like this repository. The
-source checkout was read, not modified.
+lines. The source checkout was read, not modified.
+
+### Licence
+
+The kitty fork is distributed under GPL-3.0, and the source file carries no
+licence header of its own. All four commits that touch it are authored by
+`itsmygithubacct <itsmygithubacct@users.noreply.github.com>`. The derived
+reader is offered here under this repository's MIT licence, which the package
+gate requires of every component. As with the kilix-device-lease import, the
+owner's confirmation of that licence choice is required. Until it is given, the
+copy stays on this work branch and is not merged or pinned by a release.
 
 ### What was kept
 
