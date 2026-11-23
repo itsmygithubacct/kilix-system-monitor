@@ -190,9 +190,8 @@ The kitty fork is distributed under GPL-3.0, and the source file carries no
 licence header of its own. All four commits that touch it are authored by
 `itsmygithubacct <itsmygithubacct@users.noreply.github.com>`. The derived
 reader is offered here under this repository's MIT licence, which the package
-gate requires of every component. As with the kilix-device-lease import, the
-owner's confirmation of that licence choice is required. Until it is given, the
-copy stays on this work branch and is not merged or pinned by a release.
+gate requires of every component. The owner confirmed that licence choice on
+2026-11-23.
 
 ### What was kept
 
