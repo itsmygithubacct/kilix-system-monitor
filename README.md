@@ -2,7 +2,8 @@
 
 A parent repository for the components that observe a Plebian-OS machine and
 size work for it: live telemetry, the shared accelerator execution lease,
-unprivileged hardware observation and model resource estimates.
+the GPU residency registry, unprivileged hardware observation and model
+resource estimates.
 
 **Status:** a parent repository pinned by Plebian-OS. Plebian-OS 0.2.3
 (release candidate `v0.2.3-rc6`) holds `KILIX_SYSTEM_MONITOR_REF=9316bc26`
@@ -16,7 +17,7 @@ repository, a Kilix submodule. The default branch is `main`.
 ## What it contains
 
 kilix-system-monitor is the F106 provider monorepo for Plebian OS and Kilix.
-It keeps four separately versioned components beside the contract fixtures
+It keeps five separately versioned components beside the contract fixtures
 that couple them:
 
 - components/kilix-telemetry preserves the public kilix-telemetry package,
@@ -25,6 +26,11 @@ that couple them:
   shared accelerator execution lease that the Qwen and transcription providers
   consume. It coordinates exclusive execution only; it admits no model, device
   or capacity.
+- components/kilix-gpu-residency is the one per-user record of which models
+  are resident on which GPU. Apps register what they load, and `ensure_room`
+  unloads idle, unpinned models least recently used first to make room. Ollama
+  models are found through Ollama itself, and unregistered GPU processes are
+  never touched. Phase 1, in development.
 - components/plebian-hardware implements the currently open, unprivileged D2
   observation surface.
 - components/plebian-model-sizer provides development estimates and provisional
@@ -41,6 +47,7 @@ this parent now has its own public origin.
 | --- | --- | --- | --- |
 | `kilix-telemetry` | 0.1.2 | history-imported | [components/kilix-telemetry](components/kilix-telemetry/README.md) |
 | `kilix-device-lease` | 1.0.0 | imported, awaiting interface acceptance | [components/kilix-device-lease](components/kilix-device-lease/README.md) |
+| `kilix-gpu-residency` | 0.1.0 | development, phase 1 | [components/kilix-gpu-residency](components/kilix-gpu-residency/README.md) |
 | `plebian-hardware` | 0.1.0 | unprivileged D2 | [components/plebian-hardware](components/plebian-hardware/README.md) |
 | `plebian-model-sizer` | 0.2.0 | development estimates, unqualified | [components/plebian-model-sizer](components/plebian-model-sizer/README.md) |
 
@@ -71,7 +78,8 @@ covers. Each component also runs from its source tree, for example
 | `plebian-hardware inventory --json` / `gpu --json` | machine inventory or GPU observation as JSON |
 | `plebian-model-sizer snapshot` | current RAM, cgroup headroom, CUDA free memory and model storage |
 | `plebian-model-sizer recommend help-llm\|avatar-chat\|voice\|runtime --catalog FILE` | provisional resource shortlist for one domain |
-| `make check` | every offline gate (contracts, telemetry, lease, hardware, packages, profiles, evidence, launcher readiness, model sizer) |
+| `kilix-gpu status` / `unload` / `pin` / `unpin` / `room BYTES` | resident models per GPU; unload or pin one; dry-run making room |
+| `make check` | every offline gate (contracts, telemetry, lease, hardware, packages, profiles, evidence, launcher readiness, model sizer, residency) |
 | `make prefetch` | fill the uv cache that `make check` reads offline |
 
 `kilix-device-lease` has no command; it is the `kilix_device_lease` Python
@@ -86,6 +94,7 @@ module that providers import.
                                       ▼
  measured profiles ──▶ plebian-model-sizer ──▶ provisional shortlists (Kilix model and voice setup)
  speech / transcription providers ──▶ kilix_device_lease ──▶ one exclusive accelerator grant
+ apps loading models ──▶ kilix_gpu_residency (+ NVML, Ollama /api/ps) ──▶ who holds which GPU memory; room by unloading idle models
 ```
 
 `kilix-telemetry` runs one sampler per user that reads `/proc` and `/sys` and
@@ -97,10 +106,12 @@ probe targets. `plebian-model-sizer` combines that observation with measured
 reference profiles to estimate training and inference cost; a shortlist is an
 estimate, not a reservation or a qualification. `kilix-device-lease` is a
 cooperative per-user lock that serializes accelerator use across providers.
+`kilix-gpu-residency` records which models are resident and unloads idle ones
+when an app needs room; it neither uses nor changes the lease.
 
 The contracts that couple these components live under `contracts/`: the
 pre-freeze `p1-candidate` bundle, the frozen `v1` resource-profile bundle and
-the device-lease interface. [docs/contracts.md](docs/contracts.md) explains
+the device-lease and GPU-residency interfaces. [docs/contracts.md](docs/contracts.md) explains
 each one and what has and has not been accepted.
 
 ## Documentation
@@ -110,7 +121,7 @@ each one and what has and has not been accepted.
 | [docs/contracts.md](docs/contracts.md) | contract state: candidate, frozen v1, device lease, F120 and trusted-launcher records |
 | [docs/checks.md](docs/checks.md) | prefetch, the offline developer gate and what it exercises |
 | [docs/boundaries.md](docs/boundaries.md) | what is implemented, constructed but non-qualifying, and not claimed |
-| [MIGRATION.md](MIGRATION.md) | the kilix-telemetry history import and the kilix-device-lease import |
+| [MIGRATION.md](MIGRATION.md) | the kilix-telemetry history import, the kilix-device-lease import and the copied VRAM reader |
 | [integration/README.md](integration/README.md) | the F120 development registration and trusted-launcher readiness |
 | [integration/TRUSTED-LAUNCHER-CONSUMER.md](integration/TRUSTED-LAUNCHER-CONSUMER.md) | the trusted-launcher consumer contract |
 | [LICENSES/README.md](LICENSES/README.md) | licensing layout |

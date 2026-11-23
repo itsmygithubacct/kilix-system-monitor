@@ -169,3 +169,44 @@ Before publication, drop the import commit; nothing outside this repository
 and the two provider work branches references it, and the kilix-voice branch is
 untouched. After publication, consumers move back only through their owning
 tracks.
+
+## kilix-gpu-residency VRAM reader
+
+Status: copied, not moved. Kilix core keeps its own reader until phase 2.
+
+### Source
+
+`components/kilix-gpu-residency/src/kilix_gpu_residency/vram.py` is derived
+from the Kilix kitty fork's `kitty/kilix_gpu.py` at commit
+`629035ef89f29f052b5571f684009dcc03ec5160`. That commit is on published
+`work/0.2.3-rc9-*` and `work/0.2.4-*` branches. The source file is blob
+`23ad1b04bd2055b4d6269de0dd526f4ade0c3ee5`, SHA-256
+`4ac623bd46390c387ed9ebbf4f5856a7f121a1140c727b945182fb7e67aa1483`, 1018
+lines, written under this account and MIT-licensed like this repository. The
+source checkout was read, not modified.
+
+### What was kept
+
+- DRM discovery from `/sys/class/drm`, PCI-only, with connectors skipped, and the `KILIX_GPU_SYSFS_ROOT` override;
+- the runtime-PM rule that nothing is read from a suspended or suspending GPU, and that NVML is not opened while any NVIDIA GPU sleeps;
+- the ctypes NVML client: handle by PCI bus id, name, memory, and the `_v3`/`_v2`/v1 process-list ABIs with the insufficient-size retry and the merge of compute and graphics lists;
+- the DRM fdinfo parser, which prefers device-local regions and does not count cycles as memory.
+
+### What changed
+
+- **Removed:** the terminal chrome (modes, formatting, glyphs, colours, the click card) and the pane attribution through Kilix's process cache.
+- **Removed:** the idle backoff and the retained cross-sample NVML session. The registry reads on demand, not every 1.5 s, and closes NVML after each snapshot.
+- **Changed:** NVML memory reports free bytes as well as used and total.
+- **Added:** `snapshot(wake=True)`, which reads sleeping GPUs. `ensure_room` asks for it because a model is about to load there.
+- **Added:** an `nvidia-smi` fallback when `libnvidia-ml.so.1` cannot be loaded. The source never spawns it.
+- **Changed:** per-process DRM fdinfo is read for every readable process, but only on devices with a VRAM counter. The source read only a pane's tree, and the registry needs unmanaged processes too.
+- **Added:** `has_counter`, `normalise_pci` and the `KILIX_GPU_PROC_ROOT` override.
+
+### The phase 2 seam
+
+Kilix core is to import `kilix_gpu_residency.vram` for its readings, with
+`kitty/kilix_gpu.py` keeping its chrome, backoff and pane attribution. Its GPU
+card and top bar can then read `kilix_gpu_residency.status()` to name the owner
+of each resident model. Kilix already fetches this repository at a pinned
+commit for the model sizer and the lease, so no new fetch path is needed.
+Changing Kilix core is a phase 2 task in its own track.

@@ -36,6 +36,17 @@ exclusive, non-co-residential admission. The component suite holds the module
 to those exact values. F100 acceptance of the interface bytes is a separate
 record and has not been given by anything in this repository.
 
+contracts/kilix.gpu-residency-v1.interface.json records the phase 1 GPU
+residency interface:
+
+- the version, backends, record states, unload kinds, policies and error codes;
+- the record fields, the record and event bounds, and the lock, grace and release timeouts;
+- the default namespace, the device-map variable and the command's JSON schemas;
+- the eviction rules and the two Ollama calls.
+
+`components/kilix-gpu-residency/tests/test_interface_document.py` holds the
+module to those values. The interface has had no acceptance review.
+
 integration/f120-registration.json is the exact pre-repository scaffold from
 the published F120 handoff. Its zero commit and metadata sentinels are retained
 until the parent has a reviewed public install surface. An F120 development

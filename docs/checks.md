@@ -42,8 +42,14 @@ fixtures, the imported telemetry suite, the shared accelerator lease's
 real-process controls and interface-document binding, the hardware unit boundaries, live
 inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
 consumer readiness, the unqualified provider-profile intake validator, and
-the model-sizer resource accounting and refusal cases. Hardware checks use no network and no
-privilege. `tools/measure/profile.py` records **1/1** provider-owned evidence
+the model-sizer resource accounting and refusal cases, and the GPU residency
+suite (fake GPUs, a fake loopback Ollama and real process groups behind a guard
+that refuses `/run/user`, the real NVML, `nvidia-smi`, non-loopback networking
+and signals outside the suite). Hardware checks use no network and no
+privilege. `make residency-defects` is not part of `make check`: it reruns the
+residency suite once for each planted defect in
+`components/kilix-gpu-residency/tests/defects.py` and fails on any defect the
+suite does not catch. `tools/measure/profile.py` records **1/1** provider-owned evidence
 record against **3/3** exact input-byte identities, promotes **0/9** provider
 measurement fields, and keeps qualification acceptance at **0/1**. Provider
 execution is outside this validator.
