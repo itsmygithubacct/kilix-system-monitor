@@ -23,7 +23,7 @@ TESTS = Path(__file__).resolve().parent
 
 PLANTED = r"""
 import json, os, pathlib, signal, socket, subprocess, sys
-target, smi, stranger = sys.argv[1], sys.argv[2], int(sys.argv[3])
+target, smi, stranger, models = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 results = {"guarded": bool(getattr(sys, "_kilix_residency_guard", False))}
 def attempt(name, call):
     try:
@@ -36,6 +36,8 @@ attempt("rename", lambda: os.rename(target + "/rename-me", target + "/renamed"))
 attempt("open", lambda: open(target + "/opened", "w").close())
 attempt("pathlib", lambda: pathlib.Path(target, "touched").touch())
 attempt("mkfifo", lambda: os.mkfifo(target + "/fifo"))
+attempt("model-folder", lambda: os.makedirs(models + "/kilix-llm/models"))
+attempt("model-file", lambda: open(models + "/puzzllm/diffusion.gguf", "wb").close())
 attempt("nvidia-smi", lambda: subprocess.run([smi], check=True))
 def dlopen():
     import ctypes
@@ -63,9 +65,10 @@ import os, sys
 target = sys.argv[1]
 os.mkdir(target, 0o700)
 open(os.path.join(target, "rename-me"), "wb").write(b"canary")
+os.makedirs(os.path.join(sys.argv[2], "puzzllm"))
 """
-CALLS = ("makedirs", "rename", "open", "pathlib", "mkfifo", "nvidia-smi", "nvml", "ollama-port", "remote",
-         "signal-stranger")
+CALLS = ("makedirs", "rename", "open", "pathlib", "mkfifo", "model-folder", "model-file", "nvidia-smi", "nvml",
+         "ollama-port", "remote", "signal-stranger")
 
 
 class GuardTests(unittest.TestCase):
@@ -78,6 +81,8 @@ class GuardTests(unittest.TestCase):
         self.smi = Path(self.temp.name) / "nvidia-smi"
         self.smi.write_text("#!/bin/sh\nexit 0\n")
         self.smi.chmod(0o700)
+        # A stand-in home whose model folders the guarded child is told are the real ones.
+        self.models = os.path.join(self.temp.name, "home")
         # A process that is not a descendant of the suite: its parent exits at once.
         self.stranger = int(subprocess.run(
             ["sh", "-c", "sleep 30 </dev/null >/dev/null 2>&1 & echo $!"], capture_output=True, text=True,
@@ -92,22 +97,37 @@ class GuardTests(unittest.TestCase):
         return done.stdout
 
     def snapshot(self):
-        code = ("import json, os, sys; t = sys.argv[1]; print(json.dumps(sorted("
-                "os.path.relpath(os.path.join(d, n), t) for d, ds, fs in os.walk(t) for n in ds + fs)))")
-        return json.loads(self.child(code, residency_containment.env_without_path_guard()))
+        code = ("import json, os, sys; print(json.dumps(sorted("
+                "os.path.relpath(os.path.join(d, n), t) for t in sys.argv[1:] for d, ds, fs in os.walk(t) "
+                "for n in ds + fs)))")
+        return json.loads(self.child(code, residency_containment.env_without_path_guard(), self.models))
 
     def planted(self, env):
-        return json.loads(self.child(PLANTED, env, str(self.smi), str(self.stranger)))
+        return json.loads(self.child(PLANTED, env, str(self.smi), str(self.stranger), self.models))
 
     def test_children_started_by_the_suite_refuse_every_planted_call(self):
-        self.child(FIXTURE, residency_containment.env_without_path_guard())
+        self.child(FIXTURE, residency_containment.env_without_path_guard(), self.models)
         before = self.snapshot()
-        self.assertEqual(self.planted(residency_containment.child_env()),
+        folders = os.pathsep.join((self.models + "/kilix-llm", self.models + "/puzzllm"))
+        self.assertEqual(self.planted(residency_containment.child_env(**{guard.MODELS_ENV: folders})),
                          {"guarded": True, **{call: "RealMachineRefused" for call in CALLS}})
         self.assertEqual(self.snapshot(), before)
 
+    def test_the_suite_recorded_the_real_model_folders_before_clearing_their_variables(self):
+        import pwd
+        home = pwd.getpwuid(os.getuid()).pw_dir
+        for path in (home + "/.local/gpu_terminal/kilix-llm", home + "/.local/share/puzzllm"):
+            with self.subTest(folder=path):
+                self.assertIn(path, guard.MODEL_FOLDERS)
+                self.assertTrue(guard.refuses(path + "/models/x.gguf"))
+                with self.assertRaises(guard.RealMachineRefused):
+                    open(path + "/models/never-made.gguf", "rb")
+        self.assertEqual(os.environ[guard.MODELS_ENV].split(os.pathsep), list(guard.MODEL_FOLDERS))
+        for name in ("KILIX_LLM_MODELS_DIR", "PUZZLLM_DIFFUSION_MODELS", "GPU_TERMINAL_HOME", "XDG_DATA_HOME"):
+            self.assertNotIn(name, os.environ)
+
     def test_children_without_the_guard_would_have_made_every_call(self):
-        self.child(FIXTURE, residency_containment.env_without_path_guard())
+        self.child(FIXTURE, residency_containment.env_without_path_guard(), self.models)
         before = self.snapshot()
         self.assertEqual(self.planted(residency_containment.env_without_path_guard()),
                          {"guarded": False, **{call: "done" for call in CALLS}})

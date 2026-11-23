@@ -4,6 +4,98 @@
     "process",
     "http"
   ],
+  "catalog": {
+    "actions": [
+      "list",
+      "install",
+      "remove",
+      "verify"
+    ],
+    "attempts": 5,
+    "command": "kilix-gpu models",
+    "data_schema": "kilix.gpu-residency.catalog/v1",
+    "exit_codes": {
+      "0": "done",
+      "1": "failed",
+      "2": "refused",
+      "3": "in use",
+      "4": "does not match"
+    },
+    "folders": {
+      "diffusion": {
+        "base_default": "~/.local/share",
+        "base_env": "XDG_DATA_HOME",
+        "env": "PUZZLLM_DIFFUSION_MODELS",
+        "subpath": "puzzllm/diffusion"
+      },
+      "llama.cpp": {
+        "base_default": "~/.local/gpu_terminal",
+        "base_env": "GPU_TERMINAL_HOME",
+        "env": "KILIX_LLM_MODELS_DIR",
+        "subpath": "kilix-llm/models"
+      }
+    },
+    "kinds": [
+      "gguf",
+      "diffusion-gguf",
+      "ollama"
+    ],
+    "lock_name": ".fetch.lock",
+    "lock_wait_seconds": 1,
+    "max_redirects": 5,
+    "ollama": {
+      "check": "POST /api/show",
+      "delete": "DELETE /api/delete",
+      "list": "GET /api/tags",
+      "loopback_only": true,
+      "pull": "POST /api/pull stream"
+    },
+    "outcomes": {
+      "already-installed": 0,
+      "already-saved": 0,
+      "ambiguous": 2,
+      "busy": 3,
+      "busy-folder": 2,
+      "conflict": 2,
+      "download-failed": 1,
+      "downloaded-mismatch": 1,
+      "invalid-name": 2,
+      "loaded": 3,
+      "mismatch": 4,
+      "no-space": 2,
+      "not-installed": 2,
+      "not-verifiable": 2,
+      "open": 3,
+      "outside-folders": 2,
+      "pinned": 3,
+      "pull-failed": 1,
+      "pulled": 0,
+      "remove-failed": 1,
+      "removed": 0,
+      "saved": 0,
+      "symlink": 2,
+      "unavailable": 1,
+      "unknown": 2,
+      "unsafe-folder": 2,
+      "verified": 0
+    },
+    "part_template": ".{file}.part",
+    "python_module": "kilix_gpu_residency.catalog",
+    "release_wait_seconds": 10,
+    "remove_refused_while": [
+      "registered",
+      "loaded-in-ollama",
+      "open-or-mapped"
+    ],
+    "result_schema": "kilix.gpu-residency.models/v1",
+    "unload_never_unloads": [
+      "pinned",
+      "busy",
+      "loading",
+      "unmanaged"
+    ],
+    "url_pattern": "https://huggingface\\.co/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*/resolve/[0-9a-f]{40}/(?P<file>[^/?#]+)\\Z"
+  },
   "command": "kilix-gpu",
   "default_policy": "evict-idle",
   "device_lease": {

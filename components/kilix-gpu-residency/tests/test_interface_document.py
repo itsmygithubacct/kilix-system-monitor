@@ -17,7 +17,7 @@ import unittest
 
 import residency_containment  # noqa: F401
 import kilix_gpu_residency as residency
-from kilix_gpu_residency import cli
+from kilix_gpu_residency import catalog, cli
 
 COMPONENT = Path(__file__).resolve().parents[1]
 ROOT = COMPONENT.parents[1]
@@ -27,7 +27,7 @@ KEYS = {"schema", "version", "distribution", "python_module", "command", "namesp
         "backends", "states", "unload_kinds", "policies", "default_policy", "error_codes", "record_fields",
         "max_records", "max_events", "lock_wait_seconds", "term_grace_seconds", "kill_grace_seconds",
         "release_wait_seconds", "device_map_env", "status_schema", "room_schema", "eviction", "ollama",
-        "device_lease"}
+        "device_lease", "catalog"}
 
 
 def strict_load(raw: bytes):
@@ -110,7 +110,80 @@ def error_codes(sources: dict[str, str]) -> tuple[set[str], list[str]]:
     return codes, problems
 
 
+def catalog_differences(module, document) -> list[str]:
+    section = document["catalog"]
+    packaged = json.loads((COMPONENT / "src" / "kilix_gpu_residency" / "catalog.json").read_text())
+    found = []
+    pairs = (
+        ("python_module", module.__name__, section["python_module"]),
+        ("actions", module.ACTIONS, tuple(section["actions"])),
+        ("data_schema", module.SCHEMA, section["data_schema"]),
+        ("result_schema", module.RESULT_SCHEMA, section["result_schema"]),
+        ("kinds", module.KINDS, tuple(section["kinds"])),
+        ("folders", packaged["folders"], section["folders"]),
+        ("url_pattern", module._HF.pattern, section["url_pattern"]),
+        ("lock_name", module.LOCK_NAME, section["lock_name"]),
+        ("part_template", module.PART_TEMPLATE, section["part_template"]),
+        ("attempts", module.ATTEMPTS, section["attempts"]),
+        ("lock_wait_seconds", module.LOCK_WAIT_SECONDS, float(section["lock_wait_seconds"])),
+        ("release_wait_seconds", module.RELEASE_WAIT_SECONDS, float(section["release_wait_seconds"])),
+        ("max_redirects", module.MAX_REDIRECTS, section["max_redirects"]),
+        ("outcomes", module.OUTCOMES, section["outcomes"]),
+        ("exit_codes", {str(k): v for k, v in module.EXIT_MEANINGS.items()}, section["exit_codes"]),
+    )
+    for key, observed, expected in pairs:
+        if observed != expected or type(observed) is not type(expected):
+            found.append(f"{key}: module {observed!r}, document {expected!r}")
+    if set(module.OUTCOMES.values()) != set(module.EXIT_MEANINGS):
+        found.append("exit_codes: an outcome has an undocumented exit code")
+    return found
+
+
+def outcomes(source: str) -> tuple[set[str], list[str]]:
+    """Every outcome catalog.py can produce: CatalogError's first and Result's second argument."""
+    found, problems = set(), []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        position = {"CatalogError": 0, "Result": 1}.get(node.func.id)
+        if position is None:
+            continue
+        value = node.args[position] if len(node.args) > position else None
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            found.add(value.value)
+        else:
+            problems.append(f"{node.lineno}: {node.func.id} with a computed outcome")
+    return found, problems
+
+
 class InterfaceDocumentTests(unittest.TestCase):
+    def test_the_catalog_section_matches_the_catalog_module(self):
+        document = load()
+        self.assertEqual(catalog_differences(catalog, document), [])
+        planted = {"attempts": 4, "lock_name": ".lock", "kinds": ["gguf"], "result_schema": "x",
+                   "outcomes": {**catalog.OUTCOMES, "removed": 1}, "exit_codes": {"0": "done"},
+                   "part_template": "{file}.part", "url_pattern": ".*"}
+        for key, value in planted.items():
+            with self.subTest(planted=key):
+                drifted = copy.deepcopy(document)
+                drifted["catalog"][key] = value
+                self.assertTrue(any(line.startswith(key) for line in catalog_differences(catalog, drifted)))
+        self.assertEqual(document["catalog"]["ollama"], {
+            "list": "GET /api/tags", "check": "POST /api/show", "pull": "POST /api/pull stream",
+            "delete": "DELETE /api/delete", "loopback_only": True})
+        source = (COMPONENT / "src" / "kilix_gpu_residency" / "ollama.py").read_text(encoding="utf-8")
+        for call in ('"GET", "/api/tags"', '"POST", "/api/show"', '"POST", "/api/pull", {"model": name, "stream": True}',
+                     '"DELETE", "/api/delete"'):
+            self.assertIn(call, source)
+
+    def test_the_outcomes_are_every_outcome_the_catalog_can_produce(self):
+        source = (COMPONENT / "src" / "kilix_gpu_residency" / "catalog.py").read_text(encoding="utf-8")
+        found, problems = outcomes(source)
+        self.assertEqual(problems, [])
+        self.assertEqual(found, set(load()["catalog"]["outcomes"]))
+        self.assertIn("exploded", outcomes(source + '\nraise CatalogError("exploded", "x")\n')[0])
+        self.assertTrue(outcomes(source + "\nraise CatalogError(code, 'x')\n")[1])
+
     def test_the_document_has_exactly_its_keys_and_no_duplicates(self):
         document = load()
         self.assertEqual(set(document), KEYS)

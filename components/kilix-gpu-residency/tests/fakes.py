@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -149,6 +150,9 @@ class FakeOllama:
 
     def __init__(self, scratch: Path, *, legacy: bool = False) -> None:
         self.models: dict[str, dict[str, Any]] = {}
+        self.disk: dict[str, int] = {}  # installed models (GET /api/tags) and their sizes
+        self.pull_error: str | None = None  # an error line the next pulls report
+        self.pull_truncated = False  # end the next pulls' progress before "success"
         self.requests: list[tuple[str, str, Any]] = []
         self.ignore_unload = False
         self.lock = threading.Lock()
@@ -172,22 +176,55 @@ class FakeOllama:
             def log_message(self, *_: Any) -> None:
                 pass
 
-            def reply(self, value: Any) -> None:
+            def reply(self, value: Any, code: int = 200) -> None:
                 raw = json.dumps(value).encode()
-                self.send_response(200)
+                self.send_response(code)
                 self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
 
+            def body(self) -> Any:
+                return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+
             def do_GET(self) -> None:
                 owner.requests.append(("GET", self.path, None))
                 with owner.lock:
-                    models = [{"name": name, "model": name, **value} for name, value in owner.models.items()]
+                    if self.path == "/api/tags":
+                        models = [{"name": name, "model": name, "size": size} for name, size in owner.disk.items()]
+                    else:
+                        models = [{"name": name, "model": name, **value} for name, value in owner.models.items()]
                 self.reply({"models": models})
 
+            def do_DELETE(self) -> None:
+                body = self.body()
+                owner.requests.append(("DELETE", self.path, body))
+                with owner.lock:
+                    found = owner.disk.pop(body.get("model"), None) is not None
+                self.reply({} if found else {"error": "model not found"}, 200 if found else 404)
+
             def do_POST(self) -> None:
-                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                body = self.body()
                 owner.requests.append(("POST", self.path, body))
+                if self.path == "/api/show":
+                    with owner.lock:
+                        found = body.get("model") in owner.disk
+                    self.reply({"modelfile": "FROM x"} if found else {"error": "not found"}, 200 if found else 404)
+                    return
+                if self.path == "/api/pull":
+                    lines = [{"status": "pulling manifest"},
+                             {"status": "pulling abc", "completed": 5, "total": 10},
+                             {"error": owner.pull_error} if owner.pull_error else {"status": "success"}]
+                    if owner.pull_truncated:
+                        lines = lines[:-1]
+                    raw = b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+                    if not owner.pull_error:
+                        with owner.lock:
+                            owner.disk[body.get("model")] = 2 * GIB
+                    self.send_response(200)
+                    self.send_header("Content-Length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                    return
                 if self.path == "/api/generate" and body.get("keep_alive") == 0 and not owner.ignore_unload:
                     with owner.lock:
                         owner.models.pop(body.get("model"), None)
@@ -233,6 +270,80 @@ class FakeOllama:
         stop(self.runner)
 
 
+class FakeDownloads:
+    """A loopback file server shaped like Hugging Face: ``/resolve/<name>`` redirects to
+    ``/files/<name>``, which honours ``Range``. ``drops[name]`` lists the byte offsets at
+    which the next responses break the connection; ``ignore_range`` answers 200 to a Range."""
+
+    def __init__(self) -> None:
+        self.files: dict[str, bytes] = {}
+        self.drops: dict[str, list[int]] = {}
+        self.ignore_range = False
+        self.shift = 0  # resume this many bytes before the offset asked for
+        self.redirect: str | None = None  # where /resolve/ sends instead, when set
+        self.status: int | None = None  # answer every /files/ request with this status
+        self.requests: list[tuple[str, str | None]] = []
+        owner = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_: Any) -> None:
+                pass
+
+            def do_GET(self) -> None:
+                owner.requests.append((self.path, self.headers.get("Range")))
+                if self.path.startswith("/resolve/"):
+                    self.send_response(302)
+                    self.send_header("Location", owner.redirect or "/files/" + self.path[len("/resolve/"):])
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                name = self.path[len("/files/"):]
+                data = owner.files.get(name)
+                if owner.status is not None or data is None:
+                    self.send_response(owner.status or 404)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                start = 0
+                wanted = self.headers.get("Range")
+                if wanted and not owner.ignore_range:
+                    start = max(0, int(wanted[len("bytes="):].rstrip("-")) - owner.shift)
+                    if start >= len(data):
+                        self.send_response(416)
+                        self.send_header("Content-Range", f"bytes */{len(data)}")
+                        self.send_header("Content-Length", "0")
+                        self.end_headers()
+                        return
+                    self.send_response(206)
+                    self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
+                else:
+                    self.send_response(200)
+                self.send_header("Content-Length", str(len(data) - start))
+                self.end_headers()
+                drops = owner.drops.get(name)
+                stop_at = drops.pop(0) if drops else len(data)
+                try:
+                    self.wfile.write(data[start:max(start, stop_at)])
+                    if stop_at < len(data):
+                        self.wfile.flush()
+                        self.connection.shutdown(socket.SHUT_RDWR)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass  # the client stopped reading (a mismatch it noticed early)
+                self.close_connection = True
+
+        self.http = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.http.server_address[1]}"
+        self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
+        self.thread.start()
+
+    def ranges(self, name: str) -> list[str | None]:
+        return [wanted for path, wanted in self.requests if path == "/files/" + name]
+
+    def close(self) -> None:
+        self.http.shutdown()
+        self.http.server_close()
+
+
 def stop(process: subprocess.Popen) -> None:
     if process.poll() is None:
         try:
@@ -267,8 +378,9 @@ class ResidencyCase(unittest.TestCase):
         self.sys = self.scratch / "sys"
         for spec in self.gpus:
             make_gpu(self.sys, *spec)
-        self.environ = {key: os.environ.get(key) for key in ("KILIX_GPU_SYSFS_ROOT", "KILIX_GPU_PROC_ROOT",
-                                                            "KILIX_GPU_DEVICES", "OLLAMA_HOST")}
+        self.environ = {key: os.environ.get(key) for key in (
+            "KILIX_GPU_SYSFS_ROOT", "KILIX_GPU_PROC_ROOT", "KILIX_GPU_DEVICES", "OLLAMA_HOST", "HOME",
+            "KILIX_LLM_MODELS_DIR", "PUZZLLM_DIFFUSION_MODELS", "GPU_TERMINAL_HOME", "XDG_DATA_HOME")}
         self.addCleanup(self.restore_environ)
         os.environ["KILIX_GPU_SYSFS_ROOT"] = str(self.sys)
         self.ollama = FakeOllama(self.scratch)
@@ -363,5 +475,110 @@ def wait_for(predicate: Callable[[], bool], timeout: float = 10.0) -> bool:
     return predicate()
 
 
-__all__ = ["ResidencyCase", "FakeNvml", "FakeOllama", "make_gpu", "wait_for", "alive", "stop", "GIB", "MIB",
+__all__ = ["ResidencyCase", "FakeNvml", "FakeOllama", "FakeDownloads", "make_gpu", "wait_for", "alive", "stop", "GIB", "MIB",
            "NVIDIA", "SECOND_NVIDIA", "INTEL", "AMD", "ollama_module"]
+
+
+def blob(size: int, seed: int) -> bytes:
+    import random
+    return random.Random(seed).randbytes(size)
+
+
+class CatalogCase(ResidencyCase):
+    """ResidencyCase plus a private home with the catalog's default folders, a test
+    catalog served from a fake loopback download server and a file:// mirror, and
+    fast retry, lock and release timings."""
+
+    SMALL = "Small-Q4.gguf"
+    TINY = "Tiny-Diffusion.Q4.gguf"
+
+    def setUp(self) -> None:
+        super().setUp()
+        from kilix_gpu_residency import catalog
+        self.catalog_module = catalog
+        self.home = self.scratch / "home"
+        self.home.mkdir(mode=0o700)
+        os.environ["HOME"] = str(self.home)
+        for name in ("KILIX_LLM_MODELS_DIR", "PUZZLLM_DIFFUSION_MODELS", "GPU_TERMINAL_HOME", "XDG_DATA_HOME"):
+            os.environ.pop(name, None)
+        self.llm = self.home / ".local" / "gpu_terminal" / "kilix-llm" / "models"
+        self.diffusion = self.home / ".local" / "share" / "puzzllm" / "diffusion"
+        for name in ("ATTEMPTS", "BACKOFF_SECONDS", "LOCK_WAIT_SECONDS", "RELEASE_WAIT_SECONDS", "free_bytes"):
+            self.addCleanup(setattr, catalog, name, getattr(catalog, name))
+        catalog.BACKOFF_SECONDS = 0.0
+        catalog.LOCK_WAIT_SECONDS = 0.2
+        catalog.RELEASE_WAIT_SECONDS = 3.0
+        self.downloads = FakeDownloads()
+        self.addCleanup(self.downloads.close)
+        self.small = blob(3 * MIB + 123, 1)
+        self.tiny = blob(2 * MIB + 7, 2)
+        self.downloads.files[self.SMALL] = self.small
+        mirror = self.scratch / "mirror"
+        mirror.mkdir(mode=0o700)
+        (mirror / self.TINY).write_bytes(self.tiny)
+        self.catalog_path = self.scratch / "catalog.json"
+        self.write_catalog()
+
+    def document(self) -> dict:
+        import hashlib
+        packaged = json.loads((Path(residency.__file__).parent / "catalog.json").read_text())
+        common = {"architecture": "test", "context_length": 4096, "source": "a test fixture", "licence": "mit"}
+        return {"schema": "kilix.gpu-residency.catalog/v1", "folders": packaged["folders"], "models": [
+            {"id": "small", "name": "Small (Q4)", "kind": "gguf", "folder": "llama.cpp", "file": self.SMALL,
+             "bytes": len(self.small), "sha256": hashlib.sha256(self.small).hexdigest(),
+             "url": f"{self.downloads.url}/resolve/{self.SMALL}", **common},
+            {"id": "tiny-diffusion", "name": "Tiny diffusion (Q4)", "kind": "diffusion-gguf", "folder": "diffusion",
+             "file": self.TINY, "bytes": len(self.tiny), "sha256": hashlib.sha256(self.tiny).hexdigest(),
+             "url": (self.scratch / "mirror" / self.TINY).as_uri(), **common},
+            {"id": "tiny-ollama", "name": "Tiny (Ollama)", "kind": "ollama", "ollama": "tiny:1b", **common},
+        ]}
+
+    def write_catalog(self, document: dict | None = None) -> None:
+        self.catalog_path.write_text(json.dumps(document or self.document()))
+        self.catalog = self.catalog_module.load(str(self.catalog_path))
+
+    def install(self, target: str, **kwargs: Any):
+        return self.catalog_module.install(target, catalog=self.catalog, ollama=self.ollama.url, **kwargs)
+
+    def remove(self, target: str, **kwargs: Any):
+        return self.catalog_module.remove(target, catalog=self.catalog, **self.where(), **kwargs)
+
+    def verify(self, target: str, **kwargs: Any):
+        return self.catalog_module.verify(target, catalog=self.catalog, **kwargs)
+
+    def inventory(self, **kwargs: Any):
+        return self.catalog_module.list_models(catalog=self.catalog, **{**self.where(), **kwargs})
+
+    def refused(self, outcome: str, call: Callable[..., Any], *args: Any, **kwargs: Any):
+        with self.assertRaises(self.catalog_module.CatalogError) as caught:
+            call(*args, **kwargs)
+        self.assertEqual(caught.exception.outcome, outcome, str(caught.exception))
+        return caught.exception
+
+    def place(self, folder: Path, name: str, data: bytes) -> Path:
+        folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+        for parent in (folder, *folder.parents):
+            if parent in (self.home, self.scratch):
+                break
+            os.chmod(parent, 0o700)
+        path = folder / name
+        path.write_bytes(data)
+        return path
+
+    def holding(self, path: Path) -> subprocess.Popen:
+        """A process this suite started that holds ``path`` open (on its stdin) and nothing else."""
+        with open(path, "rb") as stream:
+            process = subprocess.Popen(["sleep", "600"], stdin=stream, process_group=0)
+        self.addCleanup(stop, process)
+        return process
+
+    def cli(self, *argv: str) -> tuple[int, str, str]:
+        import io
+        from kilix_gpu_residency import cli
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["--namespace", self.namespace, "--ollama", self.ollama.url, "models",
+                         "--catalog", str(self.catalog_path), *argv], out, err)
+        return code, out.getvalue(), err.getvalue()
+
+
+__all__ += ["CatalogCase", "blob"]

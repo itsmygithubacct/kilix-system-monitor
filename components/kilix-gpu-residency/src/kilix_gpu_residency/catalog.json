@@ -1,0 +1,117 @@
+{
+  "schema": "kilix.gpu-residency.catalog/v1",
+  "folders": {
+    "llama.cpp": {
+      "env": "KILIX_LLM_MODELS_DIR",
+      "base_env": "GPU_TERMINAL_HOME",
+      "base_default": "~/.local/gpu_terminal",
+      "subpath": "kilix-llm/models"
+    },
+    "diffusion": {
+      "env": "PUZZLLM_DIFFUSION_MODELS",
+      "base_env": "XDG_DATA_HOME",
+      "base_default": "~/.local/share",
+      "subpath": "puzzllm/diffusion"
+    }
+  },
+  "models": [
+    {
+      "id": "qwen3.5-0.8b",
+      "name": "Qwen3.5 0.8B (Q8_0)",
+      "kind": "gguf",
+      "folder": "llama.cpp",
+      "file": "Qwen3.5-0.8B-Q8_0.gguf",
+      "bytes": 833592096,
+      "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
+      "url": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/807dfd9a6fadbf703207aac3bfb0b2b3040d077c/Qwen3.5-0.8B-Q8_0.gguf",
+      "architecture": "qwen35",
+      "context_length": 262144,
+      "source": "ggml-org/Qwen3.5-0.8B-GGUF, a GGUF of Qwen/Qwen3.5-0.8B",
+      "licence": "apache-2.0, as the GGUF header and the model card declare"
+    },
+    {
+      "id": "qwen3.5-4b-q4",
+      "name": "Qwen3.5 4B (Q4_K_M)",
+      "kind": "gguf",
+      "folder": "llama.cpp",
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "bytes": 2740937888,
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
+      "architecture": "qwen35",
+      "context_length": 262144,
+      "source": "unsloth/Qwen3.5-4B-GGUF, a GGUF of Qwen/Qwen3.5-4B",
+      "licence": "apache-2.0, as the GGUF header and the model card declare"
+    },
+    {
+      "id": "gemma4-e2b-q4-k-m",
+      "name": "Gemma 4 E2B it (Q4_K_M)",
+      "kind": "gguf",
+      "folder": "llama.cpp",
+      "file": "gemma-4-E2B-it-Q4_K_M.gguf",
+      "bytes": 3106738272,
+      "sha256": "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
+      "url": "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/0314792d7f1f7e229411f620751375812bb9faf2/gemma-4-E2B-it-Q4_K_M.gguf",
+      "architecture": "gemma4",
+      "context_length": 131072,
+      "source": "unsloth/gemma-4-E2B-it-GGUF, a GGUF of google/gemma-4-E2B-it",
+      "licence": "apache-2.0, as the GGUF header and the model card declare (https://ai.google.dev/gemma/docs/gemma_4_license)"
+    },
+    {
+      "id": "llada-moe-7b-a1b",
+      "name": "LLaDA-MoE 7B-A1B Instruct (Q4_K_M)",
+      "kind": "diffusion-gguf",
+      "folder": "diffusion",
+      "file": "LLaDA-MoE-7B-A1B-Instruct.Q4_K_M.gguf",
+      "bytes": 4520661184,
+      "sha256": "a8fc1d9d43718a742b55b122cdca739a9cc2e790e38b2316b1a5b10e84489b27",
+      "url": "https://huggingface.co/mradermacher/LLaDA-MoE-7B-A1B-Instruct-GGUF/resolve/1080e16761f6f82a92e8bfb54a4c8998dfee0219/LLaDA-MoE-7B-A1B-Instruct.Q4_K_M.gguf",
+      "architecture": "llada-moe",
+      "context_length": 8192,
+      "source": "mradermacher/LLaDA-MoE-7B-A1B-Instruct-GGUF, a GGUF of inclusionAI/LLaDA-MoE-7B-A1B-Instruct",
+      "licence": "apache-2.0, as the GGUF header and the model card declare"
+    },
+    {
+      "id": "llada-1.5",
+      "name": "LLaDA 1.5 (Q4_K_M)",
+      "kind": "diffusion-gguf",
+      "folder": "diffusion",
+      "file": "LLaDA-1.5.Q4_K_M.gguf",
+      "bytes": 4925226240,
+      "sha256": "967765045ef1f9db6f4dff72b14a338e0c897e81618f7779105426e9e2e9fce8",
+      "url": "https://huggingface.co/mradermacher/LLaDA-1.5-GGUF/resolve/5acdac19a98ed7ff799324391d82c602474edf3b/LLaDA-1.5.Q4_K_M.gguf",
+      "architecture": "llada",
+      "context_length": 4096,
+      "source": "mradermacher/LLaDA-1.5-GGUF, a GGUF of GSAI-ML/LLaDA-1.5",
+      "licence": "mit, as the GGUF header and the model card declare"
+    },
+    {
+      "id": "dream-coder-7b",
+      "name": "Dream-Coder v0 Instruct 7B (Q4_K_M)",
+      "kind": "diffusion-gguf",
+      "folder": "diffusion",
+      "file": "Dream-Coder-v0-Instruct-7B.Q4_K_M.gguf",
+      "bytes": 4683074016,
+      "sha256": "c1b2c58e9f2a6e9cd548347e5845c3e5306862be1151329b22c5b3956d858e3c",
+      "url": "https://huggingface.co/mradermacher/Dream-Coder-v0-Instruct-7B-GGUF/resolve/e22431dd659aba45146840ac9b6b9417aff3cac5/Dream-Coder-v0-Instruct-7B.Q4_K_M.gguf",
+      "architecture": "dream",
+      "context_length": 32768,
+      "source": "mradermacher/Dream-Coder-v0-Instruct-7B-GGUF, a GGUF of Dream-org/Dream-Coder-v0-Instruct-7B",
+      "licence": "apache-2.0, as the GGUF header and the model card declare"
+    },
+    {
+      "id": "d3llm-llada",
+      "name": "d3LLM LLaDA (Q4_K_M)",
+      "kind": "diffusion-gguf",
+      "folder": "diffusion",
+      "file": "d3LLM_LLaDA.Q4_K_M.gguf",
+      "bytes": 4925226656,
+      "sha256": "eb450d47abe05c1c1503d78751a8453c8834ef1a8d34802173914379b7cafa88",
+      "url": "https://huggingface.co/mradermacher/d3LLM_LLaDA-GGUF/resolve/6cbf038bb867cd42bb4ff9b9ce931af23b32e3df/d3LLM_LLaDA.Q4_K_M.gguf",
+      "architecture": "llada",
+      "context_length": 4096,
+      "source": "mradermacher/d3LLM_LLaDA-GGUF, a third-party GGUF of d3LLM/d3LLM_LLaDA (hao-ai-lab)",
+      "licence": "apache-2.0, as the model card declares (the GGUF header declares none)"
+    }
+  ]
+}

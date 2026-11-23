@@ -7,6 +7,11 @@ process-wide audit hook refuses, before it runs:
 * any audited filesystem operation whose path names the default namespace
   leaf or lies under /run/user (the module walks to its namespace with
   descriptor-relative names, so the leaf itself is refused as well);
+* any audited filesystem operation on the real model folders: the defaults
+  under the account's home directory (from the password database, not $HOME)
+  and whatever the model-folder variables named when the suite started. The
+  catalog opens a folder by its absolute path before it works relative to it,
+  so that first open is where a stray test is stopped;
 * loading the real NVML library, and starting a program named nvidia-smi;
 * connecting anywhere but loopback, or to Ollama's default port 11434;
 * sending a signal to a process that is not a descendant of the suite's root
@@ -28,6 +33,8 @@ import sys
 LEAF = "kilix-gpu-residency-v1"
 RUNTIME = "/run/user"
 ROOT_ENV = "KILIX_RESIDENCY_TEST_ROOT"
+MODELS_ENV = "KILIX_RESIDENCY_REAL_MODEL_FOLDERS"
+MODEL_FOLDERS: tuple[str, ...] = ()
 EVENTS = {
     "open": (0,), "os.mkdir": (0,), "os.rename": (0, 1), "os.remove": (0,), "os.rmdir": (0,),
     "os.link": (0, 1), "os.symlink": (0, 1), "os.chmod": (0,), "os.chown": (0,),
@@ -53,12 +60,31 @@ def _name(value: object) -> str | None:
     return os.fsdecode(value)
 
 
+def real_model_folders() -> list[str]:
+    """The model folders of the account running the suite, as it started."""
+    import pwd
+    env = os.environ
+    homes = {pwd.getpwuid(os.getuid()).pw_dir, env.get("HOME") or ""}
+    found = set()
+    for home in filter(None, homes):
+        found.add(os.path.join(home, ".local", "gpu_terminal", "kilix-llm"))
+        found.add(os.path.join(home, ".local", "share", "puzzllm"))
+    for name, leaf in (("KILIX_LLM_MODELS_DIR", ""), ("PUZZLLM_DIFFUSION_MODELS", ""),
+                       ("GPU_TERMINAL_HOME", "kilix-llm"), ("XDG_DATA_HOME", "puzzllm")):
+        value = env.get(name)
+        if value and value.startswith("/"):
+            found.add(os.path.join(value, leaf) if leaf else value)
+    return sorted(os.path.normpath(path) for path in found)
+
+
 def refuses(name: str) -> bool:
     if LEAF in name:
         return True
     if not name.startswith("/"):
         return False
     normal = os.path.normpath(name)
+    if any(normal == folder or normal.startswith(folder + "/") for folder in MODEL_FOLDERS):
+        return True
     return normal == RUNTIME or normal.startswith(RUNTIME + "/")
 
 
@@ -165,6 +191,8 @@ def _refusing(call, event: str):
 if not getattr(sys, "_kilix_residency_guard", False):
     sys._kilix_residency_guard = True
     os.environ.setdefault(ROOT_ENV, str(os.getpid()))
+    os.environ.setdefault(MODELS_ENV, os.pathsep.join(real_model_folders()))
+    MODEL_FOLDERS = tuple(path for path in os.environ[MODELS_ENV].split(os.pathsep) if path.startswith("/"))
     sys.addaudithook(_hook)
     import posix
     for _call in ("mkfifo", "mknod"):

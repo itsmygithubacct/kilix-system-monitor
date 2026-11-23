@@ -21,9 +21,11 @@ if str(GUARD) not in sys.path:
 import residency_path_guard as guard  # noqa: E402
 
 os.environ["PYTHONPATH"] = os.pathsep.join((str(SOURCE), str(GUARD)))
-# A real OLLAMA_HOST must never be the default a test falls back to.
-os.environ.pop("OLLAMA_HOST", None)
-os.environ.pop("KILIX_GPU_DEVICES", None)
+# A real OLLAMA_HOST must never be the default a test falls back to, nor a real
+# model folder (the guard has recorded the real ones and refuses them).
+for _name in ("OLLAMA_HOST", "KILIX_GPU_DEVICES", "KILIX_LLM_MODELS_DIR", "PUZZLLM_DIFFUSION_MODELS",
+              "GPU_TERMINAL_HOME", "XDG_DATA_HOME"):
+    os.environ.pop(_name, None)
 
 
 def child_env(**extra: str) -> dict[str, str]:

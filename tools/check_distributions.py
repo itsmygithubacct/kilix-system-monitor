@@ -86,6 +86,8 @@ PACKAGES = {
         "modules": (
             "kilix_gpu_residency/__init__.py",
             "kilix_gpu_residency/__main__.py",
+            "kilix_gpu_residency/catalog.json",
+            "kilix_gpu_residency/catalog.py",
             "kilix_gpu_residency/cli.py",
             "kilix_gpu_residency/ollama.py",
             "kilix_gpu_residency/vram.py",

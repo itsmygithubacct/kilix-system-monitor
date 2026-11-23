@@ -8,6 +8,10 @@ idle, unpinned models, least recently used first. Models Ollama has loaded are
 found through Ollama's own list, whoever loaded them. GPU processes nobody
 registered are listed and never touched.
 
+Its model catalog (`kilix_gpu_residency.catalog`, `kilix-gpu models`) is the one
+place apps install, list, verify and remove local models. It refuses to remove
+anything resident.
+
 Standard library only, no daemon. Every call takes the registry's `flock` for
 its duration. The trust boundary is one user's cooperating processes, as for
 [kilix-device-lease](../kilix-device-lease/README.md), which this component
@@ -134,6 +138,113 @@ the same one.
 `kilix.gpu-residency.room/v1`. From a source tree, run
 `components/kilix-gpu-residency/kilix-gpu status`.
 
+## The model catalog
+
+`catalog.json` beside the module pins each downloadable model:
+
+- an id, a display name and a kind (`gguf`, `diffusion-gguf` or `ollama`);
+- its file, exact size and sha256, and a URL pinned to one Hugging Face revision (`https://huggingface.co/<owner>/<repo>/resolve/<40-hex revision>/<file>`);
+- its folder role, architecture and context length (as the GGUF header has them), and a source and licence note.
+
+It is seeded with puzzllm-fetch's six pinned models, plus `d3llm-llada`
+(d3LLM's LLaDA, which the owner asked for and puzzllm-fetch gains too).
+
+| Folder role | Folder | Kinds |
+| --- | --- | --- |
+| `llama.cpp` | `$KILIX_LLM_MODELS_DIR`, else `${GPU_TERMINAL_HOME:-~/.local/gpu_terminal}/kilix-llm/models` | `gguf` |
+| `diffusion` | `$PUZZLLM_DIFFUSION_MODELS`, else `${XDG_DATA_HOME:-~/.local/share}/puzzllm/diffusion` | `diffusion-gguf` |
+
+An empty variable counts as unset, as in the shell's `${VAR:-default}`. A
+folder the catalog creates is mode 0700, with its parents. A folder that is not
+yours, or that others can write, is refused.
+
+| Command | Effect |
+| --- | --- |
+| `kilix-gpu models list [--json]` | catalog models (installed, partial, available, or mismatch by size), unlisted GGUFs in the folders (`local`, or `link` for a symlink), Ollama's installed models; and who holds each now: a registry app, Ollama, or a process with the file open or mapped |
+| `kilix-gpu models install ID\|ollama:NAME [--json]` | download, verify and name a catalog file, or pull an Ollama model |
+| `kilix-gpu models remove ID\|FILE\|PATH\|ollama:NAME [--unload] [--json]` | remove a model that nothing holds; `--unload` unloads it through the registry first |
+| `kilix-gpu models verify ID\|FILE [--json]` | recompute an installed catalog file's size and sha256 |
+
+`models --catalog FILE` uses another catalog. Only a catalog given by path may
+use `file://` or loopback `http://` URLs, for tests and local mirrors.
+
+`models --progress auto|lines|none` sets how install and verify report progress on stderr:
+- `auto`, the default, redraws one line, and only on a terminal.
+- `lines` prints a whole line about once a second, such as `downloading llada-1.5: 40% of 4.6 GiB`. This suits a menu that shows the latest line from a pty, as puzzllm's Downloads page does.
+- `none` is silent.
+
+Every action prints one line on stdout, for a game menu to show as a notice,
+and exits with a code:
+
+| Exit | Meaning | Lines |
+| --- | --- | --- |
+| 0 | done | `saved X`, `already saved X`, `pulled N`, `already installed N`, `removed X`, `verified X` |
+| 1 | failed | `could not download X`, `downloaded X did not match`, `could not pull N`, `Ollama is not reachable` |
+| 2 | refused | `unknown model ID`, `X is already in the models folder and does not match`, `refusing to replace a symlink: X`, `another download is using the models folder`, `X is not installed`, `not enough disk space for X: ...` |
+| 3 | in use | `X is loaded by APP; use --unload`, `X is pinned by APP; unpin it first`, `X is busy in APP; try again when it is idle`, `X is open by pid N (COMMAND); close it first` |
+| 4 | does not match | `X does not match the catalog (size)` or `(sha256)` |
+
+A failure's cause, when there is one, goes to stderr. `--json` prints one
+object with `schema` `kilix.gpu-residency.models/v1`, `outcome`, `exit`,
+`message`, `detail`, `name` and `path`. The interface document lists every
+outcome with its exit code.
+
+### Installs
+
+Installs keep puzzllm-fetch's semantics and its per-folder lock file,
+`.fetch.lock`, so the two never write a folder at once:
+
+- A matching file of the same name is `already saved`.
+- A different file of that name is refused, and so is a symlink.
+- The download goes to `.<file>.part`, is checked against the size and sha256, and only then is hard-linked to its name, so a file that appeared meanwhile is never replaced.
+
+In addition, a dropped connection is resumed with `Range`, up to five
+consecutive attempts that make no progress. A download that still fails keeps
+its `.part`, and the next install resumes it. Other cases:
+- A server that ignores `Range` starts over.
+- A server that resumes at another offset, or serves a file of another size, is refused.
+- A part that does not hash to the catalog's sha256 is deleted.
+- A part another process has open is left alone.
+
+Redirects may only go to https, or from loopback http to loopback http. Ollama
+models are pulled through `POST /api/pull` on a loopback Ollama, with
+puzzllm-fetch's name rule.
+
+### Removal
+
+A model is not removed while:
+
+- a registry record holds it (matched by catalog id, file name, file stem or path);
+- Ollama has it loaded;
+- any process this user can inspect has the file open or mapped. Other users' processes cannot be seen.
+
+`--unload` unloads registry and Ollama residents through `kilix_gpu_residency.unload`, then waits up to 10 s for the file to be closed. It still refuses a pinned, busy or loading resident. It never touches a process the registry does not manage: a file held by such a process is refused with its pid.
+
+Only a regular file named `*.gguf` directly in a models folder can be
+removed, with its idle `.part`. That excludes symlinks, other files such as
+puzzllm-fetch's `.partial.*` and `.download.json`, and anything in a
+subfolder. A part someone is writing is never removed. Ollama models are
+removed with `DELETE /api/delete`, using the exact tag Ollama lists. If the
+registry cannot be read, removal fails closed.
+
+### From Python
+
+```python
+from kilix_gpu_residency import catalog
+
+result = catalog.install("llada-moe-7b-a1b", progress=lambda stage, done, total: ...)
+print(result.message)                     # "saved LLaDA-MoE-7B-A1B-Instruct.Q4_K_M.gguf"
+try:
+    catalog.remove("llada-moe-7b-a1b")
+except catalog.CatalogError as error:
+    print(error, error.outcome, error.exit_code)  # "... is loaded by kilix-chat; use --unload" loaded 3
+for model in catalog.list_models().models:
+    print(model.id, model.state, model.resident)
+```
+
+`install`, `remove`, `verify` and `list_models` take `catalog=` (from
+`catalog.load(path)`), and `namespace=` and `ollama=` as the registry calls do.
+
 ## Interface document
 
 `contracts/kilix.gpu-residency-v1.interface.json` at the monorepo root records
@@ -141,7 +252,8 @@ this interface:
 
 - the version, backends, states, unload kinds, policies and error codes;
 - the record fields, the bounds and timeouts;
-- the default namespace, the eviction rules and the Ollama calls.
+- the default namespace, the eviction rules and the Ollama calls;
+- the catalog: its data schema, kinds, folders, URL pattern, lock, part name, outcomes and exit codes.
 
 `tests/test_interface_document.py` holds the module to that document, and each
 comparison also runs against planted drifts.
@@ -153,14 +265,18 @@ From the monorepo root, with the release-pinned uv 0.12.5:
     make residency-check UV=/absolute/path/to/uv-0.12.5
     make residency-defects UV=/absolute/path/to/uv-0.12.5
 
-`residency-check` is part of `make check`. It uses fake GPUs (a fake sysfs and
-a fake NVML whose memory follows real processes), a fake Ollama on a loopback
-port, and real process groups.
+`residency-check` is part of `make check`. It uses:
+
+- fake GPUs: a fake sysfs, and a fake NVML whose memory follows real processes;
+- a fake Ollama on a loopback port;
+- a fake loopback download server shaped like Hugging Face, which can redirect, drop a connection partway, ignore `Range`, or resume at the wrong offset;
+- `file://` mirrors and real process groups.
 
 Every test process, and every Python child it starts, installs
 `tests/containment/residency_path_guard.py`. The guard refuses:
 
 - any path under `/run/user` or naming the default namespace leaf;
+- the real model folders: those under the account's home directory (taken from the password database), and whatever the model-folder variables named when the suite started;
 - loading the real NVML, or running `nvidia-smi`;
 - connecting anywhere but loopback, or to port 11434;
 - signalling any process that is not a descendant of the suite.
@@ -172,7 +288,7 @@ cannot see calls made through ctypes.
 
 ## Status
 
-Phase 1 of the plebian-os GPU residency design, at version 0.1.0:
+Phase 1 of the plebian-os GPU residency design, with the model catalog (P1b), at version 0.1.0:
 
 - Phase 2 points Kilix core's GPU readout at `kilix_gpu_residency.vram` and adds the `http` unload kind.
 - Phase 3 is a lease interface revision binding `llm-turn` grants to a resident record.
