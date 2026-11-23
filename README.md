@@ -30,7 +30,9 @@ that couple them:
   are resident on which GPU. Apps register what they load, and `ensure_room`
   unloads idle, unpinned models least recently used first to make room. Ollama
   models are found through Ollama itself, and unregistered GPU processes are
-  never touched. Phase 1, in development.
+  never touched. Its model catalog installs, lists, verifies and removes
+  local models (pinned GGUFs and Ollama models), and refuses to remove one
+  that is resident. Phase 1, in development.
 - components/plebian-hardware implements the currently open, unprivileged D2
   observation surface.
 - components/plebian-model-sizer provides development estimates and provisional
@@ -79,6 +81,7 @@ covers. Each component also runs from its source tree, for example
 | `plebian-model-sizer snapshot` | current RAM, cgroup headroom, CUDA free memory and model storage |
 | `plebian-model-sizer recommend help-llm\|avatar-chat\|voice\|runtime --catalog FILE` | provisional resource shortlist for one domain |
 | `kilix-gpu status` / `unload` / `pin` / `unpin` / `room BYTES` | resident models per GPU; unload or pin one; dry-run making room |
+| `kilix-gpu models list` / `install ID` / `remove ID [--unload]` / `verify ID` | the shared model catalog: install, list, verify and remove local models |
 | `make check` | every offline gate (contracts, telemetry, lease, hardware, packages, profiles, evidence, launcher readiness, model sizer, residency) |
 | `make prefetch` | fill the uv cache that `make check` reads offline |
 
@@ -107,7 +110,8 @@ reference profiles to estimate training and inference cost; a shortlist is an
 estimate, not a reservation or a qualification. `kilix-device-lease` is a
 cooperative per-user lock that serializes accelerator use across providers.
 `kilix-gpu-residency` records which models are resident and unloads idle ones
-when an app needs room; it neither uses nor changes the lease.
+when an app needs room, and keeps the shared catalog of installed models; it
+neither uses nor changes the lease.
 
 The contracts that couple these components live under `contracts/`: the
 pre-freeze `p1-candidate` bundle, the frozen `v1` resource-profile bundle and

@@ -42,7 +42,8 @@ residency interface:
 - the version, backends, record states, unload kinds, policies and error codes;
 - the record fields, the record and event bounds, and the lock, grace and release timeouts;
 - the default namespace, the device-map variable and the command's JSON schemas;
-- the eviction rules and the two Ollama calls.
+- the eviction rules and the two Ollama calls;
+- the model catalog: its data schema and kinds, folder roles, pinned-URL pattern, the lock and part names, retry bounds, the Ollama calls it makes, and every outcome with its `kilix-gpu models` exit code.
 
 `components/kilix-gpu-residency/tests/test_interface_document.py` holds the
 module to those values. The interface has had no acceptance review.

@@ -43,9 +43,10 @@ real-process controls and interface-document binding, the hardware unit boundari
 inventory/GPU schema and privacy rules, wheel/sdist contents, trusted-launcher
 consumer readiness, the unqualified provider-profile intake validator, and
 the model-sizer resource accounting and refusal cases, and the GPU residency
-suite (fake GPUs, a fake loopback Ollama and real process groups behind a guard
-that refuses `/run/user`, the real NVML, `nvidia-smi`, non-loopback networking
-and signals outside the suite). Hardware checks use no network and no
+suite (fake GPUs, a fake loopback Ollama, a fake loopback download server and
+real process groups behind a guard that refuses `/run/user`, the real model
+folders, the real NVML, `nvidia-smi`, non-loopback networking and signals
+outside the suite). Hardware checks use no network and no
 privilege. `make residency-defects` is not part of `make check`: it reruns the
 residency suite once for each planted defect in
 `components/kilix-gpu-residency/tests/defects.py` and fails on any defect the
