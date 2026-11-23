@@ -30,6 +30,7 @@ GATES = {
     "capacity evidence validator": ("python tools/validate_h2_capacity_evidence.py",),
     "launcher consumer readiness": ("python tools/check_trusted_launcher_consumer_readiness.py --self-test",),
     "model sizer suite": ("cd components/plebian-model-sizer", "unittest discover -s tests"),
+    "residency suite": ("cd components/kilix-gpu-residency", "unittest discover -s tests"),
     "gate wiring check": ("python tools/check_gate_wiring.py",),
 }
 

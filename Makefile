@@ -1,8 +1,8 @@
 UV ?= uv
 
-.PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-check prefetch
+.PHONY: check contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-check residency-check residency-defects prefetch
 
-check: contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-check
+check: contracts-check telemetry-check lease-check hardware-check package-check profile-measure-check capacity-evidence-check launcher-consumer-readiness model-sizer-check residency-check
 	PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tools/check_gate_wiring.py
 
 contracts-check:
@@ -35,6 +35,13 @@ launcher-consumer-readiness:
 model-sizer-check:
 	cd components/plebian-model-sizer && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tests -v
 
+residency-check:
+	cd components/kilix-gpu-residency && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python -m unittest discover -s tests -v
+
+# Planted defects in the residency component, each of which the suite must catch. Slow; not part of check.
+residency-defects:
+	cd components/kilix-gpu-residency && PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked --offline python tests/run_defects.py
+
 # Online, once: fill the uv cache that make check reads offline. uv verifies every
 # download against uv.lock, and the root's build backend against tools/build-constraints.txt.
 prefetch:
@@ -43,4 +50,5 @@ prefetch:
 	cd components/kilix-device-lease && $(UV) sync --locked
 	cd components/plebian-hardware && $(UV) sync --locked
 	cd components/plebian-model-sizer && $(UV) sync --locked
+	cd components/kilix-gpu-residency && $(UV) sync --locked
 	UV=$(UV) PYTHONDONTWRITEBYTECODE=1 $(UV) run --locked python tools/check_distributions.py --prefetch

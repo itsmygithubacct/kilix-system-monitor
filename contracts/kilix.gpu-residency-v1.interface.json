@@ -1,0 +1,87 @@
+{
+  "backends": [
+    "ollama",
+    "process",
+    "http"
+  ],
+  "command": "kilix-gpu",
+  "default_policy": "evict-idle",
+  "device_lease": {
+    "changes": false,
+    "uses": false
+  },
+  "device_map_env": "KILIX_GPU_DEVICES",
+  "distribution": "kilix-gpu-residency",
+  "error_codes": [
+    "gone",
+    "invalid-request",
+    "no-room",
+    "not-found",
+    "refused",
+    "unavailable",
+    "unmeasured"
+  ],
+  "eviction": {
+    "all_or_nothing": true,
+    "candidate_state": "idle",
+    "never_evicted": [
+      "busy",
+      "loading",
+      "unloading",
+      "pinned",
+      "unmanaged",
+      "no-unload-action",
+      "other-device"
+    ],
+    "order": "least-recently-used",
+    "unknown_ollama_models_evictable": true
+  },
+  "kill_grace_seconds": 5,
+  "label_pattern": "[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}\\Z",
+  "lock_wait_seconds": 120,
+  "max_events": 32,
+  "max_records": 64,
+  "namespace_default": "/run/user/{euid}/kilix-gpu-residency-v1",
+  "ollama": {
+    "discovery": "GET /api/ps",
+    "loopback_only": true,
+    "unload": "POST /api/generate keep_alive 0"
+  },
+  "policies": [
+    "evict-idle",
+    "never"
+  ],
+  "python_module": "kilix_gpu_residency",
+  "record_fields": [
+    "app",
+    "backend",
+    "device",
+    "holder",
+    "id",
+    "last_used",
+    "model",
+    "need_bytes",
+    "pgid",
+    "pinned",
+    "registered_at",
+    "state",
+    "unload",
+    "version"
+  ],
+  "release_wait_seconds": 10,
+  "room_schema": "kilix.gpu-residency.room/v1",
+  "schema": "kilix.gpu-residency.interface/v1",
+  "states": [
+    "loading",
+    "idle",
+    "busy",
+    "unloading"
+  ],
+  "status_schema": "kilix.gpu-residency.status/v1",
+  "term_grace_seconds": 5,
+  "unload_kinds": [
+    "ollama",
+    "signal"
+  ],
+  "version": "kilix.gpu-residency/v1"
+}

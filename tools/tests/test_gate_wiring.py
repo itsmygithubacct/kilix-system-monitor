@@ -74,6 +74,13 @@ class GateWiringTests(unittest.TestCase):
         frozen_deleted = self.errors_for(self.edited(frozen_line + "\n", ""))
         self.assertEqual(frozen_deleted, ["make check no longer runs the frozen bundle validator"])
 
+    def test_dropping_the_residency_suite_is_reported(self):
+        self.assertIn("residency suite", wiring.GATES)
+        prerequisites = next(line for line in self.makefile.splitlines() if line.startswith("check:"))
+        dropped = self.errors_for(self.edited(
+            prerequisites, " ".join(part for part in prerequisites.split() if part != "residency-check")))
+        self.assertEqual(dropped, ["make check no longer runs the residency suite"])
+
     def test_make_is_available_to_ask(self):
         self.assertIsNotNone(shutil.which("make"))
 

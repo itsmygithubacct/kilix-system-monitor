@@ -1,0 +1,22 @@
+[project]
+name = "kilix-gpu-residency"
+version = "0.1.0"
+description = "One per-user record of the models resident on each GPU, with room-making unloads"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "itsmygithubacct", email = "itsmygithubacct@users.noreply.github.com" },
+]
+dependencies = []
+
+[project.scripts]
+kilix-gpu = "kilix_gpu_residency.cli:main"
+
+[build-system]
+requires = ["uv_build==0.12.5"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = true

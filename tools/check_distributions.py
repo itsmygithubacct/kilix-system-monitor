@@ -81,6 +81,18 @@ PACKAGES = {
         "version": "0.2.0",
         "isolated_build": False,
     },
+    "kilix-gpu-residency": {
+        "path": ROOT / "components" / "kilix-gpu-residency",
+        "modules": (
+            "kilix_gpu_residency/__init__.py",
+            "kilix_gpu_residency/__main__.py",
+            "kilix_gpu_residency/cli.py",
+            "kilix_gpu_residency/ollama.py",
+            "kilix_gpu_residency/vram.py",
+        ),
+        "version": "0.1.0",
+        "isolated_build": False,
+    },
 }
 BUILD_BACKEND_VERSION = "0.12.5"
 BUILD_CONSTRAINTS = ROOT / "tools" / "build-constraints.txt"
