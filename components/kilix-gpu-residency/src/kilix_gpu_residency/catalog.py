@@ -34,10 +34,11 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import resources
-from typing import Callable, Iterator, Mapping
+from typing import Callable, Iterable, Iterator, Mapping
 from urllib.parse import unquote, urljoin, urlsplit
 
 from . import ResidencyError, ResidentInfo, residents as _residents, unload as _unload
+from . import _groups
 from . import ollama as _ollama
 
 SCHEMA = "kilix.gpu-residency.catalog/v1"
@@ -58,7 +59,10 @@ OUTCOMES = {
 EXIT_MEANINGS = {0: "done", 1: "failed", 2: "refused", 3: "in use", 4: "does not match"}
 ACTIONS = ("list", "install", "remove", "verify")
 LOCK_NAME = ".fetch.lock"  # the same lock file puzzllm-fetch takes, so the two exclude each other
-PART_TEMPLATE = ".{file}.part"
+# A part is named after the pin it is filling, so a part of another pin (the catalog moved on, or
+# puzzllm-fetch's ".{file}.part") is never resumed into this one.
+PART_TEMPLATE = ".{file}.{pin}.part"
+LEGACY_PART_TEMPLATE = ".{file}.part"  # what kilix-gpu 0.2.4-p1b named parts: never resumed; removed with the file
 ATTEMPTS = 5  # consecutive failed connections before a download gives up (the .part is kept)
 BACKOFF_SECONDS = 2.0
 TIMEOUT_SECONDS = 30.0
@@ -66,6 +70,8 @@ LOCK_WAIT_SECONDS = 1.0
 RELEASE_WAIT_SECONDS = 10.0
 MAX_REDIRECTS = 5
 USER_AGENT = "kilix-gpu-residency/0.1"
+# The CA bundle downloads are verified against; None is the system's. A test points it at its own CA.
+CAFILE: str | None = None
 _CHUNK = 1 << 20
 _ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z", re.ASCII)
 _GGUF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\.gguf\Z", re.ASCII)
@@ -87,12 +93,19 @@ Progress = Callable[[str, int | None, int | None], None]
 
 
 class CatalogError(RuntimeError):
-    """A refusal or failure. ``outcome`` is one of OUTCOMES; ``str()`` is a one-line notice."""
+    """A refusal or failure. ``outcome`` is one of OUTCOMES; ``str()`` is a one-line notice.
 
-    def __init__(self, outcome: str, message: str, *, detail: str | None = None) -> None:
+    ``name`` and ``path`` say which model, when known; ``holders`` who holds it, each
+    ``{"app": APP}`` (a registry record) or ``{"pid": N, "command": COMM}`` (an open file)."""
+
+    def __init__(self, outcome: str, message: str, *, detail: str | None = None, name: str | None = None,
+                 path: str | None = None, holders: tuple[dict, ...] = ()) -> None:
         super().__init__(message)
         self.outcome = outcome
         self.detail = detail
+        self.name = name
+        self.path = path
+        self.holders = tuple(holders)
 
     @property
     def exit_code(self) -> int:
@@ -158,7 +171,7 @@ class Listed:
     path: str | None
     bytes: int | None  # the catalog's size, else the size on disk
     partial_bytes: int | None
-    resident: tuple[str, ...]  # who holds it now: "kilix-chat", "ollama", "pid 4242 (llama-server)"
+    resident: tuple[dict, ...]  # who holds it now: {"app": "kilix-chat"} or {"pid": 4242, "command": "llama-server"}
 
 
 @dataclass(frozen=True)
@@ -368,7 +381,8 @@ def _folder_lock(fd: int) -> Iterator[None]:
                 break
             except BlockingIOError:
                 if time.monotonic() >= deadline:
-                    raise CatalogError("busy-folder", "another download is using the models folder") from None
+                    raise CatalogError("busy-folder", "a download is running in that folder; try again when it finishes"
+                                       ) from None
                 time.sleep(0.05)
         yield
     finally:
@@ -386,8 +400,21 @@ def _identity(info: os.stat_result) -> tuple[int, int]:
     return info.st_dev, info.st_ino
 
 
-def _part(file: str) -> str:
-    return PART_TEMPLATE.format(file=file)
+def _part(file: str, sha256: str) -> str:
+    return PART_TEMPLATE.format(file=file, pin=sha256[:12])
+
+
+_PART_NAME = re.compile(r"\.(?P<file>.+?)(?:\.(?P<pin>[0-9a-f]{12}))?\.part\Z")
+
+
+def _parts(file: str, names: Iterable[str]) -> list[str]:
+    """Every part of ``file`` among ``names``: any pin's, and puzzllm-fetch's legacy name."""
+    found = []
+    for name in names:
+        match = _PART_NAME.fullmatch(name)
+        if match is not None and match.group("file") == file:
+            found.append(name)
+    return sorted(found)
 
 
 def _sha256(name: str, fd: int, progress: Progress | None = None) -> tuple[str, int]:
@@ -476,42 +503,85 @@ def _holders(namespace: str | None, url: str, what: str) -> tuple[ResidentInfo, 
     try:
         return _residents(namespace=namespace, ollama=url)
     except ResidencyError as error:
-        raise CatalogError("unavailable", f"cannot check whether {what} is loaded: {error}") from error
+        raise CatalogError("unavailable", f"cannot check whether {what} is loaded: {error}", name=what) from error
 
 
-def _file_names(entry: Entry | None, directory: str, file: str) -> set[str]:
-    """What an app may have registered a GGUF as: its catalog id, file name, stem or path."""
+def _names_in_other_folders(directory: str, file: str, folders: Mapping[str, str]) -> bool:
+    return any(os.path.realpath(path) != os.path.realpath(directory) and os.path.lexists(os.path.join(path, file))
+               for path in folders.values())
+
+
+def _registered_as(model: str, entry: Entry | None, directory: str, file: str, folders: Mapping[str, str]) -> bool:
+    """Whether a record whose model is ``model`` holds ``directory/file``.
+
+    An absolute path is compared by its real path, so a symlink to the file counts. The catalog
+    id counts. A bare file name or stem counts only when no other models folder has a file of
+    that name. Anything else (a relative path, another name) does not."""
     path = os.path.join(directory, file)
-    names = {file, file[:-len(".gguf")], path, os.path.realpath(path)}
-    if entry is not None:
-        names.add(entry.id)
-    return names
+    if model.startswith("/"):
+        return os.path.realpath(model) == os.path.realpath(path)
+    if entry is not None and model == entry.id:
+        return True
+    if model in (file, file[:-len(".gguf")]):
+        return not _names_in_other_folders(directory, file, folders)
+    return False
 
 
-def _clear(holders: list[ResidentInfo], label: str, unload: bool, namespace: str | None, url: str) -> bool:
-    """Refuse while ``holders`` hold the model, or unload them with ``unload``. True when one was unloaded."""
+def _who(infos: Iterable[ResidentInfo]) -> list[dict]:
+    return [{"app": app} for app in sorted({info.app for info in infos})]
+
+
+def _clear(holders: list[ResidentInfo], label: str, unload: bool, force: bool, namespace: str | None, url: str,
+           *, path: str | None = None) -> list[ResidentInfo]:
+    """Refuse while ``holders`` hold the model, or unload them with ``unload``. Returns what was unloaded.
+
+    Every holder is checked before anything is unloaded: one pinned refuses ``pinned``, one not
+    idle ``busy``. An Ollama model no app registered may be generating for another client, so
+    it needs ``force`` as well. An unload that fails is ``remove-failed``, naming what had been
+    unloaded already."""
     if not holders:
-        return False
+        return []
+    who = tuple(_who(holders))
     for info in holders:
         if info.pinned:
-            raise CatalogError("pinned", f"{label} is pinned by {info.app}; unpin it first")
+            raise CatalogError("pinned", f"{label} is pinned by {info.app}; unpin it first", name=label, path=path,
+                               holders=who)
     apps = ", ".join(sorted({info.app for info in holders}))
     if not unload:
-        raise CatalogError("loaded", f"{label} is loaded by {apps}; use --unload")
+        raise CatalogError("loaded", f"{label} is loaded by {apps}; use --unload", name=label, path=path,
+                           holders=who)
     for info in holders:
         if info.state != "idle":
-            raise CatalogError("busy", f"{label} is {info.state} in {info.app}; try again when it is idle")
+            raise CatalogError("busy", f"{label} is {info.state} in {info.app}; try again when it is idle",
+                               name=label, path=path, holders=who)
+    if not force and any(not info.registered for info in holders):
+        raise CatalogError("loaded", f"{label} is loaded in Ollama by a client that did not register it and may "
+                                     "be in use; use --force to unload it anyway", name=label, path=path, holders=who)
+    done: list[ResidentInfo] = []
+    seen_units: set[str] = set()
     for info in holders:
+        if info.unit and info.unit in seen_units:
+            continue
+        seen_units.add(info.unit)
         try:
-            _unload(info.id, by="kilix-gpu-models", namespace=namespace, ollama=url)
+            _unload(info.id, shared=True, by="kilix-gpu-models", namespace=namespace, ollama=url)
         except ResidencyError as error:
-            if error.code != "not-found":
-                raise CatalogError("busy", f"could not unload {label} from {info.app}: {error}") from error
-    return True
+            if error.code == "not-found":
+                continue
+            already = ", ".join(f"{i.model} ({i.app})" for i in done) or "nothing"
+            raise CatalogError("remove-failed", f"could not unload {label} from {info.app}; unloaded already: "
+                                                f"{already}", detail=str(error), name=label, path=path,
+                               holders=who) from error
+        done.append(info)
+    return done
 
 
 def _describe(holders: list[tuple[int, str]]) -> str:
     return ", ".join(f"pid {pid} ({command})" for pid, command in sorted(holders))
+
+
+def _opened(holders: list[tuple[int, str]]) -> tuple[dict, ...]:
+    return tuple({"pid": pid, "command": command} for pid, command in sorted(holders))
 
 # }}}
 
@@ -527,7 +597,7 @@ class _Fail(Exception):
 
 
 class _Mismatch(Exception):
-    """The bytes received are not the catalog's file."""
+    """The bytes received are complete but are not the catalog's file: the part is discarded."""
 
 
 class _State:
@@ -546,7 +616,7 @@ class _State:
             if not chunk:
                 return
             if self.have + len(chunk) > self.total:
-                raise _Mismatch("the server sent more than the catalog's size")
+                raise _Fail("the server sent more than the catalog's size")
             view = memoryview(chunk)
             try:
                 while view:
@@ -564,14 +634,15 @@ def _content_range_start(value: str | None, total: int) -> int:
     if match is None:
         raise _Fail("the server's Content-Range is malformed")
     if match.group(3) != "*" and int(match.group(3)) != total:
-        raise _Mismatch("the server's file is not the catalog's size")
+        raise _Fail("the server's file is not the catalog's size")
     return int(match.group(1))
 
 
 def _connection(parts) -> http.client.HTTPConnection:
     if parts.scheme == "https":
+        # Certificates are always verified; CAFILE only names which authorities to trust.
         return http.client.HTTPSConnection(parts.hostname, parts.port or 443, timeout=TIMEOUT_SECONDS,
-                                           context=ssl.create_default_context())
+                                           context=ssl.create_default_context(cafile=CAFILE))
     if parts.scheme == "http" and _loopback_host(parts.hostname):
         return http.client.HTTPConnection(parts.hostname, parts.port or 80, timeout=TIMEOUT_SECONDS)
     raise _Fail("only https, or http to a loopback address, is fetched")
@@ -626,7 +697,7 @@ def _fetch(url: str, state: _State) -> None:
             if response.status == 200:
                 length = response.getheader("Content-Length")
                 if length is not None and length.strip().isdigit() and int(length) != state.total:
-                    raise _Mismatch("the server's file is not the catalog's size")
+                    raise _Fail("the server's file is not the catalog's size")
                 if state.have:
                     state.restart()  # the server ignored Range
             elif response.status == 206:
@@ -638,8 +709,10 @@ def _fetch(url: str, state: _State) -> None:
                 raise _Fail(f"HTTP {response.status}")
             state.copy(response.read)
             return
+        except ssl.SSLCertVerificationError as error:
+            raise _Fail(f"the server's certificate is not trusted: {error.verify_message}") from error
         except (OSError, http.client.HTTPException) as error:
-            raise _Retry(type(error).__name__) from error
+            raise _Retry(type(error).__name__ + _proxy_hint()) from error
         finally:
             if response is not None:
                 response.close()
@@ -647,14 +720,24 @@ def _fetch(url: str, state: _State) -> None:
     raise _Fail("too many redirects")
 
 
+def _proxy_hint() -> str:
+    """Downloads never use a proxy; say so when one is configured, as it may be why this failed."""
+    if any(os.environ.get(name) for name in ("https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")):
+        return " (https_proxy is set, but kilix-gpu does not use proxies)"
+    return ""
+
+
 def _download(entry: Entry, fd: int, progress: Progress | None) -> None:
-    """Fill ``.<file>.part`` to the catalog's size and sha256, resuming what is there."""
-    part = _part(entry.file)
+    """Fill the pin's part to the catalog's size and sha256, resuming what is there.
+
+    A failure keeps the part to resume, whatever the server answered; only complete bytes whose
+    sha256 differs are discarded."""
+    part = _part(entry.file, entry.sha256)
     handle = os.open(part, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=fd)
     try:
         info = os.fstat(handle)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise CatalogError("conflict", f"{part} is not a plain file")
+            raise CatalogError("conflict", f"{part} is not a plain file", name=entry.file)
         state = _State(handle, 0, entry.bytes, progress)
         if info.st_size > entry.bytes:
             state.restart()
@@ -672,7 +755,8 @@ def _download(entry: Entry, fd: int, progress: Progress | None) -> None:
         room = free_bytes(fd)
         if room < entry.bytes - state.have:
             raise CatalogError("no-space", f"not enough disk space for {entry.file}: "
-                                           f"{(entry.bytes - state.have) / 1e9:.1f} GB needed, {room / 1e9:.1f} GB free")
+                                           f"{(entry.bytes - state.have) / 1e9:.1f} GB needed, {room / 1e9:.1f} GB free",
+                               name=entry.file)
         failures = 0
         while state.have < entry.bytes:
             before = state.have
@@ -684,10 +768,11 @@ def _download(entry: Entry, fd: int, progress: Progress | None) -> None:
                 failures = 1 if state.have > before else failures + 1
                 if failures >= ATTEMPTS:
                     raise CatalogError("download-failed", f"could not download {entry.file}",
-                                       detail=str(error)) from error
+                                       detail=str(error), name=entry.file) from error
                 time.sleep(min(BACKOFF_SECONDS * failures, 10.0))
             except _Fail as error:
-                raise CatalogError("download-failed", f"could not download {entry.file}", detail=str(error)) from error
+                raise CatalogError("download-failed", f"could not download {entry.file}", detail=str(error),
+                                   name=entry.file) from error
         if state.digest.hexdigest() != entry.sha256:
             raise _Mismatch("sha256 differs")
         os.fsync(handle)
@@ -695,7 +780,8 @@ def _download(entry: Entry, fd: int, progress: Progress | None) -> None:
         os.close(handle)
         handle = -1
         os.unlink(part, dir_fd=fd)
-        raise CatalogError("downloaded-mismatch", f"downloaded {entry.file} did not match", detail=str(error)) from error
+        raise CatalogError("downloaded-mismatch", f"downloaded {entry.file} did not match", detail=str(error),
+                           name=entry.file) from error
     except CatalogError:
         if os.fstat(handle).st_size == 0:
             os.unlink(part, dir_fd=fd)  # nothing to resume
@@ -705,49 +791,73 @@ def _download(entry: Entry, fd: int, progress: Progress | None) -> None:
             os.close(handle)
 
 
-def _publish(fd: int, part: str, file: str) -> None:
-    """Give the verified part its real name, never replacing a file that appeared meanwhile."""
+def _publish(fd: int, part: str, entry: Entry, progress: Progress | None) -> str:
+    """Give the verified part its real name, never replacing a file that appeared meanwhile.
+
+    Returns "saved", or "already-saved" when the file that appeared is the catalog's own; one
+    that is not is a conflict. Either way the part is gone afterwards."""
+    file = entry.file
     try:
         os.link(part, file, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
     except FileExistsError:
-        raise CatalogError("conflict", f"{file} is already in the models folder and does not match") from None
+        return _appeared(fd, part, entry, progress)
     except OSError as error:
         if error.errno not in (errno.EPERM, errno.EOPNOTSUPP, errno.EMLINK, errno.ENOSYS):
             raise
         if _lstat(file, fd) is not None:  # a filesystem without hard links
-            raise CatalogError("conflict", f"{file} is already in the models folder and does not match") from None
+            return _appeared(fd, part, entry, progress)
         os.rename(part, file, src_dir_fd=fd, dst_dir_fd=fd)
     else:
         os.unlink(part, dir_fd=fd)
     os.fsync(fd)
+    return "saved"
+
+
+def _appeared(fd: int, part: str, entry: Entry, progress: Progress | None) -> str:
+    present = _lstat(entry.file, fd)
+    matches = (present is not None and stat.S_ISREG(present.st_mode) and present.st_size == entry.bytes
+               and _sha256(entry.file, fd, progress)[0] == entry.sha256)
+    os.unlink(part, dir_fd=fd)
+    os.fsync(fd)
+    if not matches:
+        raise CatalogError("conflict", f"{entry.file} appeared in the models folder meanwhile and does not match",
+                           name=entry.file)
+    return "already-saved"
 
 
 def _install_file(entry: Entry, catalog: Catalog, progress: Progress | None) -> Result:
     directory = folder(entry.folder, catalog)
     path = os.path.join(directory, entry.file)
     fd = _open_folder(directory, create=True)
+    part_name = _part(entry.file, entry.sha256)
     try:
         with _folder_lock(fd):
             present = _lstat(entry.file, fd)
             if present is not None:
                 if stat.S_ISLNK(present.st_mode):
-                    raise CatalogError("symlink", f"refusing to replace a symlink: {entry.file}")
+                    raise CatalogError("symlink", f"refusing to replace a symlink: {entry.file}", name=entry.file,
+                                       path=path)
                 if (not stat.S_ISREG(present.st_mode) or present.st_size != entry.bytes
                         or _sha256(entry.file, fd, progress)[0] != entry.sha256):
-                    raise CatalogError("conflict", f"{entry.file} is already in the models folder and does not match")
+                    raise CatalogError("conflict", f"{entry.file} is already in the models folder and does not match",
+                                       name=entry.file, path=path)
                 return Result("install", "already-saved", f"already saved {entry.file}", entry.file, path)
-            part = _lstat(_part(entry.file), fd)
+            part = _lstat(part_name, fd)
             if part is not None:
                 if stat.S_ISLNK(part.st_mode):
-                    raise CatalogError("symlink", f"refusing to use a symlink: {_part(entry.file)}")
-                writers = open_by({_identity(part): _part(entry.file)}).get(_identity(part))
+                    raise CatalogError("symlink", f"refusing to use a symlink: {part_name}", name=entry.file,
+                                       path=path)
+                writers = open_by({_identity(part): part_name}).get(_identity(part))
                 if writers:
-                    raise CatalogError("open", f"{entry.file} is being downloaded by {_describe(writers)}")
+                    raise CatalogError("open", f"{entry.file} is being downloaded by {_describe(writers)}",
+                                       name=entry.file, path=path, holders=_opened(writers))
             _download(entry, fd, progress)
-            _publish(fd, _part(entry.file), entry.file)
+            outcome = _publish(fd, part_name, entry, progress)
     finally:
         os.close(fd)
-    return Result("install", "saved", f"saved {entry.file}", entry.file, path)
+    if outcome == "saved":
+        return Result("install", "saved", f"saved {entry.file}", entry.file, path)
+    return Result("install", "already-saved", f"already saved {entry.file}", entry.file, path)
 
 
 def _ollama_url(url: str | None) -> str:
@@ -802,6 +912,40 @@ def _install_ollama(name: str, url: str, progress: Progress | None, entry: Entry
 
 # Public API {{{
 
+def _disk_error(outcome: str, what: str, error: OSError, name: str | None) -> CatalogError:
+    message = f"could not {what} it: {error.strerror or type(error).__name__}"
+    detail = f"{type(error).__name__}: {error.strerror or error}"
+    if outcome == "download-failed":
+        return CatalogError("download-failed", message, detail=detail, name=name)
+    if outcome == "remove-failed":
+        return CatalogError("remove-failed", message, detail=detail, name=name)
+    return CatalogError("unavailable", message, detail=detail, name=name)
+
+
+def _os_errors(outcome: str, what: str):
+    """The API raises only CatalogError: an OSError from the disk becomes ``outcome``."""
+    def wrap(function):
+        import functools
+
+        @functools.wraps(function)
+        def call(*args, **kwargs):
+            try:
+                return function(*args, **kwargs)
+            except CatalogError:
+                raise
+            except OSError as error:
+                raise _disk_error(outcome, what, error, args[0] if args and isinstance(args[0], str) else None
+                                  ) from error
+            except ResidencyError as error:
+                raise CatalogError("unavailable", f"the registry could not be used: {error}", detail=error.code,
+                                   name=args[0] if args and isinstance(args[0], str) else None) from error
+            except _ollama.OllamaError as error:
+                raise CatalogError("unavailable", "Ollama is not reachable", detail=str(error)) from error
+        return call
+    return wrap
+
+
+@_os_errors("download-failed", "install")
 def install(target: str, *, catalog: Catalog | None = None, ollama: str | None = None,
             progress: Progress | None = None) -> Result:
     """Install a catalog model by id, or an Ollama model as ``ollama:NAME``.
@@ -837,7 +981,7 @@ def _locate(target: str, catalog: Catalog) -> tuple[str, str, Entry | None] | st
     elif plain_gguf(target):
         file = target
         roles = [role for role, path in folders.items() if os.path.lexists(os.path.join(path, file))
-                 or os.path.lexists(os.path.join(path, _part(file)))]
+                 or _parts(file, _listdir(path))]
         if len(roles) > 1:
             raise CatalogError("ambiguous", f"{file} is in more than one models folder; give its path")
         if not roles:
@@ -849,29 +993,54 @@ def _locate(target: str, catalog: Catalog) -> tuple[str, str, Entry | None] | st
     return folders[role], file, match
 
 
-def _remove_file(directory: str, file: str, entry: Entry | None, unload: bool, namespace: str | None,
-                 url: str) -> Result:
+def _listdir(path: str) -> list[str]:
+    try:
+        return os.listdir(path)
+    except OSError:
+        return []
+
+
+def _remove_file(directory: str, file: str, entry: Entry | None, unload: bool, force: bool, namespace: str | None,
+                 url: str, folders: Mapping[str, str]) -> Result:
+    path = os.path.join(directory, file)
     fd = _open_folder(directory, create=False)
     if fd is None:
-        raise CatalogError("not-installed", f"{file} is not installed")
+        raise CatalogError("not-installed", f"{file} is not installed", name=file, path=path)
     try:
         with _folder_lock(fd):
-            present, part = _lstat(file, fd), _lstat(_part(file), fd)
+            present = _lstat(file, fd)
+            parts = []
+            for name in _parts(file, os.listdir(fd)):
+                info = _lstat(name, fd)
+                if info is not None and stat.S_ISREG(info.st_mode):  # never follow or remove anything else
+                    parts.append((name, info))
             if present is not None and stat.S_ISLNK(present.st_mode):
-                raise CatalogError("symlink", f"refusing to remove a symlink: {file}")
+                raise CatalogError("symlink", f"refusing to remove a symlink: {file}", name=file, path=path)
             if present is not None and not stat.S_ISREG(present.st_mode):
-                raise CatalogError("conflict", f"{file} is not a regular file")
-            if part is not None and not stat.S_ISREG(part.st_mode):
-                part = None  # never follow or remove anything but a plain part file
-            if present is None and part is None:
-                raise CatalogError("not-installed", f"{file} is not installed")
-            unloaded = False
+                raise CatalogError("conflict", f"{file} is not a regular file", name=file, path=path)
+            if present is None and not parts:
+                raise CatalogError("not-installed", f"{file} is not installed", name=file, path=path)
+            holders: list[ResidentInfo] = []
             if present is not None:
-                names = _file_names(entry, directory, file)
                 holders = [info for info in _holders(namespace, url, file)
-                           if info.registered and info.backend != "ollama" and info.model in names]
-                unloaded = _clear(holders, file, unload, namespace, url)
-            targets = {_identity(info): name for name, info in ((file, present), (_part(file), part)) if info}
+                           if info.registered and info.backend != "ollama"
+                           and _registered_as(info.model, entry, directory, file, folders)]
+            targets = {_identity(info): name for name, info in ((file, present), *parts) if info}
+            # Who else has it open, before anything is unloaded: the holders' own processes do not
+            # count, since unloading them closes the file; anyone else refuses the removal at once.
+            groups = _groups()
+            theirs: set[int] = set()
+            for info in holders:
+                theirs |= {info.pid} if info.pid else set()
+                if info.pgid is not None:
+                    theirs |= groups.get(info.pgid, set())
+            holding = open_by(targets)
+            if present is not None:
+                others = [(pid, command) for pid, command in holding.get(_identity(present), []) if pid not in theirs]
+                if others:
+                    raise CatalogError("open", f"{file} is open by {_describe(others)}; close it first", name=file,
+                                       path=path, holders=_opened(others))
+            unloaded = bool(_clear(holders, file, unload, force, namespace, url, path=path)) if present else False
             deadline = time.monotonic() + (RELEASE_WAIT_SECONDS if unloaded else 0)
             while True:
                 holding = open_by(targets)
@@ -879,60 +1048,71 @@ def _remove_file(directory: str, file: str, entry: Entry | None, unload: bool, n
                     break
                 time.sleep(0.1)
             if present is not None and _identity(present) in holding:
-                raise CatalogError("open", f"{file} is open by {_describe(holding[_identity(present)])}; close it first")
+                raise CatalogError("open", f"{file} is open by {_describe(holding[_identity(present)])}; close it first",
+                                   name=file, path=path, holders=_opened(holding[_identity(present)]))
             removed = []
-            for name, info in ((file, present), (_part(file), part)):
+            for name, info in ((file, present), *parts):
                 if info is None or _identity(info) in holding:
                     continue  # a part someone is writing is never removed
                 again = _lstat(name, fd)
                 if again is None or _identity(again) != _identity(info):
-                    continue
+                    continue  # replaced since it was checked: not what was checked, so left alone
                 os.unlink(name, dir_fd=fd)
                 removed.append(name)
             os.fsync(fd)
     finally:
         os.close(fd)
     if present is None and not removed:
-        raise CatalogError("open", f"the partial download of {file} is being written; leaving it")
+        raise CatalogError("open", f"the partial download of {file} is being written; leaving it", name=file,
+                           path=path)
+    if present is not None and file not in removed:
+        raise CatalogError("remove-failed", f"{file} changed while it was being removed; it was left", name=file,
+                           path=path)
     message = f"removed {file}" if present is not None else f"removed the partial download of {file}"
-    return Result("remove", "removed", message, file, os.path.join(directory, file))
+    return Result("remove", "removed", message, file, path)
 
 
-def _remove_ollama(name: str, unload: bool, namespace: str | None, url: str) -> Result:
+def _remove_ollama(name: str, unload: bool, force: bool, namespace: str | None, url: str) -> Result:
     if not ollama_name_ok(name):
         raise CatalogError("invalid-name", "Ollama names use letters, digits, and . _ : / -")
     try:
         names = {_canonical(model.name): model.name for model in _ollama.installed(url)}
     except _ollama.OllamaError as error:
-        raise CatalogError("unavailable", "Ollama is not reachable", detail=str(error)) from error
+        raise CatalogError("unavailable", "Ollama is not reachable", detail=str(error), name=name) from error
     if _canonical(name) not in names:
-        raise CatalogError("not-installed", f"{name} is not installed")
+        raise CatalogError("not-installed", f"{name} is not installed", name=name)
     tag = names[_canonical(name)]  # delete exactly what Ollama listed
+    if not ollama_name_ok(tag):
+        raise CatalogError("remove-failed", "Ollama listed the model under a name that is not valid", name=name)
     holders = [info for info in _holders(namespace, url, name)
                if info.backend == "ollama" and _canonical(info.model) == _canonical(name)]
-    _clear(holders, name, unload, namespace, url)
+    _clear(holders, name, unload, force, namespace, url)
     try:
         _ollama.delete(url, tag)
     except _ollama.OllamaMissing as error:
-        raise CatalogError("not-installed", f"{name} is not installed") from error
+        raise CatalogError("not-installed", f"{name} is not installed", name=name) from error
     except _ollama.OllamaError as error:
-        raise CatalogError("remove-failed", f"could not remove {name}", detail=str(error)) from error
+        raise CatalogError("remove-failed", f"could not remove {name}", detail=str(error), name=name) from error
     return Result("remove", "removed", f"removed {name}", name)
 
 
-def remove(target: str, *, unload: bool = False, catalog: Catalog | None = None, namespace: str | None = None,
-           ollama: str | None = None) -> Result:
+@_os_errors("remove-failed", "remove")
+def remove(target: str, *, unload: bool = False, force: bool = False, catalog: Catalog | None = None,
+           namespace: str | None = None, ollama: str | None = None) -> Result:
     """Remove a model: a catalog id, a GGUF's file name or path in a models folder, or
     ``ollama:NAME``. Refused while it is resident or open; ``unload`` unloads it through
-    the registry first, which still refuses pinned, busy and loading residents."""
+    the registry first, which still refuses pinned, busy and loading residents. An Ollama
+    model no app registered may be in use by another client: unloading it also needs ``force``."""
     catalog = catalog or load()
     url = _ollama_url(ollama)
     located = _locate(target, catalog)
     if isinstance(located, str):
-        return _remove_ollama(located, unload, namespace, url)
-    return _remove_file(*located, unload, namespace, url)
+        return _remove_ollama(located, unload, force, namespace, url)
+    folders = {role: folder(role, catalog) for role in FOLDER_ROLES}
+    return _remove_file(*located, unload, force, namespace, url, folders)
 
 
+@_os_errors("unavailable", "verify")
 def verify(target: str, *, catalog: Catalog | None = None, progress: Progress | None = None,
            ollama: str | None = None) -> Result:
     """Recompute an installed catalog file's size and sha256 and compare them with the catalog,
@@ -971,6 +1151,7 @@ def verify(target: str, *, catalog: Catalog | None = None, progress: Progress | 
     return Result("verify", "verified", f"verified {file}", file, os.path.join(directory, file))
 
 
+@_os_errors("unavailable", "list")
 def list_models(*, catalog: Catalog | None = None, namespace: str | None = None,
                 ollama: str | None = None) -> Inventory:
     """Catalog entries (installed, partial or available), unlisted local GGUFs, Ollama's
@@ -1004,7 +1185,7 @@ def list_models(*, catalog: Catalog | None = None, namespace: str | None = None,
                 pass
         listed = set()
         for entry in (e for e in catalog.entries if e.folder == role):
-            info, part = present.get(entry.file), present.get(_part(entry.file))
+            info, part = present.get(entry.file), present.get(_part(entry.file, entry.sha256))
             listed.add(entry.file)
             if info is not None and stat.S_ISLNK(info.st_mode):
                 state = "link"
@@ -1032,10 +1213,11 @@ def list_models(*, catalog: Catalog | None = None, namespace: str | None = None,
     models = []
     for row in rows:
         info = row.pop("info")
-        names = _file_names(row.pop("entry"), os.path.dirname(row["path"]), row.pop("file"))
-        who = sorted({h.app for h in holders if h.registered and h.backend != "ollama" and h.model in names})
+        entry, file = row.pop("entry"), row.pop("file")
+        who = _who(h for h in holders if h.registered and h.backend != "ollama"
+                   and _registered_as(h.model, entry, os.path.dirname(row["path"]), file, folders))
         if info is not None and stat.S_ISREG(info.st_mode):
-            who += [f"pid {pid} ({command})" for pid, command in sorted(opened.get(_identity(info), []))]
+            who += list(_opened(opened.get(_identity(info), [])))
         models.append(Listed(**row, resident=tuple(who)))
     on_disk = {_canonical(tag.name): tag for tag in tags}
     for entry in (e for e in catalog.entries if e.kind == "ollama"):
@@ -1048,7 +1230,7 @@ def list_models(*, catalog: Catalog | None = None, namespace: str | None = None,
 
 def _ollama_row(ident: str, name: str, model: str, tag: _ollama.Installed | None,
                 holders: tuple[ResidentInfo, ...], source: str, entry: Entry | None = None) -> Listed:
-    who = sorted({h.app for h in holders if h.backend == "ollama" and _canonical(h.model) == _canonical(model)})
+    who = _who(h for h in holders if h.backend == "ollama" and _canonical(h.model) == _canonical(model))
     if tag is None:
         state = "available"
     else:

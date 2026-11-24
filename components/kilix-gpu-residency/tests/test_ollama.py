@@ -56,12 +56,56 @@ class DiscoveryTests(ResidencyCase):
 
     def test_the_default_url_follows_ollama_host(self):
         self.assertEqual(ollama.default_url(), "http://127.0.0.1:11434")
+        import os
+        # As Ollama's own client reads it: the unspecified addresses a server binds to mean loopback.
         for value, expected in (("127.0.0.1:9999", "http://127.0.0.1:9999"), ("http://localhost", "http://localhost:11434"),
-                                ("0.0.0.0", "http://0.0.0.0:11434")):
+                                ("0.0.0.0", "http://127.0.0.1:11434"), ("0.0.0.0:8080", "http://127.0.0.1:8080"),
+                                ("[::]:11434", "http://[::1]:11434"), ("[::1]:11434", "http://[::1]:11434"),
+                                ("http://[::1]", "http://[::1]:11434"), ("ip6-localhost:11434", "http://ip6-localhost:11434")):
             with self.subTest(value=value):
-                import os
                 os.environ["OLLAMA_HOST"] = value
                 self.assertEqual(ollama.default_url(), expected)
+        # Only "localhost" is trusted by name: another name that resolves to loopback is not.
+        self.assertIsNone(ollama.loopback("http://ip6-localhost:11434"))
+        self.assertIsNotNone(ollama.loopback("http://[::1]:11434"))
+        for bad in ("127.0.0.1:99999", "127.0.0.1:port"):
+            with self.subTest(bad=bad):
+                os.environ["OLLAMA_HOST"] = bad
+                with self.assertRaises(ollama.OllamaError):
+                    ollama.default_url()
+                with self.assertRaises(residency.ResidencyError) as caught:
+                    residency.status(namespace=self.namespace)
+                self.assertEqual(caught.exception.code, "invalid-request")
+
+    def test_a_bind_all_ollama_host_is_discovered(self):
+        import os
+        self.ollama.load("bonsai-2:27b", 5 * GIB)
+        os.environ["OLLAMA_HOST"] = "0.0.0.0:" + self.ollama.url.rsplit(":", 1)[1]
+        status = residency.status(namespace=self.namespace)
+        self.assertEqual((status.ollama, [r.model for r in status.residents]), ("reachable", ["bonsai-2:27b"]))
+
+    def test_keep_alive_is_read_as_ollama_reads_it(self):
+        import os
+        self.addCleanup(os.environ.pop, "OLLAMA_KEEP_ALIVE", None)
+        for value, seconds in (("", 300.0), ("600", 600.0), ("1h", 3600.0), ("1h30m", 5400.0), ("90s", 90.0),
+                               ("1.5m", 90.0), ("-1", None), ("-1m", None), ("forever", None), ("5x", None)):
+            with self.subTest(value=value):
+                os.environ["OLLAMA_KEEP_ALIVE"] = value
+                self.assertEqual(ollama.keep_alive_seconds(), seconds)
+
+    def test_a_long_keep_alive_orders_models_by_their_real_last_use(self):
+        import os
+        os.environ["OLLAMA_KEEP_ALIVE"] = "1h"
+        self.addCleanup(os.environ.pop, "OLLAMA_KEEP_ALIVE", None)
+        self.ollama.load("stale", GIB, expires_in=600)  # used 50 minutes ago
+        self.ollama.load("fresh", GIB, expires_in=3500)  # used 100 seconds ago
+        by_name = {r.model: r for r in self.status().residents}
+        self.assertAlmostEqual(by_name["stale"].last_used, time.time() - 3000, delta=5)
+        self.assertLess(by_name["stale"].last_used, by_name["fresh"].last_used)
+        # A 5 minute default would put "fresh" in the future; the estimate never passes now.
+        os.environ.pop("OLLAMA_KEEP_ALIVE")
+        by_name = {r.model: r for r in self.status().residents}
+        self.assertLessEqual(by_name["fresh"].last_used, time.time())
 
     def test_malformed_entries_are_skipped(self):
         self.ollama.models.update({"bad name": {"size": 1, "size_vram": 1}, "neg": {"size": -1, "size_vram": 1},
@@ -141,6 +185,7 @@ class RegisteredOllamaTests(ResidencyCase):
         self.assertEqual(len(self.status().residents), 1)  # loading: not in /api/ps yet
         resident.idle()
         self.assertEqual(self.status().residents, ())  # keep_alive expired
+        self.prune()
         self.assertEqual(self.records(), [])
 
     def test_an_unreachable_ollama_does_not_prune_registered_models(self):

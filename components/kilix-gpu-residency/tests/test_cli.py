@@ -43,7 +43,8 @@ class CliTests(ResidencyCase):
         self.assertEqual(code, 0)
         self.assertEqual((value["schema"], value["version"], value["ollama"]),
                          (cli.STATUS_SCHEMA, residency.VERSION, "reachable"))
-        self.assertEqual(set(value), {"schema", "version", "ollama", "devices", "residents", "unmanaged", "events"})
+        self.assertEqual(set(value), {"schema", "version", "ollama", "devices", "residents", "unmanaged", "foreign",
+                                      "events"})
         [resident] = value["residents"]
         self.assertEqual((resident["id"], resident["registered"], resident["vram_bytes"], resident["unload"]),
                          ("ollama:bonsai-2:27b", False, GIB, "ollama"))
@@ -68,9 +69,9 @@ class CliTests(ResidencyCase):
 
     def test_room_is_a_dry_run(self):
         _, process = self.model("puzzllm", "m", 4 * GIB)
-        code, out, _ = self.run_cli("room", "1G")
+        code, out, _ = self.run_cli("room", "1G", "--device", "Vulkan1")
         self.assertEqual(code, 0)
-        self.assertIn("954 MiB fits on 0000:01:00.0: 1.9 GiB free", out)
+        self.assertIn("1.0 GB fits on 0000:01:00.0: 2.0 GB free", out)  # in the units it was given
         code, out, _ = self.run_cli("room", "3GiB", "--device", "Vulkan1")
         self.assertEqual((code, out), (0, "3.0 GiB needs unloading on 0000:01:00.0: m (puzzllm, 4.0 GiB)\n"))
         code, out, _ = self.run_cli("room", "7GiB", "--json")

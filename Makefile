@@ -44,6 +44,7 @@ residency-defects:
 
 # Online, once: fill the uv cache that make check reads offline. uv verifies every
 # download against uv.lock, and the root's build backend against tools/build-constraints.txt.
+# It never downloads a Python (--no-python-downloads): run `$(UV) python install 3.12.8` first.
 prefetch:
 	$(UV) sync --locked --no-install-project --managed-python --no-python-downloads --python 3.12.8
 	cd components/kilix-telemetry && $(UV) sync --locked

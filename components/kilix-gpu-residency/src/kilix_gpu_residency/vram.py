@@ -27,6 +27,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -44,12 +45,22 @@ NVIDIA_SMI = "nvidia-smi"
 _SMI_TIMEOUT = 10.0
 
 
+def _test_seam(name: str, default: str) -> str:
+    """KILIX_GPU_SYSFS_ROOT and KILIX_GPU_PROC_ROOT point the reader at a fake tree, but only in
+    a process the test suite's guard is installed in. Anywhere else, the installed kilix-gpu
+    included, the real /sys and /proc are read whatever the environment says."""
+    if not getattr(sys, "_kilix_residency_guard", False):
+        return default
+    return os.path.abspath(os.environ.get(name) or default)
+
+
 def sys_root() -> str:
-    return os.path.abspath(os.environ.get("KILIX_GPU_SYSFS_ROOT") or "/sys")
+    return _test_seam("KILIX_GPU_SYSFS_ROOT", "/sys")
 
 
 def proc_root() -> str:
-    return os.path.abspath(os.environ.get("KILIX_GPU_PROC_ROOT") or "/proc")
+    """Only for finding which processes hold DRM descriptors; liveness never reads it."""
+    return _test_seam("KILIX_GPU_PROC_ROOT", "/proc")
 
 
 def normalise_pci(text: str) -> str | None:

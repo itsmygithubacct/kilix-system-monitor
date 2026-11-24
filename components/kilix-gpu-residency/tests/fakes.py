@@ -164,20 +164,6 @@ class FakeOllama:
         self.requests: list[tuple[str, str, Any]] = []
         self.ignore_unload = False
         self.lock = threading.Lock()
-        binaries = scratch / "bin"
-        binaries.mkdir(parents=True, exist_ok=True)
-        if legacy:
-            os.symlink(shutil.which("sleep"), binaries / "ollama")
-            self.server = None
-            self.runner = subprocess.Popen([str(binaries / "ollama"), "600"], stdin=subprocess.DEVNULL,
-                                           start_new_session=True)
-            self.runner_pid = self.runner.pid
-        else:
-            os.symlink(shutil.which("sh"), binaries / "ollama")
-            os.symlink(shutil.which("sleep"), binaries / "llama-server")
-            self.runner = subprocess.Popen([str(binaries / "ollama"), "-c", f'"{binaries}/llama-server" 600 & wait'],
-                                           stdin=subprocess.DEVNULL, start_new_session=True)
-            self.runner_pid = self._child_of(self.runner.pid)
         owner = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -244,6 +230,24 @@ class FakeOllama:
 
         self.http = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.http.server_address[1]}"
+        # The process named ollama holds the listening socket, as Ollama's server does: that,
+        # not its name, is how the registry tells Ollama's processes from a decoy.
+        listener = self.http.fileno()
+        binaries = scratch / "bin"
+        binaries.mkdir(parents=True, exist_ok=True)
+        if legacy:
+            os.symlink(shutil.which("sleep"), binaries / "ollama")
+            self.server = None
+            self.runner = subprocess.Popen([str(binaries / "ollama"), "600"], stdin=subprocess.DEVNULL,
+                                           start_new_session=True, pass_fds=(listener,))
+            self.runner_pid = self.runner.pid
+        else:
+            os.symlink(shutil.which("sh"), binaries / "ollama")
+            os.symlink(shutil.which("sleep"), binaries / "llama-server")
+            self.runner = subprocess.Popen([str(binaries / "ollama"), "-c", f'"{binaries}/llama-server" 600 & wait'],
+                                           stdin=subprocess.DEVNULL, start_new_session=True, pass_fds=(listener,))
+            self.runner_pid = self._child_of(self.runner.pid)
+        self.server_pid = self.runner.pid
         self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
         self.thread.start()
 
@@ -262,7 +266,9 @@ class FakeOllama:
             time.sleep(0.01)
         raise RuntimeError("the fake Ollama runner did not start")
 
-    def load(self, name: str, vram_bytes: int, expires_in: float = 300.0) -> None:
+    def load(self, name: str, vram_bytes: int, expires_in: float = 60.0) -> None:
+        """Load a model as if last used ``300 - expires_in`` seconds ago (Ollama's keep-alive is 5
+        minutes): by default 4 minutes ago, longer than RECENT_USE_SECONDS."""
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() + expires_in)) + ".123456789Z"
         with self.lock:
             self.models[name] = {"size": vram_bytes + 512 * MIB, "size_vram": vram_bytes, "expires_at": stamp}
@@ -294,6 +300,7 @@ class FakeDownloads:
         self.shift = 0  # resume this many bytes before the offset asked for
         self.redirect: str | None = None  # where /resolve/ sends instead, when set
         self.status: int | None = None  # answer every /files/ request with this status
+        self.range_total: int | None = None  # the total a 206's Content-Range claims, when set
         self.requests: list[tuple[str, str | None]] = []
         owner = self
 
@@ -327,7 +334,8 @@ class FakeDownloads:
                         self.end_headers()
                         return
                     self.send_response(206)
-                    self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
+                    self.send_header("Content-Range",
+                                     f"bytes {start}-{len(data) - 1}/{owner.range_total or len(data)}")
                 else:
                     self.send_response(200)
                 self.send_header("Content-Length", str(len(data) - start))
@@ -347,6 +355,14 @@ class FakeDownloads:
         self.url = f"http://127.0.0.1:{self.http.server_address[1]}"
         self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
         self.thread.start()
+
+    def tls(self, certfile: str, keyfile: str) -> None:
+        """Serve https from now on, with this certificate."""
+        import ssl
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile, keyfile)
+        self.http.socket = context.wrap_socket(self.http.socket, server_side=True)
+        self.url = "https" + self.url[len("http"):]
 
     def ranges(self, name: str) -> list[str | None]:
         return [wanted for path, wanted in self.requests if path == "/files/" + name]
@@ -395,6 +411,12 @@ class ResidencyCase(unittest.TestCase):
             "KILIX_LLM_MODELS_DIR", "PUZZLLM_DIFFUSION_MODELS", "GPU_TERMINAL_HOME", "XDG_DATA_HOME")}
         self.addCleanup(self.restore_environ)
         os.environ["KILIX_GPU_SYSFS_ROOT"] = str(self.sys)
+        # What the plebian-os installer writes from vulkaninfo: Vulkan0 is the iGPU, Vulkan1 the NVIDIA.
+        os.environ["KILIX_GPU_DEVICES"] = "Vulkan0=0000:00:02.0,Vulkan1=0000:01:00.0"
+        for name in ("OLLAMA_KEEP_ALIVE",):
+            self.addCleanup(os.environ.__setitem__ if name in os.environ else os.environ.pop,
+                            *((name, os.environ[name]) if name in os.environ else (name, None)))
+            os.environ.pop(name, None)
         self.ollama = FakeOllama(self.scratch)
         self.addCleanup(self.ollama.close)
         self.processes: dict[int, int] = {}
@@ -466,6 +488,10 @@ class ResidencyCase(unittest.TestCase):
 
     def status(self, **kwargs: Any) -> residency.Status:
         return residency.status(**self.where(), **kwargs)
+
+    def prune(self) -> None:
+        """A writer's call that needs nothing: it prunes what is gone, as every write path does."""
+        residency.ensure_room(1, device=None, requester="test", **self.where())
 
     def reap(self, process: subprocess.Popen, timeout: float = 10.0) -> int:
         return process.wait(timeout=timeout)
@@ -545,6 +571,12 @@ class CatalogCase(ResidencyCase):
             {"id": "tiny-ollama", "name": "Tiny (Ollama)", "kind": "ollama", "ollama": "tiny:1b", "bytes": 10**9,
              "digest": digest_of("tiny:1b"), **common},
         ]}
+
+    def part_name(self, file: str) -> str:
+        """The part a download of the catalog's ``file`` fills: named after its pin."""
+        import hashlib
+        data = self.small if file == self.SMALL else self.tiny
+        return self.catalog_module._part(file, hashlib.sha256(data).hexdigest())
 
     def write_catalog(self, document: dict | None = None) -> None:
         self.catalog_path.write_text(json.dumps(document or self.document()))

@@ -297,7 +297,7 @@ class InstallTests(CatalogCase):
         error = self.refused("symlink", self.install, "small")
         self.assertEqual(str(error), f"refusing to replace a symlink: {self.SMALL}")
         os.unlink(self.llm / self.SMALL)
-        os.symlink(outside, self.llm / f".{self.SMALL}.part")
+        os.symlink(outside, self.llm / self.part_name(self.SMALL))
         self.refused("symlink", self.install, "small")
         self.assertEqual(outside.read_bytes(), b"untouched")
         self.assertEqual(self.downloads.requests, [])
@@ -315,22 +315,56 @@ class InstallTests(CatalogCase):
         self.assertEqual(len(self.downloads.ranges(self.SMALL)), 4)
 
     def test_a_resume_at_the_wrong_offset_is_refused(self):
-        self.place(self.llm, f".{self.SMALL}.part", self.small[:MIB])
+        self.place(self.llm, self.part_name(self.SMALL), self.small[:MIB])
         self.downloads.shift = 1
         error = self.refused("download-failed", self.install, "small")
         self.assertIn("wrong offset", error.detail)
-        self.assertEqual((self.llm / f".{self.SMALL}.part").read_bytes(), self.small[:MIB])
+        self.assertEqual((self.llm / self.part_name(self.SMALL)).read_bytes(), self.small[:MIB])
 
     def test_a_verified_part_never_replaces_a_file_that_appeared(self):
-        part = self.place(self.llm, ".x.gguf.part", b"new")
-        existing = self.place(self.llm, "x.gguf", b"existing")
-        fd = os.open(self.llm, os.O_RDONLY | os.O_DIRECTORY)
+        entry = self.catalog.get("small")
+        name = self.part_name(self.SMALL)
+        fd = os.open(self.llm if self.llm.exists() else self.place(self.llm, "x", b"") and self.llm,
+                     os.O_RDONLY | os.O_DIRECTORY)
         self.addCleanup(os.close, fd)
-        self.refused("conflict", catalog._publish, fd, ".x.gguf.part", "x.gguf")
-        self.assertEqual((existing.read_bytes(), part.read_bytes()), (b"existing", b"new"))
+        # Another file appeared under the real name meanwhile: it is kept, the part goes.
+        part = self.place(self.llm, name, self.small)
+        existing = self.place(self.llm, self.SMALL, b"existing")
+        self.refused("conflict", catalog._publish, fd, name, entry, None)
+        self.assertEqual(existing.read_bytes(), b"existing")
+        self.assertFalse(part.exists())
+        # The catalog's own file appeared meanwhile: already saved, and the part does not leak.
+        existing.write_bytes(self.small)
+        part = self.place(self.llm, name, self.small)
+        self.assertEqual(catalog._publish(fd, name, entry, None), "already-saved")
+        self.assertFalse(part.exists())
         os.unlink(existing)
-        catalog._publish(fd, ".x.gguf.part", "x.gguf")
-        self.assertEqual(sorted(os.listdir(self.llm)), ["x.gguf"])
+        part = self.place(self.llm, name, self.small)
+        self.assertEqual(catalog._publish(fd, name, entry, None), "saved")
+        self.assertEqual(sorted(n for n in os.listdir(self.llm) if n != "x"), [self.SMALL])
+
+    def test_a_file_that_appears_during_the_download_is_answered(self):
+        original = catalog._download
+
+        def download_then_appear(entry, fd, progress):
+            original(entry, fd, progress)
+            self.place(self.llm, self.SMALL, self.small)  # another installer finished first
+        catalog._download = download_then_appear
+        self.addCleanup(setattr, catalog, "_download", original)
+        result = self.install("small")
+        self.assertEqual(result.outcome, "already-saved")
+        self.assertEqual(sorted(os.listdir(self.llm)), [".fetch.lock", self.SMALL])
+
+    def test_a_part_of_another_pin_is_never_resumed(self):
+        # The catalog moved to another revision of the file: its old part must not seed the new one.
+        old = self.small[:MIB]
+        stale = self.place(self.llm, catalog._part(self.SMALL, "0" * 64), old)
+        legacy = self.place(self.llm, catalog.LEGACY_PART_TEMPLATE.format(file=self.SMALL), old)
+        self.assertEqual(self.install("small").outcome, "saved")
+        self.assertEqual(self.downloads.ranges(self.SMALL), [None])  # from the start
+        self.assertTrue(stale.exists() and legacy.exists())  # not this pin's: left for remove
+        self.assertEqual(self.remove(self.SMALL).outcome, "removed")
+        self.assertEqual(sorted(os.listdir(self.llm)), [".fetch.lock"])
 
     def test_a_symlinked_lock_is_refused_and_not_followed(self):
         target = self.place(self.scratch / "elsewhere", "lock", b"keep")
@@ -345,7 +379,7 @@ class InstallTests(CatalogCase):
         self.downloads.drops[self.SMALL] = [2 * MIB, 2 * MIB, 2 * MIB]
         error = self.refused("download-failed", self.install, "small")
         self.assertEqual((str(error), error.exit_code), (f"could not download {self.SMALL}", 1))
-        part = self.llm / f".{self.SMALL}.part"
+        part = self.llm / self.part_name(self.SMALL)
         self.assertEqual(part.read_bytes(), self.small[:2 * MIB])
         self.assertFalse((self.llm / self.SMALL).exists())
         self.downloads.drops[self.SMALL] = []
@@ -355,35 +389,36 @@ class InstallTests(CatalogCase):
         self.assertEqual((self.llm / self.SMALL).read_bytes(), self.small)
 
     def test_a_server_that_ignores_range_restarts_from_the_beginning(self):
-        self.place(self.llm, f".{self.SMALL}.part", self.small[:MIB])
+        self.place(self.llm, self.part_name(self.SMALL), self.small[:MIB])
         self.downloads.ignore_range = True
         self.assertEqual(self.install("small").outcome, "saved")
         self.assertEqual(self.downloads.ranges(self.SMALL), [f"bytes={MIB}-"])
         self.assertEqual((self.llm / self.SMALL).read_bytes(), self.small)
 
     def test_a_complete_part_is_checked_and_named_without_a_request(self):
-        self.place(self.llm, f".{self.SMALL}.part", self.small)
+        self.place(self.llm, self.part_name(self.SMALL), self.small)
         self.assertEqual(self.install("small").outcome, "saved")
         self.assertEqual(self.downloads.requests, [])
         self.assertEqual((self.llm / self.SMALL).read_bytes(), self.small)
 
     def test_a_server_that_cannot_resume_a_part_starts_again(self):
         # 416 for a range the server cannot satisfy: here, because its file is shorter than the part.
-        self.place(self.llm, f".{self.SMALL}.part", self.small[:MIB])
+        self.place(self.llm, self.part_name(self.SMALL), self.small[:MIB])
         self.downloads.files[self.SMALL] = self.small[:MIB // 2]
         self.downloads.drops[self.SMALL] = []
         catalog.ATTEMPTS = 2
-        self.refused("downloaded-mismatch", self.install, "small")
+        error = self.refused("download-failed", self.install, "small")
+        self.assertEqual(error.detail, "the server's file is not the catalog's size")
         self.assertEqual(self.downloads.ranges(self.SMALL), [f"bytes={MIB}-", None])
-        self.assertEqual(sorted(os.listdir(self.llm)), [".fetch.lock"])
+        self.assertEqual(sorted(os.listdir(self.llm)), [".fetch.lock"])  # restarted: nothing left to resume
 
     def test_a_part_longer_than_the_model_starts_again(self):
-        self.place(self.llm, f".{self.SMALL}.part", self.small + b"extra")
+        self.place(self.llm, self.part_name(self.SMALL), self.small + b"extra")
         self.assertEqual(self.install("small").outcome, "saved")
         self.assertEqual(self.downloads.ranges(self.SMALL), [None])
 
     def test_a_corrupt_part_fails_once_and_is_removed(self):
-        part = self.place(self.llm, f".{self.SMALL}.part", b"\0" * MIB)
+        part = self.place(self.llm, self.part_name(self.SMALL), b"\0" * MIB)
         error = self.refused("downloaded-mismatch", self.install, "small")
         self.assertEqual((str(error), error.exit_code), (f"downloaded {self.SMALL} did not match", 1))
         self.assertFalse(part.exists())
@@ -391,10 +426,11 @@ class InstallTests(CatalogCase):
         self.assertEqual(self.install("small").outcome, "saved")
 
     def test_a_server_with_another_file_is_refused(self):
-        for data in (self.small + b"!", self.small[:-1] + b"!"):
+        # Another size is a failure a later call may get past; complete bytes that differ are discarded.
+        for data, outcome in ((self.small + b"!", "download-failed"), (self.small[:-1] + b"!", "downloaded-mismatch")):
             with self.subTest(size=len(data)):
                 self.downloads.files[self.SMALL] = data
-                self.refused("downloaded-mismatch", self.install, "small")
+                self.refused(outcome, self.install, "small")
                 self.assertEqual(sorted(os.listdir(self.llm)), [".fetch.lock"])
 
     def test_http_errors_fail_without_leaving_an_empty_part(self):
@@ -426,7 +462,7 @@ class InstallTests(CatalogCase):
         self.addCleanup(stop, holder)
         self.assertEqual(holder.stdout.readline().strip(), "ready")
         error = self.refused("busy-folder", self.install, "small")
-        self.assertEqual((str(error), error.exit_code), ("another download is using the models folder", 2))
+        self.assertEqual((str(error), error.exit_code), ("a download is running in that folder; try again when it finishes", 2))
         self.assertEqual(self.downloads.requests, [])
 
     def test_two_installs_at_once_download_once(self):
@@ -451,7 +487,7 @@ class InstallTests(CatalogCase):
         self.assertEqual(self.downloads.ranges(self.SMALL).count(None), 1)
 
     def test_a_part_another_process_is_writing_is_left_alone(self):
-        part = self.place(self.llm, f".{self.SMALL}.part", self.small[:MIB])
+        part = self.place(self.llm, self.part_name(self.SMALL), self.small[:MIB])
         writer = self.holding(part)
         error = self.refused("open", self.install, "small")
         self.assertIn(f"pid {writer.pid}", str(error))
@@ -464,7 +500,7 @@ class InstallTests(CatalogCase):
         self.assertTrue(str(error).startswith(f"not enough disk space for {self.SMALL}"))
         self.assertEqual(self.downloads.requests, [])
         catalog.free_bytes = lambda fd: len(self.small) - MIB  # enough for what a part still lacks
-        self.place(self.llm, f".{self.SMALL}.part", self.small[:2 * MIB])
+        self.place(self.llm, self.part_name(self.SMALL), self.small[:2 * MIB])
         self.assertEqual(self.install("small").outcome, "saved")
 
     def test_an_unknown_id_is_refused(self):

@@ -1,4 +1,20 @@
 {
+  "api": {
+    "Resident.attach": "(*, pid=None, pgid=None)",
+    "Resident.busy": "()",
+    "Resident.close": "(*, unload=True)",
+    "Resident.idle": "()",
+    "Resident.loaded": "()",
+    "default_namespace": "()",
+    "ensure_room": "(need_bytes, *, device, requester, policy='evict-idle', namespace=None, ollama=None, wait=120.0)",
+    "pin": "(target, pinned=True, *, namespace=None, ollama=None, wait=120.0)",
+    "register": "(*, app, model, backend, device=None, pid=None, pgid=None, need_bytes=None, policy='evict-idle', pinned=False, unload='auto', namespace=None, ollama=None, wait=120.0)",
+    "residents": "(*, namespace=None, ollama=None, wait=120.0)",
+    "resolve_device": "(label, devices)",
+    "status": "(*, namespace=None, ollama=None, wake=False, wait=120.0)",
+    "unload": "(target, *, force=False, shared=False, by='kilix-gpu', namespace=None, ollama=None, wait=120.0)",
+    "unpin": "(target, *, namespace=None, ollama=None, wait=120.0)"
+  },
   "backends": [
     "ollama",
     "process",
@@ -11,9 +27,23 @@
       "remove",
       "verify"
     ],
+    "api": {
+      "folder": "(role, catalog=None)",
+      "install": "(target, *, catalog=None, ollama=None, progress=None)",
+      "list_models": "(*, catalog=None, namespace=None, ollama=None)",
+      "load": "(path=None)",
+      "remove": "(target, *, unload=False, force=False, catalog=None, namespace=None, ollama=None)",
+      "verify": "(target, *, catalog=None, progress=None, ollama=None)"
+    },
     "attempts": 5,
     "command": "kilix-gpu models",
     "data_schema": "kilix.gpu-residency.catalog/v1",
+    "error_fields": [
+      "detail",
+      "holders",
+      "name",
+      "path"
+    ],
     "exit_codes": {
       "0": "done",
       "1": "failed",
@@ -54,6 +84,7 @@
       "diffusion-gguf",
       "ollama"
     ],
+    "legacy_part_template": ".{file}.part",
     "lock_name": ".fetch.lock",
     "lock_wait_seconds": 1,
     "max_redirects": 5,
@@ -106,22 +137,210 @@
       "unsafe-folder": 2,
       "verified": 0
     },
-    "part_template": ".{file}.part",
+    "part_template": ".{file}.{pin}.part",
+    "proxies": "never used: downloads connect directly; when https_proxy is set, a failure's detail says so",
     "python_module": "kilix_gpu_residency.catalog",
     "release_wait_seconds": 10,
+    "remove_order": "other processes holding the file refuse it (open) before anything is unloaded; then every holder is checked (pinned, busy) before any is unloaded; an unload that fails is remove-failed, naming what was already unloaded",
     "remove_refused_while": [
       "registered",
       "loaded-in-ollama",
       "open-or-mapped"
     ],
     "result_schema": "kilix.gpu-residency.models/v1",
+    "space": "install checks free space once, before downloading, and reserves none",
+    "types": {
+      "Inventory": [
+        "models",
+        "folders",
+        "ollama",
+        "residency"
+      ],
+      "Listed": [
+        "id",
+        "name",
+        "kind",
+        "source",
+        "state",
+        "folder",
+        "path",
+        "bytes",
+        "partial_bytes",
+        "resident"
+      ],
+      "Result": [
+        "action",
+        "outcome",
+        "message",
+        "name",
+        "path"
+      ]
+    },
     "unload_never_unloads": [
       "pinned",
       "busy",
       "loading",
-      "unmanaged"
+      "unmanaged",
+      "unregistered-ollama-without-force"
     ],
     "url_pattern": "https://huggingface\\.co/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*/resolve/[0-9a-f]{40}/(?P<file>[^/?#]+)\\Z"
+  },
+  "cli": {
+    "commands": [
+      "status",
+      "unload",
+      "pin",
+      "unpin",
+      "room",
+      "models"
+    ],
+    "exit_codes": {
+      "0": "done; room: fits, or would fit after unloading",
+      "1": "failed, refused or unavailable (kilix-gpu: MESSAGE [code] on stderr); room: unknown device (invalid-request) or unmeasured",
+      "130": "interrupted",
+      "2": "room: does not fit even with every idle resident unloaded"
+    },
+    "last_resort": "anything unexpected prints one line on stdout and exits 1",
+    "models_list_json": {
+      "keys": [
+        "action",
+        "folders",
+        "models",
+        "ollama",
+        "residency",
+        "schema",
+        "version"
+      ],
+      "model": [
+        "bytes",
+        "folder",
+        "id",
+        "kind",
+        "name",
+        "partial_bytes",
+        "path",
+        "resident",
+        "source",
+        "state"
+      ],
+      "resident": [
+        [
+          "app"
+        ],
+        [
+          "command",
+          "pid"
+        ]
+      ]
+    },
+    "models_result_json": {
+      "keys": [
+        "action",
+        "detail",
+        "exit",
+        "holders",
+        "message",
+        "name",
+        "outcome",
+        "path",
+        "schema",
+        "target",
+        "version"
+      ]
+    },
+    "ollama_states": [
+      "reachable",
+      "unreachable",
+      "not-loopback"
+    ],
+    "registered_false": "an Ollama model found through GET /api/ps that no app registered",
+    "room_json": {
+      "keys": [
+        "device_pci",
+        "enough",
+        "fits",
+        "free_bytes",
+        "need_bytes",
+        "plan",
+        "schema"
+      ],
+      "plan": [
+        "app",
+        "id",
+        "model",
+        "vram_bytes"
+      ]
+    },
+    "status_json": {
+      "device": [
+        "asleep",
+        "discrete",
+        "driver",
+        "free_bytes",
+        "name",
+        "pci",
+        "source",
+        "total_bytes",
+        "used_bytes",
+        "vendor"
+      ],
+      "event": [
+        "app",
+        "by",
+        "confirmed",
+        "freed_bytes",
+        "id",
+        "model",
+        "reason",
+        "time"
+      ],
+      "foreign": [
+        "app",
+        "id",
+        "model",
+        "pid",
+        "reason",
+        "version",
+        "vram_bytes"
+      ],
+      "keys": [
+        "devices",
+        "events",
+        "foreign",
+        "ollama",
+        "residents",
+        "schema",
+        "unmanaged",
+        "version"
+      ],
+      "resident": [
+        "app",
+        "backend",
+        "device_label",
+        "device_pci",
+        "id",
+        "last_used",
+        "model",
+        "need_bytes",
+        "pgid",
+        "pid",
+        "pinned",
+        "registered",
+        "reserved_bytes",
+        "state",
+        "unit",
+        "unload",
+        "vram_bytes"
+      ],
+      "unmanaged": [
+        "command",
+        "device_pci",
+        "pid",
+        "vram_bytes"
+      ],
+      "vram": "one figure per unit: a unit's first row carries it, its other rows 0"
+    },
+    "text": "every human-readable line shows control characters (C0, C1, DEL, bidi) as escapes; JSON is json.dump's"
   },
   "command": "kilix-gpu",
   "default_policy": "evict-idle",
@@ -130,19 +349,29 @@
     "uses": false
   },
   "device_map_env": "KILIX_GPU_DEVICES",
+  "devices": {
+    "env_input": "device_map_env only names devices; it cannot widen what is unloaded or signalled",
+    "label": "any other label must be in device_map_env and map to a GPU this machine has; else invalid-request",
+    "none": "the one GPU with a VRAM counter, if exactly one has; else unmeasured",
+    "pci": "a PCI address names itself, and must be a GPU this machine has"
+  },
   "distribution": "kilix-gpu-residency",
   "error_codes": [
     "gone",
     "invalid-request",
     "no-room",
     "not-found",
+    "not-released",
+    "policy-never",
     "refused",
     "unavailable",
+    "unload-failed",
     "unmeasured"
   ],
   "eviction": {
-    "all_or_nothing": true,
-    "candidate_state": "idle",
+    "all_or_nothing": "nothing is unloaded when the plan cannot meet the need",
+    "candidate": "a unit on the requested device with an unload action and measured VRAM, every live record of which is idle, which no record and no pins.json entry pins, and which is not an Ollama model nobody registered whose estimated last use is under recent_use_seconds ago or cannot be estimated",
+    "lock": "planned units are marked unloading under the lock; unloads and the release wait run with it released; an unloading mark whose unloader is gone reads as idle",
     "never_evicted": [
       "busy",
       "loading",
@@ -150,13 +379,31 @@
       "pinned",
       "unmanaged",
       "no-unload-action",
-      "other-device"
+      "other-device",
+      "no-vram",
+      "foreign",
+      "recently-used-unregistered-ollama"
     ],
-    "order": "least-recently-used",
-    "unknown_ollama_models_evictable": true
+    "ollama_bytes": "an Ollama model counts for no more than Ollama's processes measurably hold on the device",
+    "order": "registered units first, then Ollama models nobody registered; each least recently used first",
+    "unit": "one Ollama model (every record naming it, and Ollama's own entry), or one process group (every record naming it); a record without either is its own unit",
+    "unknown_ollama_models_evictable": "only when idle by the estimate: not used within recent_use_seconds",
+    "unregistered_ollama_last_use": "an estimate: expires_at minus the keep-alive (OLLAMA_KEEP_ALIVE, else 300 s), never later than now; none for a model kept for ever or an unreadable keep-alive, and such a model is never a candidate"
+  },
+  "forward_compatibility": {
+    "additions": "v1 grows only by adding optional result fields, error codes listed here and catalog outcomes; a record field, state, backend or unload kind added later is another version's, which v1 readers treat as foreign",
+    "events": "events.json of another kilix.gpu-residency version is read as empty and never rewritten",
+    "pins": "pins.json of another kilix.gpu-residency version is honoured and never rewritten",
+    "rule": "a record that is a safe registry file (regular, 0600, one link, valid JSON, id matching its name, version kilix.gpu-residency/*) but uses what this version does not know (another version, an added field, backend or unload kind) is listed foreign: never unloaded, its holder's VRAM counted, pruned only when its v1-shaped holder is dead in this PID namespace. Anything else malformed refuses the registry."
+  },
+  "gaps": {
+    "http_unload": "phase 2: an http backend unloads by its process group in v1",
+    "long_lived_servers": "a server that cannot register its own process group (a system Ollama, a shared llama-server) is reached only through its API (Ollama) or not at all; phase 2 adds the http unload for the rest",
+    "shared_http_units": "in phase 2 an http unit is one endpoint, shared by every record naming it, under the same unit rule"
   },
   "kill_grace_seconds": 5,
   "label_pattern": "[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}\\Z",
+  "load_timeout_seconds": 600,
   "lock_wait_seconds": 120,
   "max_events": 32,
   "max_records": 64,
@@ -171,9 +418,15 @@
     "never"
   ],
   "python_module": "kilix_gpu_residency",
+  "raises": {
+    "catalog": "CatalogError, whose outcome is one of catalog.outcomes; nothing else for any input or I/O failure",
+    "library": "ResidencyError (RoomError is one), whose code is one of error_codes; nothing else for any input or I/O failure"
+  },
+  "recent_use_seconds": 120,
   "record_fields": [
     "app",
     "backend",
+    "claim",
     "device",
     "holder",
     "id",
@@ -181,13 +434,39 @@
     "model",
     "need_bytes",
     "pgid",
+    "pidns",
     "pinned",
     "registered_at",
+    "reserved_until",
     "state",
     "unload",
     "version"
   ],
+  "registry": {
+    "pid_namespace": "a record carries its writer's PID namespace; records from another namespace are never pruned or signalled from here, and are listed foreign",
+    "reads": "status, residents, room with policy never and models list create nothing, take the lock shared, read an absent registry as empty, and prune nothing",
+    "signal_handler": "a SIGTERM handler may call Resident.close(unload=False): the registry is not locked while an unload runs",
+    "user_namespace": "covered by the PID-namespace rule: a process in another user namespace that shares the registry is in another PID namespace too, or sees the same /proc",
+    "writes": "every other call creates the registry, takes the lock exclusively, removes temporary files killed writers left, and prunes records whose holder is gone"
+  },
   "release_wait_seconds": 10,
+  "reservation": {
+    "amount": "need_bytes minus what the record's processes hold, while it lasts",
+    "busy_keeps_it": true,
+    "device": "only the device the record was registered on",
+    "ends": [
+      "Resident.loaded()",
+      "Resident.idle()",
+      "load_timeout_seconds after register"
+    ]
+  },
+  "room_error_codes": {
+    "no-room": "not enough even if every candidate were unloaded; nothing was unloaded",
+    "not-released": "everything planned was unloaded, but the VRAM did not come back within release_wait_seconds",
+    "policy-never": "unloading would make room, but the policy is never; nothing was unloaded",
+    "unload-failed": "an unload failed or Ollama had not confirmed it in time; evicted lists what was unloaded",
+    "unmeasured": "the device's free VRAM cannot be measured; nothing was unloaded"
+  },
   "room_schema": "kilix.gpu-residency.room/v1",
   "schema": "kilix.gpu-residency.interface/v1",
   "states": [
@@ -198,6 +477,67 @@
   ],
   "status_schema": "kilix.gpu-residency.status/v1",
   "term_grace_seconds": 5,
+  "types": {
+    "Eviction": [
+      "id",
+      "app",
+      "model",
+      "freed_bytes",
+      "time",
+      "by",
+      "reason",
+      "confirmed"
+    ],
+    "Foreign": [
+      "id",
+      "version",
+      "app",
+      "model",
+      "pid",
+      "vram_bytes",
+      "reason"
+    ],
+    "ResidentInfo": [
+      "id",
+      "app",
+      "model",
+      "backend",
+      "device_label",
+      "device_pci",
+      "pid",
+      "pgid",
+      "vram_bytes",
+      "need_bytes",
+      "state",
+      "pinned",
+      "last_used",
+      "registered",
+      "unload_kind",
+      "unit",
+      "reserved_bytes"
+    ],
+    "Room": [
+      "device_pci",
+      "need_bytes",
+      "free_bytes",
+      "evicted",
+      "plan"
+    ],
+    "Status": [
+      "devices",
+      "residents",
+      "unmanaged",
+      "ollama",
+      "events",
+      "foreign"
+    ],
+    "Unmanaged": [
+      "pid",
+      "command",
+      "device_pci",
+      "vram_bytes"
+    ]
+  },
   "unload_kinds": [
     "ollama",
     "signal"

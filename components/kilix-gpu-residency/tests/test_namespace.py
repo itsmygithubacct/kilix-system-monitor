@@ -29,6 +29,10 @@ class NamespaceTests(unittest.TestCase):
     def use(self, **kwargs):
         return residency.status(namespace=str(self.path), ollama="http://192.0.2.1:1", **kwargs)
 
+    def create(self, wait=5.0):
+        """A writer's open: it creates the directory and lock, and cleans what killed writers left."""
+        residency._Namespace(str(self.path), wait).close()
+
     def refused(self, code="unavailable"):
         with self.assertRaises(residency.ResidencyError) as caught:
             self.use()
@@ -39,8 +43,16 @@ class NamespaceTests(unittest.TestCase):
         return residency.register(app="a", model="m", backend="process", namespace=str(self.path),
                                   ollama="http://192.0.2.1:1")
 
-    def test_first_use_creates_a_private_directory_and_lock(self):
+    def test_reading_creates_nothing_and_an_absent_registry_reads_empty(self):
+        status = self.use()
+        self.assertEqual((status.residents, status.events, status.foreign), ((), (), ()))
+        self.assertFalse(self.path.exists())
+        self.path.mkdir(mode=0o700)
         self.use()
+        self.assertEqual(os.listdir(self.path), [])  # not even the lock
+
+    def test_first_write_creates_a_private_directory_and_lock(self):
+        self.create()
         self.assertEqual(os.stat(self.path).st_mode & 0o777, 0o700)
         self.assertEqual(os.stat(self.path / "registry.lock").st_mode & 0o777, 0o600)
         self.assertEqual(sorted(os.listdir(self.path)), ["registry.lock"])
@@ -138,7 +150,7 @@ class NamespaceTests(unittest.TestCase):
                 self.use()
 
     def test_damaged_pins_and_events_are_refused(self):
-        self.use()
+        self.create()
         for name, value in (("pins.json", {"version": residency.VERSION, "ollama": ["bad name"]}),
                             ("pins.json", {"version": "other", "ollama": []}),
                             ("events.json", {"version": residency.VERSION, "events": [{"id": "x"}]})):
@@ -150,10 +162,12 @@ class NamespaceTests(unittest.TestCase):
                 path.unlink()
 
     def test_a_writer_killed_before_its_rename_leaves_nothing_behind(self):
-        self.use()
+        self.create()
         leftover = self.path / ".0123456789abcdef0123456789abcdef.json.tmp"
         leftover.write_text("{half")
         self.use()
+        self.assertTrue(leftover.exists())  # reading cleans nothing
+        self.create()  # the next writer does
         self.assertFalse(leftover.exists())
 
     def test_a_replaced_directory_is_refused_before_anything_is_written(self):
@@ -176,7 +190,7 @@ class NamespaceTests(unittest.TestCase):
         self.assertEqual(os.listdir(self.path), [])
 
     def test_a_replaced_lock_file_is_refused(self):
-        self.use()
+        self.create()
         (self.path / "registry.lock").unlink()
         original = residency._Namespace.check
         calls = {"n": 0}
@@ -190,10 +204,12 @@ class NamespaceTests(unittest.TestCase):
             return original(ns)
         residency._Namespace.check = swap
         self.addCleanup(setattr, residency._Namespace, "check", original)
-        self.refused()
+        with self.assertRaises(residency.ResidencyError) as caught:
+            self.create()
+        self.assertEqual(caught.exception.code, "unavailable")
 
     def test_a_busy_registry_waits_then_refuses(self):
-        self.use()
+        self.create()
         fd = os.open(self.path / "registry.lock", os.O_RDWR)
         self.addCleanup(os.close, fd)
         fcntl.flock(fd, fcntl.LOCK_EX)
@@ -207,7 +223,7 @@ class NamespaceTests(unittest.TestCase):
         self.use(wait=0.3)
 
     def test_a_child_forked_while_the_registry_is_locked_does_not_keep_it_locked(self):
-        self.use()
+        self.create()
         code = textwrap.dedent("""
             import os, sys, time
             import kilix_gpu_residency as residency
@@ -226,8 +242,19 @@ class NamespaceTests(unittest.TestCase):
         self.addCleanup(process.stdout.close)
         process.stdout.readline()
         started = time.monotonic()
-        self.use(wait=2.0)
+        self.create(wait=2.0)
         self.assertLess(time.monotonic() - started, 1.0)
+
+    def test_the_lock_is_private_whatever_the_umask(self):
+        previous = os.umask(0o277)
+        try:
+            self.create()
+            self.assertEqual(os.stat(self.path / "registry.lock").st_mode & 0o777, 0o600)
+            resident = self.register()
+            resident.idle()
+            self.assertEqual(len(self.use().residents), 1)
+        finally:
+            os.umask(previous)
 
     def test_lock_and_registry_descriptors_are_closed_on_exec(self):
         ns = residency._Namespace(str(self.path), 1)

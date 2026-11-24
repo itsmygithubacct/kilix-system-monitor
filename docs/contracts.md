@@ -39,14 +39,19 @@ record and has not been given by anything in this repository.
 contracts/kilix.gpu-residency-v1.interface.json records the phase 1 GPU
 residency interface:
 
-- the version, backends, record states, unload kinds, policies and error codes;
-- the record fields, the record and event bounds, and the lock, grace and release timeouts;
-- the default namespace, the device-map variable and the command's JSON schemas;
-- the eviction rules and the two Ollama calls;
-- the model catalog: its data schema and kinds, folder roles, pinned-URL pattern, the lock and part names, retry bounds, the Ollama calls it makes, and every outcome with its `kilix-gpu models` exit code.
+- the version, backends, record states, unload kinds, policies and error codes, with each room error's meaning;
+- the API apps call: every public function's and method's signature, and every result type's fields;
+- the record fields, the record and event bounds, and the lock, grace, release, load and recent-use timeouts;
+- the default namespace, devices and the device-map variable, reservations, and the registry's read and write rules;
+- the eviction rules (units, candidates, order, all-or-nothing) and the two Ollama calls;
+- the command: its JSON keys, exit codes and Ollama states;
+- forward compatibility, versioning and the known gaps;
+- the model catalog: its API and types, data schema and kinds, folder roles, pinned-URL pattern, the lock and part names, retry bounds, the Ollama calls it makes, and every outcome with its `kilix-gpu models` exit code.
 
 `components/kilix-gpu-residency/tests/test_interface_document.py` holds the
-module to those values. The interface has had no acceptance review.
+module to that document by behaviour: signatures and fields by introspection,
+the eviction rules by probing the planner, and the JSON keys and exit codes by
+running the command. The interface has had no acceptance review.
 
 integration/f120-registration.json is the exact pre-repository scaffold from
 the published F120 handoff. Its zero commit and metadata sentinels are retained

@@ -50,7 +50,8 @@ outside the suite). Hardware checks use no network and no
 privilege. `make residency-defects` is not part of `make check`: it reruns the
 residency suite once for each planted defect in
 `components/kilix-gpu-residency/tests/defects.py` and fails on any defect the
-suite does not catch. `tools/measure/profile.py` records **1/1** provider-owned evidence
+suite does not catch, or catches only by breaking an import; each defect's line
+names the test that caught it. `tools/measure/profile.py` records **1/1** provider-owned evidence
 record against **3/3** exact input-byte identities, promotes **0/9** provider
 measurement fields, and keeps qualification acceptance at **0/1**. Provider
 execution is outside this validator.

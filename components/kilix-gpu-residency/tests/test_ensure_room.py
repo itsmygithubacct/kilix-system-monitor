@@ -146,8 +146,10 @@ class RoomTests(ResidencyCase):
         # Once the loader holds what it reserved, the reservation is what it holds.
         process = self.spawn(3 * GIB)
         first.attach(pgid=process.pid)
-        self.assertLess(self.room(GIB // 2).free_bytes, FREE - 3 * GIB)
-        first.busy()  # loaded: only measured use counts now
+        self.assertEqual(self.room(GIB // 2).free_bytes, FREE - 4 * GIB)
+        first.busy()  # working, perhaps still loading: the reservation stands
+        self.assertEqual(self.room(GIB // 2).free_bytes, FREE - 4 * GIB)
+        first.loaded()  # loaded: only measured use counts now
         self.assertEqual(self.room(2 * GIB).free_bytes, FREE - 3 * GIB)
 
     def test_register_with_need_bytes_unloads_first_and_records_the_room(self):
@@ -217,18 +219,24 @@ class DeviceTests(ResidencyCase):
         self.assertIsNone(other.poll())
 
     def test_labels_resolve_by_pci_address_then_the_device_map(self):
+        os.environ.pop("KILIX_GPU_DEVICES")
         devices = residency.status(**self.where(), wake=True).devices
         self.assertEqual(residency.resolve_device("0000:02:00.0", devices), "0000:02:00.0")
         self.assertEqual(residency.resolve_device("0000:02:00.0".upper(), devices), "0000:02:00.0")
-        # Two GPUs have VRAM counters, so a bare label is ambiguous without the map.
-        self.assertIsNone(residency.resolve_device("Vulkan1", devices))
-        with self.assertRaises(residency.RoomError) as caught:
-            residency.ensure_room(GIB, device="Vulkan1", requester="kilix-chat", **self.where())
-        self.assertEqual(caught.exception.code, "unmeasured")
-        os.environ["KILIX_GPU_DEVICES"] = "Vulkan1=0000:02:00.0, CUDA0=0000:01:00.0;bad=nope"
+        # Two GPUs have VRAM counters, so no device means none in particular.
+        self.assertIsNone(residency.resolve_device(None, devices))
+        # A label the map does not name is refused, never guessed.
+        for label in ("Vulkan1", "NoSuchGPU7"):
+            with self.subTest(label=label), self.assertRaises(residency.ResidencyError) as caught:
+                residency.ensure_room(GIB, device=label, requester="kilix-chat", **self.where())
+            self.assertEqual(caught.exception.code, "invalid-request")
+        os.environ["KILIX_GPU_DEVICES"] = "Vulkan1=0000:02:00.0, CUDA0=0000:01:00.0;bad=nope;Ghost=0000:09:00.0"
         self.assertEqual(residency.resolve_device("Vulkan1", devices), "0000:02:00.0")
         self.assertEqual(residency.resolve_device("CUDA0", devices), "0000:01:00.0")
-        self.assertIsNone(residency.resolve_device("bad", devices))
+        for label in ("bad", "Ghost", "0000:09:00.0"):  # unparsable, or a GPU this machine does not have
+            with self.subTest(label=label), self.assertRaises(residency.ResidencyError) as caught:
+                residency.resolve_device(label, devices)
+            self.assertEqual(caught.exception.code, "invalid-request")
         room = residency.ensure_room(GIB, device="Vulkan1", requester="kilix-chat", **self.where())
         self.assertEqual(room.device_pci, "0000:02:00.0")
 
@@ -236,13 +244,38 @@ class DeviceTests(ResidencyCase):
 class OnlyMeasuredDeviceTests(ResidencyCase):
     gpus = (INTEL, AMD)
 
-    def test_a_label_means_the_one_gpu_with_a_vram_counter(self):
+    def setUp(self):
+        super().setUp()
         amd = self.sys / "devices" / "pci0000:00" / AMD[0]
         (amd / "mem_info_vram_total").write_text(str(8 * GIB))
         (amd / "mem_info_vram_used").write_text(str(GIB))
-        room = residency.ensure_room(GIB, device="Vulkan0", requester="kilix-chat", **self.where())
+
+    def test_no_device_means_the_one_gpu_with_a_vram_counter(self):
+        room = residency.ensure_room(GIB, device=None, requester="kilix-chat", **self.where())
         self.assertEqual((room.device_pci, room.free_bytes), (AMD[0], 7 * GIB))
         self.assertEqual(self.loader_calls, 0)  # no NVIDIA GPU: NVML is never loaded
+
+    def test_a_label_is_never_taken_for_the_one_measured_gpu(self):
+        # Vulkan0 is the iGPU: without the map it is refused, with it it is the iGPU (unmeasured).
+        os.environ.pop("KILIX_GPU_DEVICES")
+        victim, process = self.amd_resident()
+        with self.assertRaises(residency.ResidencyError) as caught:
+            residency.ensure_room(7 * GIB + GIB // 2, device="Vulkan0", requester="kilix-chat", **self.where())
+        self.assertEqual(caught.exception.code, "invalid-request")
+        os.environ["KILIX_GPU_DEVICES"] = "Vulkan0=0000:00:02.0"
+        with self.assertRaises(residency.RoomError) as caught:
+            residency.ensure_room(7 * GIB + GIB // 2, device="Vulkan0", requester="kilix-chat", **self.where())
+        self.assertEqual((caught.exception.code, caught.exception.device), ("unmeasured", INTEL[0]))
+        self.assertIsNone(process.poll())
+        os.environ["KILIX_GPU_DEVICES"] = "Vulkan0=0000:00:02.0,Vulkan2=" + AMD[0]
+        self.assertEqual(residency.ensure_room(GIB, device="Vulkan2", requester="kilix-chat",
+                                               **self.where()).device_pci, AMD[0])
+
+    def amd_resident(self):
+        process = self.spawn()
+        residency.register(app="puzzllm", model="m", backend="process", device=AMD[0], pgid=process.pid,
+                           **self.where()).idle()
+        return None, process
 
 
 if __name__ == "__main__":

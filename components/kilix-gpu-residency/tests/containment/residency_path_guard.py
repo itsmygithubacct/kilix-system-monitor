@@ -4,14 +4,16 @@ Every namespace the residency tests use lives beneath a private temporary
 directory, every GPU is a fake and every Ollama a local fake server. This
 process-wide audit hook refuses, before it runs:
 
-* any audited filesystem operation whose path names the default namespace
-  leaf or lies under /run/user (the module walks to its namespace with
-  descriptor-relative names, so the leaf itself is refused as well);
-* any audited filesystem operation on the real model folders: the defaults
-  under the account's home directory (from the password database, not $HOME)
-  and whatever the model-folder variables named when the suite started. The
-  catalog opens a folder by its absolute path before it works relative to it,
-  so that first open is where a stray test is stopped;
+* any filesystem operation whose path names the default namespace leaf or lies
+  under /run/user, including a name relative to a directory descriptor
+  (``dir_fd``) and an operation on a descriptor itself: those are resolved
+  through /proc/self/fd first. The module walks to its namespace one
+  descriptor-relative component at a time, so the walk is refused when it
+  reaches /run/user, before anything beneath it is opened;
+* any filesystem operation on the real model folders, resolved the same way:
+  the defaults under the account's home directory (from the password database,
+  not $HOME) and whatever the model-folder variables named when the suite
+  started;
 * loading the real NVML library, and starting a program named nvidia-smi;
 * connecting anywhere but loopback, or to Ollama's default port 11434;
 * sending a signal to a process that is not a descendant of the suite's root
@@ -19,8 +21,8 @@ process-wide audit hook refuses, before it runs:
 
 Refusals raise RealMachineRefused, a BaseException, so an ``except Exception``
 in the code under test cannot swallow one, and each is also recorded in
-``refused``. Python does not audit os.mkfifo or os.mknod, so both are wrapped
-with the same path refusal. Calls through ctypes are not covered; the suite's
+``refused``. Python does not audit os.mkfifo or os.mknod; the wrappers
+cover them. Calls through ctypes are not covered; the suite's
 runner is responsible for running it where the real runtime directory is
 unreachable.
 """
@@ -179,13 +181,47 @@ def _hook(event: str, args: tuple) -> None:
             _refuse(event, str(target))
 
 
-def _refusing(call, event: str):
-    def refusing(path, *args, **kwargs):
-        name = _name(path)
-        if name is not None and refuses(name):
-            _refuse(event, name)
-        return call(path, *args, **kwargs)
-    return refusing
+# The os functions that take a dir_fd (or a descriptor for the path): each is wrapped so that the
+# name it acts on is resolved through /proc/self/fd/<fd> and refused like an absolute path.
+_DIR_FD_CALLS = {
+    "open": ("path",), "mkdir": ("path",), "stat": ("path",), "lstat": ("path",), "unlink": ("path",),
+    "remove": ("path",), "rmdir": ("path",), "rename": ("src", "dst"), "replace": ("src", "dst"),
+    "link": ("src", "dst"), "symlink": ("dst",), "chmod": ("path",), "chown": ("path",), "listdir": ("path",),
+    "scandir": ("path",), "readlink": ("path",), "utime": ("path",), "access": ("path",), "mkfifo": ("path",),
+    "mknod": ("path",),
+}
+_FD_FOR = {"path": "dir_fd", "src": "src_dir_fd", "dst": "dst_dir_fd"}
+
+
+def _where(fd: int) -> str | None:
+    import posix
+    try:
+        return posix.readlink(f"/proc/self/fd/{fd}")
+    except OSError:
+        return None
+
+
+def resolved(path: object, dir_fd: object) -> str | None:
+    """The absolute name ``path`` (relative to ``dir_fd``, or a descriptor itself) stands for."""
+    if isinstance(path, int):
+        return _where(path)
+    name = _name(path)
+    if name is None or name.startswith("/") or not isinstance(dir_fd, int):
+        return name
+    base = _where(dir_fd)
+    return None if base is None else os.path.join(base, name)
+
+
+def _resolving(call, event: str, roles: tuple[str, ...]):
+    def guarded(*args, **kwargs):
+        for index, role in enumerate(roles):
+            path = args[index] if index < len(args) else kwargs.get(role, kwargs.get("path") if role == "path" else None)
+            name = resolved(path, kwargs.get(_FD_FOR[role]))
+            if name is not None and refuses(name):
+                _refuse(event, name)
+        return call(*args, **kwargs)
+    guarded.__wrapped__ = call
+    return guarded
 
 
 if not getattr(sys, "_kilix_residency_guard", False):
@@ -195,7 +231,9 @@ if not getattr(sys, "_kilix_residency_guard", False):
     MODEL_FOLDERS = tuple(path for path in os.environ[MODELS_ENV].split(os.pathsep) if path.startswith("/"))
     sys.addaudithook(_hook)
     import posix
-    for _call in ("mkfifo", "mknod"):
-        _refusal = _refusing(getattr(posix, _call), "os." + _call)
-        setattr(os, _call, _refusal)
-        setattr(posix, _call, _refusal)
+    for _call, _roles in _DIR_FD_CALLS.items():
+        _original = getattr(os, _call)
+        _wrapped = _resolving(_original, "os." + _call, _roles)
+        setattr(os, _call, _wrapped)
+        if getattr(posix, _call, None) is _original:
+            setattr(posix, _call, _wrapped)

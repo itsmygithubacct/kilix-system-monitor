@@ -159,7 +159,7 @@ class RemoveTests(CatalogCase):
 
     def test_a_partial_download_is_removed_only_when_no_one_is_writing_it(self):
         self.path.unlink()
-        part = self.place(self.llm, f".{self.SMALL}.part", self.small[:MIB])
+        part = self.place(self.llm, self.part_name(self.SMALL), self.small[:MIB])
         writer = self.holding(part)
         self.refused("open", self.remove, "small")
         self.assertTrue(part.exists())
@@ -168,11 +168,11 @@ class RemoveTests(CatalogCase):
         self.assertFalse(part.exists())
 
     def test_a_model_and_its_idle_part_go_together_but_a_written_part_stays(self):
-        part = self.place(self.llm, f".{self.SMALL}.part", b"stale")
+        part = self.place(self.llm, self.part_name(self.SMALL), b"stale")
         self.assertEqual(self.remove("small").outcome, "removed")
         self.assertFalse(part.exists())
         self.place(self.llm, self.SMALL, self.small)
-        part = self.place(self.llm, f".{self.SMALL}.part", b"being written")
+        part = self.place(self.llm, self.part_name(self.SMALL), b"being written")
         self.holding(part)
         self.assertEqual(self.remove("small").outcome, "removed")
         self.assertEqual(part.read_bytes(), b"being written")
@@ -182,7 +182,8 @@ class RemoveTests(CatalogCase):
         lock = os.open(self.llm / ".fetch.lock", os.O_RDWR | os.O_CREAT, 0o600)
         self.addCleanup(os.close, lock)
         fcntl.flock(lock, fcntl.LOCK_EX)
-        self.refused("busy-folder", self.remove, "small")
+        error = self.refused("busy-folder", self.remove, "small")
+        self.assertEqual((str(error), error.exit_code), ("a download is running in that folder; try again when it finishes", 2))
         self.assertTrue(self.path.exists())
 
     def test_removal_fails_closed_when_the_registry_cannot_be_read(self):
@@ -221,7 +222,12 @@ class OllamaRemoveTests(CatalogCase):
         error = self.refused("loaded", self.remove, "ollama:qwen3.5:2b")
         self.assertEqual((str(error), error.exit_code), ("qwen3.5:2b is loaded by ollama; use --unload", 3))
         self.assertEqual((self.ollama.unloads(), self.deletes()), ([], []))
-        self.assertEqual(self.remove("ollama:qwen3.5:2b", unload=True).outcome, "removed")
+        # No app registered it: another client may be using it, so --unload alone is not enough.
+        error = self.refused("loaded", self.remove, "ollama:qwen3.5:2b", unload=True)
+        self.assertIn("use --force", str(error))
+        self.assertEqual((error.name, error.holders), ("qwen3.5:2b", ({"app": "ollama"},)))
+        self.assertEqual((self.ollama.unloads(), self.deletes()), ([], []))
+        self.assertEqual(self.remove("ollama:qwen3.5:2b", unload=True, force=True).outcome, "removed")
         self.assertEqual((self.ollama.unloads(), self.deletes()), (["qwen3.5:2b"], ["qwen3.5:2b"]))
         unload_at = next(i for i, r in enumerate(self.ollama.requests) if r[1] == "/api/generate")
         delete_at = next(i for i, r in enumerate(self.ollama.requests) if r[0] == "DELETE")
@@ -283,7 +289,7 @@ class ListTests(CatalogCase):
 
     def test_the_inventory_shows_catalog_local_and_ollama_models_and_who_holds_them(self):
         self.place(self.llm, self.SMALL, self.small)
-        self.place(self.diffusion, f".{self.TINY}.part", self.tiny[:MIB])
+        self.place(self.diffusion, self.part_name(self.TINY), self.tiny[:MIB])
         self.place(self.llm, "Local-Q6.gguf", b"local model")
         for ignored in (".hidden.gguf", ".partial.Ab12Cd", "notes.txt", f"{self.SMALL}.download.json"):
             self.place(self.llm, ignored, b"x")
@@ -302,13 +308,13 @@ class ListTests(CatalogCase):
         summary = {key: (m.kind, m.source, m.state, m.folder, m.bytes, m.partial_bytes, m.resident)
                    for key, m in rows.items()}
         self.assertEqual(summary, {
-            "small": ("gguf", "catalog", "installed", "llama.cpp", len(self.small), None, ("kilix-chat",)),
+            "small": ("gguf", "catalog", "installed", "llama.cpp", len(self.small), None, ({"app": "kilix-chat"},)),
             "tiny-diffusion": ("diffusion-gguf", "catalog", "partial", "diffusion", len(self.tiny), MIB, ()),
-            "Local-Q6.gguf": ("gguf", "local", "local", "llama.cpp", 11, None, (f"pid {holder.pid} (sleep)",)),
+            "Local-Q6.gguf": ("gguf", "local", "local", "llama.cpp", 11, None, ({"pid": holder.pid, "command": "sleep"},)),
             "Linked.gguf": ("gguf", "local", "link", "llama.cpp",
                             len(str(self.llm / "Local-Q6.gguf")), None, ()),
             "tiny-ollama": ("ollama", "catalog", "installed", None, 10**9, None, ()),
-            "ollama:qwen3.5:2b": ("ollama", "ollama", "installed", None, 2 * 10**9, None, ("ollama",)),
+            "ollama:qwen3.5:2b": ("ollama", "ollama", "installed", None, 2 * 10**9, None, ({"app": "ollama"},)),
         })
         self.assertEqual(rows["small"].path, str(self.llm / self.SMALL))
 
@@ -376,7 +382,8 @@ class CliTests(CatalogCase):
         self.assertEqual((code, err), (0, ""))
         self.assertEqual(value, {"schema": catalog.RESULT_SCHEMA, "version": residency.VERSION, "action": "install",
                                  "target": "small", "outcome": "saved", "exit": 0, "message": f"saved {self.SMALL}",
-                                 "detail": None, "name": self.SMALL, "path": str(self.llm / self.SMALL)})
+                                 "detail": None, "name": self.SMALL, "path": str(self.llm / self.SMALL),
+                                 "holders": []})
         code, out, _ = self.cli("remove", "ollama:../x", "--json")
         self.assertEqual((code, json.loads(out)["outcome"], json.loads(out)["exit"]), (2, "invalid-name", 2))
 

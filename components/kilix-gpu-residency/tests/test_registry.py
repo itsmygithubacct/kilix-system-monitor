@@ -20,7 +20,8 @@ class RegistrationTests(ResidencyCase):
                                        need_bytes=3 * GIB)
         [record] = self.records()
         self.assertEqual(set(record), {"version", "id", "app", "model", "backend", "device", "holder", "pgid",
-                                       "need_bytes", "state", "pinned", "registered_at", "last_used", "unload"})
+                                       "need_bytes", "state", "pinned", "registered_at", "last_used", "unload",
+                                       "reserved_until", "pidns", "claim"})
         self.assertEqual(record["id"], resident.id)
         self.assertEqual(record["version"], residency.VERSION)
         self.assertEqual((record["app"], record["model"], record["backend"], record["state"]),
@@ -61,6 +62,8 @@ class RegistrationTests(ResidencyCase):
         process.kill()
         self.reap(process)
         self.assertEqual(self.status().residents, ())
+        self.assertEqual(len(self.records()), 1)  # reading prunes nothing
+        self.prune()
         self.assertEqual(self.records(), [])
         with self.assertRaises(residency.ResidencyError) as caught:
             resident.busy()

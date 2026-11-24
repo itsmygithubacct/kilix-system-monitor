@@ -81,7 +81,7 @@ covers. Each component also runs from its source tree, for example
 | `plebian-model-sizer snapshot` | current RAM, cgroup headroom, CUDA free memory and model storage |
 | `plebian-model-sizer recommend help-llm\|avatar-chat\|voice\|runtime --catalog FILE` | provisional resource shortlist for one domain |
 | `kilix-gpu status` / `unload` / `pin` / `unpin` / `room BYTES` | resident models per GPU; unload or pin one; dry-run making room |
-| `kilix-gpu models list` / `install ID` / `remove ID [--unload]` / `verify ID` | the shared model catalog: install, list, verify and remove local models |
+| `kilix-gpu models list` / `install ID` / `remove ID [--unload] [--force]` / `verify ID` | the shared model catalog: install, list, verify and remove local models |
 | `make check` | every offline gate (contracts, telemetry, lease, hardware, packages, profiles, evidence, launcher readiness, model sizer, residency) |
 | `make prefetch` | fill the uv cache that `make check` reads offline |
 

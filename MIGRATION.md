@@ -195,7 +195,7 @@ gate requires of every component. The owner confirmed that licence choice on
 
 ### What was kept
 
-- DRM discovery from `/sys/class/drm`, PCI-only, with connectors skipped, and the `KILIX_GPU_SYSFS_ROOT` override;
+- DRM discovery from `/sys/class/drm`, PCI-only, with connectors skipped, and the `KILIX_GPU_SYSFS_ROOT` override (since fix round 1 a test seam only: honoured only where the test suite's guard is installed);
 - the runtime-PM rule that nothing is read from a suspended or suspending GPU, and that NVML is not opened while any NVIDIA GPU sleeps;
 - the ctypes NVML client: handle by PCI bus id, name, memory, and the `_v3`/`_v2`/v1 process-list ABIs with the insufficient-size retry and the merge of compute and graphics lists;
 - the DRM fdinfo parser, which prefers device-local regions and does not count cycles as memory.
@@ -208,7 +208,7 @@ gate requires of every component. The owner confirmed that licence choice on
 - **Added:** `snapshot(wake=True)`, which reads sleeping GPUs. `ensure_room` asks for it because a model is about to load there.
 - **Added:** an `nvidia-smi` fallback when `libnvidia-ml.so.1` cannot be loaded. The source never spawns it.
 - **Changed:** per-process DRM fdinfo is read for every readable process, but only on devices with a VRAM counter. The source read only a pane's tree, and the registry needs unmanaged processes too.
-- **Added:** `has_counter`, `normalise_pci` and the `KILIX_GPU_PROC_ROOT` override.
+- **Added:** `has_counter`, `normalise_pci` and the `KILIX_GPU_PROC_ROOT` override, a test seam like `KILIX_GPU_SYSFS_ROOT`. The registry's own liveness checks never read either.
 
 ### The phase 2 seam
 
@@ -218,3 +218,15 @@ card and top bar can then read `kilix_gpu_residency.status()` to name the owner
 of each resident model. Kilix already fetches this repository at a pinned
 commit for the model sizer and the lease, so no new fetch path is needed.
 Changing Kilix core is a phase 2 task in its own track.
+
+### The device-label seam (phase 2)
+
+The registry never guesses what a label such as llama.cpp's `Vulkan1` means: a
+label other than a PCI address must be in `KILIX_GPU_DEVICES`
+(`Vulkan0=0000:00:02.0,Vulkan1=0000:01:00.0`). The owner decided (decision 3
+in the P1 brief) that the plebian-os installer writes that map from
+`vulkaninfo`, which lists each Vulkan device's PCI address in the order
+llama.cpp numbers them, into the session environment every app inherits. That
+is a phase 2 installer task. Until it lands, an app either names the GPU by PCI
+address, passes no device (the one GPU with a VRAM counter, when there is just
+one), or gets `invalid-request` for a label, never another GPU.
