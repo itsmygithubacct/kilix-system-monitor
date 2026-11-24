@@ -84,7 +84,7 @@ def caught_by(stderr: str) -> tuple[str, str]:
 
 
 def run(name: str, filename: str | None, edits: list[tuple[str, str]], scratch: Path,
-        only: str | None = None) -> tuple[str, str, float, str]:
+        only: str | None = None, output: list[str] | None = None) -> tuple[str, str, float, str]:
     place = Path(tempfile.mkdtemp(prefix="defect-", dir=scratch))
     os.chmod(place, 0o700)
     component = copy_tree(place)
@@ -106,6 +106,8 @@ def run(name: str, filename: str | None, edits: list[tuple[str, str]], scratch: 
             outcome = "green"
         else:
             outcome, test = caught_by(done.stderr)
+            if output is not None:
+                output.append(done.stderr)
     except subprocess.TimeoutExpired:
         outcome = "timeout"
     finally:
@@ -133,9 +135,12 @@ def main() -> int:
             check = Path(tempfile.mkdtemp(dir=scratch))
             apply(copy_tree(check), filename, edits)
             shutil.rmtree(check)
-        control = run("control (no defect)", None, [], scratch)
-        print(f"{control[1]:>9}  {control[2]:6.1f}s  {control[0]}", flush=True)
+        failed: list[str] = []
+        control = run("control (no defect)", None, [], scratch, output=failed)
+        print(f"{control[1]:>9}  {control[2]:6.1f}s  {control[0]}" + (f"  <- {control[3]}" if control[3] else ""),
+              flush=True)
         if control[1] != "green":
+            print("".join(failed)[-4000:], file=sys.stderr)
             print("FAIL: the unmutated suite is not green", file=sys.stderr)
             return 1
         holes, odd = [], []

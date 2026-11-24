@@ -4,10 +4,12 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import re
 from pathlib import Path
 import signal
 import subprocess
 import sys
+import time
 
 import residency_containment
 import kilix_gpu_residency as residency
@@ -24,6 +26,7 @@ class CliTests(ResidencyCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_status_lists_devices_residents_unmanaged_and_recent_unloads(self):
+        started = time.monotonic()
         self.model("kilix-chat", "LLaDA-MoE-7B", 2 * GIB)
         self.ollama.load("bonsai-2:27b", GIB)
         stranger = self.spawn(300 * MIB)
@@ -32,7 +35,10 @@ class CliTests(ResidencyCase):
         self.assertEqual((code, err), (0, ""))
         self.assertIn("0000:01:00.0  Fake RTX:", out)
         self.assertIn("0000:00:02.0  Intel GPU 8086:3e9b: no VRAM counter", out)
-        self.assertRegex(out, r"kilix-chat  LLaDA-MoE-7B  \[process\] idle  2\.0 GiB  idle 0m0\ds")
+        # Idle since it registered: no longer than this test has run (a slow fsync can take seconds).
+        idle = re.search(r"kilix-chat  LLaDA-MoE-7B  \[process\] idle  2\.0 GiB  idle (\d+)m(\d\d)s", out)
+        self.assertIsNotNone(idle, out)
+        self.assertLessEqual(int(idle[1]) * 60 + int(idle[2]), time.monotonic() - started + 1)
         self.assertIn(f"pid {stranger.pid}  sleep  300 MiB on 0000:01:00.0", out)
         self.assertIn("bonsai-2:27b (ollama), 1.0 GiB, by kilix-gpu", out)
 
