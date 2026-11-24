@@ -58,7 +58,7 @@ SEED = {
                     "6cbf038bb867cd42bb4ff9b9ce931af23b32e3df/d3LLM_LLaDA.Q4_K_M.gguf"),
 }
 # The Ollama pins, chosen for H2 (an 8 GiB NVIDIA GPU, the sizer's reference class) from the
-# local yes/no and BoolQ rankings: id -> (Ollama name, bytes, manifest digest). Each digest is
+# YES/NO OneBit and BoolQ scores measured on an RTX 3070: id -> (Ollama name, bytes, manifest digest). Each digest is
 # the sha256 of the manifest registry.ollama.ai serves for that name, and the size is its layers
 # and config, as GET /api/tags reports them.
 OLLAMA_SEED = {

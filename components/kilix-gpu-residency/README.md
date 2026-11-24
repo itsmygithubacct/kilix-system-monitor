@@ -156,19 +156,24 @@ config. They are the best-scoring local models that fit H2, the hardware level
 the model sizer's GPU profiles are measured on (an 8 GiB NVIDIA GPU and at
 least 16 GiB RAM):
 
-| id | Ollama name | Size | Chosen for |
-| --- | --- | --- | --- |
-| `d3-4b` | `d3:4b` | 5.8 GB | the best local yes/no and BoolQ scores (94.8%, 92.3%) |
-| `d3-2b` | `d3:2b` | 3.2 GB | the fastest judge: BoolQ 89.8% at about 0.06 s an answer |
-| `qwen3.5-9b` | `qwen3.5:9b` | 6.6 GB | general chat: yes/no 90.3%, and the furthest of these in the game campaign |
-| `gemma4-e4b` | `gemma4:e4b` | 6.6 GB | general chat: yes/no 89.1% at about 0.2 s an answer |
+Measured on an H2 machine (an RTX 3070 with 8 GiB, Ollama 0.40.16), with the
+strict YES/NO contract on the OneBit development items (442) and BoolQ
+validation (3,270):
 
-The scores come from the local yes/no (442 items) and BoolQ (3,270 items)
-rankings, which ran on a 6 GiB GPU, so whatever fits there fits H2. Models
-that scored as well but do not fit 8 GiB are left out: `d3:9b` and `nimble`
-are 9B at Q8_0, and the 27B models are larger still. `gemma4:e4b` is the
-manifest `gemma4:latest` named when it was ranked, pinned by a name that does
-not move.
+| id | Ollama name | Size | OneBit | BoolQ | Seconds an answer (OneBit, BoolQ) | Chosen for |
+| --- | --- | --- | --- | --- | --- | --- |
+| `d3-4b` | `d3:4b` | 5.8 GB | 94.8% | 92.2% | 0.19, 0.08 | the best judge on both |
+| `d3-2b` | `d3:2b` | 3.2 GB | 86.0% | 89.8% | 0.07, 0.03 | the fastest judge, second on BoolQ |
+| `qwen3.5-9b` | `qwen3.5:9b` | 6.6 GB | 90.5% | 87.6% | 0.19, 0.15 | general chat; second on OneBit, and the furthest of these in the game campaign |
+| `gemma4-e4b` | `gemma4:e4b` | 6.6 GB | 89.1% | 84.8% | 0.12, 0.08 | general chat; third on OneBit |
+
+The runners-up that fit, `qwen3.5:4b` (87.6%, 84.3%) and `bonsai-2:9b`
+(87.1%, 86.6%), were measured alongside them. `bonsai-2:9b` is level with
+`gemma4:e4b` on the two benchmarks taken together, but slower. Models that do
+not fit 8 GiB are left out: `d3:9b` and `nimble` are 9B at Q8_0, and the 27B
+models are larger still. `gemma4:e4b` is the manifest `gemma4:latest` named
+when it was first ranked, pinned by a name that does not move. The scores
+match the earlier runs on a 6 GiB laptop GPU to within two answers.
 
 `ollama:NAME` still installs any Ollama model, unpinned.
 
