@@ -149,6 +149,29 @@ the same one.
 It is seeded with puzzllm-fetch's six pinned models, plus `d3llm-llada`
 (d3LLM's LLaDA, which the owner asked for and puzzllm-fetch gains too).
 
+It also pins four Ollama models. An Ollama entry names a model and pins its
+manifest by the `digest` and `bytes` that `GET /api/tags` reports, which are
+the sha256 of the manifest the registry serves and the size of its layers and
+config. They are the best-scoring local models that fit H2, the hardware level
+the model sizer's GPU profiles are measured on (an 8 GiB NVIDIA GPU and at
+least 16 GiB RAM):
+
+| id | Ollama name | Size | Chosen for |
+| --- | --- | --- | --- |
+| `d3-4b` | `d3:4b` | 5.8 GB | the best local yes/no and BoolQ scores (94.8%, 92.3%) |
+| `d3-2b` | `d3:2b` | 3.2 GB | the fastest judge: BoolQ 89.8% at about 0.06 s an answer |
+| `qwen3.5-9b` | `qwen3.5:9b` | 6.6 GB | general chat: yes/no 90.3%, and the furthest of these in the game campaign |
+| `gemma4-e4b` | `gemma4:e4b` | 6.6 GB | general chat: yes/no 89.1% at about 0.2 s an answer |
+
+The scores come from the local yes/no (442 items) and BoolQ (3,270 items)
+rankings, which ran on a 6 GiB GPU, so whatever fits there fits H2. Models
+that scored as well but do not fit 8 GiB are left out: `d3:9b` and `nimble`
+are 9B at Q8_0, and the 27B models are larger still. `gemma4:e4b` is the
+manifest `gemma4:latest` named when it was ranked, pinned by a name that does
+not move.
+
+`ollama:NAME` still installs any Ollama model, unpinned.
+
 | Folder role | Folder | Kinds |
 | --- | --- | --- |
 | `llama.cpp` | `$KILIX_LLM_MODELS_DIR`, else `${GPU_TERMINAL_HOME:-~/.local/gpu_terminal}/kilix-llm/models` | `gguf` |
@@ -163,7 +186,7 @@ yours, or that others can write, is refused.
 | `kilix-gpu models list [--json]` | catalog models (installed, partial, available, or mismatch by size), unlisted GGUFs in the folders (`local`, or `link` for a symlink), Ollama's installed models; and who holds each now: a registry app, Ollama, or a process with the file open or mapped |
 | `kilix-gpu models install ID\|ollama:NAME [--json]` | download, verify and name a catalog file, or pull an Ollama model |
 | `kilix-gpu models remove ID\|FILE\|PATH\|ollama:NAME [--unload] [--json]` | remove a model that nothing holds; `--unload` unloads it through the registry first |
-| `kilix-gpu models verify ID\|FILE [--json]` | recompute an installed catalog file's size and sha256 |
+| `kilix-gpu models verify ID\|FILE [--json]` | recompute an installed catalog file's size and sha256, or compare a catalog Ollama model's manifest digest with its pin |
 
 `models --catalog FILE` uses another catalog. Only a catalog given by path may
 use `file://` or loopback `http://` URLs, for tests and local mirrors.
@@ -179,10 +202,10 @@ and exits with a code:
 | Exit | Meaning | Lines |
 | --- | --- | --- |
 | 0 | done | `saved X`, `already saved X`, `pulled N`, `already installed N`, `removed X`, `verified X` |
-| 1 | failed | `could not download X`, `downloaded X did not match`, `could not pull N`, `Ollama is not reachable` |
-| 2 | refused | `unknown model ID`, `X is already in the models folder and does not match`, `refusing to replace a symlink: X`, `another download is using the models folder`, `X is not installed`, `not enough disk space for X: ...` |
+| 1 | failed | `could not download X`, `downloaded X did not match`, `could not pull N`, `pulled N did not match the catalog`, `Ollama is not reachable` |
+| 2 | refused | `unknown model ID`, `X is already in the models folder and does not match`, `N is already installed and does not match the catalog`, `refusing to replace a symlink: X`, `another download is using the models folder`, `X is not installed`, `not enough disk space for X: ...` |
 | 3 | in use | `X is loaded by APP; use --unload`, `X is pinned by APP; unpin it first`, `X is busy in APP; try again when it is idle`, `X is open by pid N (COMMAND); close it first` |
-| 4 | does not match | `X does not match the catalog (size)` or `(sha256)` |
+| 4 | does not match | `X does not match the catalog (size)`, `(sha256)` or, for Ollama, `(digest)` |
 
 A failure's cause, when there is one, goes to stderr. `--json` prints one
 object with `schema` `kilix.gpu-residency.models/v1`, `outcome`, `exit`,
@@ -208,7 +231,9 @@ its `.part`, and the next install resumes it. Other cases:
 
 Redirects may only go to https, or from loopback http to loopback http. Ollama
 models are pulled through `POST /api/pull` on a loopback Ollama, with
-puzzllm-fetch's name rule.
+puzzllm-fetch's name rule. For a catalog Ollama entry:
+- An installed copy with another digest is refused, like a different file of the same name.
+- A pull is checked afterwards. If the registry's tag has moved, the install fails with `pulled N did not match the catalog`. Ollama keeps what it pulled, and the notice says how to remove it.
 
 ### Removal
 
@@ -216,7 +241,15 @@ A model is not removed while:
 
 - a registry record holds it (matched by catalog id, file name, file stem or path);
 - Ollama has it loaded;
-- any process this user can inspect has the file open or mapped. Other users' processes cannot be seen.
+- any process this user can inspect has the file open or mapped.
+
+Other users' processes, such as a system service's, cannot be inspected, and
+they do not block removal. That is deliberate. Removing a file another process
+has open or mapped does not disturb that process: the kernel keeps the data
+until the process closes it, and the space is freed then. And there are always
+processes this user cannot inspect, so refusing on their account would refuse
+every removal. A model folder is the user's own, so it is normally only the
+user's processes that load from it.
 
 `--unload` unloads registry and Ollama residents through `kilix_gpu_residency.unload`, then waits up to 10 s for the file to be closed. It still refuses a pinned, busy or loading resident. It never touches a process the registry does not manage: a file held by such a process is refused with its pid.
 

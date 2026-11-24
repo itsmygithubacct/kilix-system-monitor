@@ -26,6 +26,7 @@ _PULL_TIMEOUT = 600.0  # longest wait for the next progress line of a pull
 _MAX_BYTES = 1 << 20
 _MAX_LINE = 1 << 16
 # Ollama model names: name[:tag], with an optional registry/namespace path.
+_DIGEST = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/+-]{0,159}\Z", re.ASCII)
 
 
@@ -41,6 +42,7 @@ class OllamaMissing(OllamaError):
 class Installed:
     name: str
     size_bytes: int
+    digest: str | None = None  # the manifest's sha256, as GET /api/tags reports it
 
 
 @dataclass(frozen=True)
@@ -159,8 +161,11 @@ def installed(url: str) -> tuple[Installed, ...]:
         if type(item) is not dict:
             continue
         name, size = item.get("name") or item.get("model"), item.get("size", 0)
+        digest = item.get("digest")
+        if type(digest) is not str or not _DIGEST.fullmatch(digest):
+            digest = None
         if type(name) is str and MODEL_NAME.fullmatch(name) and type(size) is int and size >= 0:
-            found.append(Installed(name, size))
+            found.append(Installed(name, size, digest))
     return tuple(found)
 
 

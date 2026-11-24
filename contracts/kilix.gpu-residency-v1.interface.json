@@ -21,6 +21,20 @@
       "3": "in use",
       "4": "does not match"
     },
+    "file_fields": [
+      "architecture",
+      "bytes",
+      "context_length",
+      "file",
+      "folder",
+      "id",
+      "kind",
+      "licence",
+      "name",
+      "sha256",
+      "source",
+      "url"
+    ],
     "folders": {
       "diffusion": {
         "base_default": "~/.local/share",
@@ -48,8 +62,21 @@
       "delete": "DELETE /api/delete",
       "list": "GET /api/tags",
       "loopback_only": true,
+      "pin": "an ollama entry's digest and bytes are what GET /api/tags reports: the registry manifest's sha256, and its layers and config",
       "pull": "POST /api/pull stream"
     },
+    "ollama_fields": [
+      "architecture",
+      "bytes",
+      "context_length",
+      "digest",
+      "id",
+      "kind",
+      "licence",
+      "name",
+      "ollama",
+      "source"
+    ],
     "outcomes": {
       "already-installed": 0,
       "already-saved": 0,

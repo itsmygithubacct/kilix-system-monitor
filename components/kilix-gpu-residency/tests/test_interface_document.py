@@ -130,6 +130,8 @@ def catalog_differences(module, document) -> list[str]:
         ("max_redirects", module.MAX_REDIRECTS, section["max_redirects"]),
         ("outcomes", module.OUTCOMES, section["outcomes"]),
         ("exit_codes", {str(k): v for k, v in module.EXIT_MEANINGS.items()}, section["exit_codes"]),
+        ("file_fields", sorted(module._FILE_FIELDS), section["file_fields"]),
+        ("ollama_fields", sorted(module._OLLAMA_FIELDS), section["ollama_fields"]),
     )
     for key, observed, expected in pairs:
         if observed != expected or type(observed) is not type(expected):
@@ -162,7 +164,8 @@ class InterfaceDocumentTests(unittest.TestCase):
         self.assertEqual(catalog_differences(catalog, document), [])
         planted = {"attempts": 4, "lock_name": ".lock", "kinds": ["gguf"], "result_schema": "x",
                    "outcomes": {**catalog.OUTCOMES, "removed": 1}, "exit_codes": {"0": "done"},
-                   "part_template": "{file}.part", "url_pattern": ".*"}
+                   "part_template": "{file}.part", "url_pattern": ".*",
+                   "file_fields": ["id"], "ollama_fields": sorted(catalog._OLLAMA_FIELDS - {"digest"})}
         for key, value in planted.items():
             with self.subTest(planted=key):
                 drifted = copy.deepcopy(document)
@@ -170,7 +173,9 @@ class InterfaceDocumentTests(unittest.TestCase):
                 self.assertTrue(any(line.startswith(key) for line in catalog_differences(catalog, drifted)))
         self.assertEqual(document["catalog"]["ollama"], {
             "list": "GET /api/tags", "check": "POST /api/show", "pull": "POST /api/pull stream",
-            "delete": "DELETE /api/delete", "loopback_only": True})
+            "delete": "DELETE /api/delete", "loopback_only": True,
+            "pin": "an ollama entry's digest and bytes are what GET /api/tags reports: the registry manifest's sha256, "
+                   "and its layers and config"})
         source = (COMPONENT / "src" / "kilix_gpu_residency" / "ollama.py").read_text(encoding="utf-8")
         for call in ('"GET", "/api/tags"', '"POST", "/api/show"', '"POST", "/api/pull", {"model": name, "stream": True}',
                      '"DELETE", "/api/delete"'):

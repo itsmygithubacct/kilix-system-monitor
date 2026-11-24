@@ -77,7 +77,10 @@ _TEXT = re.compile(r"[^\x00-\x1f\x7f-\x9f]{1,200}\Z")
 _ENV = re.compile(r"[A-Z][A-Z0-9_]{0,63}\Z", re.ASCII)
 _FILE_FIELDS = {"id", "name", "kind", "folder", "file", "bytes", "sha256", "url", "architecture",
                 "context_length", "source", "licence"}
-_OLLAMA_FIELDS = {"id", "name", "kind", "ollama", "architecture", "context_length", "source", "licence"}
+# An Ollama entry pins the manifest by the digest and size GET /api/tags reports for it,
+# which are the sha256 of the registry's manifest and the size of its layers and config.
+_OLLAMA_FIELDS = {"id", "name", "kind", "ollama", "bytes", "digest", "architecture", "context_length", "source",
+                  "licence"}
 _FOLDER_FIELDS = {"env", "base_env", "base_default", "subpath"}
 
 Progress = Callable[[str, int | None, int | None], None]
@@ -111,6 +114,7 @@ class Entry:
     sha256: str | None = None
     url: str | None = None
     ollama: str | None = None  # the Ollama name, for the ollama kind
+    digest: str | None = None  # the Ollama manifest's sha256, for the ollama kind
 
 
 @dataclass(frozen=True)
@@ -247,6 +251,10 @@ def _parse(raw: bytes, *, local: bool) -> Catalog:
         if kind == "ollama":
             if type(item["ollama"]) is not str or not ollama_name_ok(item["ollama"]):
                 _bad(f"model {ident} has an invalid Ollama name")
+            if type(item["bytes"]) is not int or item["bytes"] <= 0:
+                _bad(f"model {ident} has an invalid size")
+            if type(item["digest"]) is not str or not _SHA.fullmatch(item["digest"]):
+                _bad(f"model {ident} has an invalid digest")
         else:
             file = item["file"]
             if item["folder"] != FOLDER_FOR_KIND[kind]:
@@ -746,18 +754,47 @@ def _ollama_url(url: str | None) -> str:
     return url or _ollama.default_url()
 
 
-def _install_ollama(name: str, url: str, progress: Progress | None) -> Result:
-    if not ollama_name_ok(name):
-        raise CatalogError("invalid-name", "Ollama names use letters, digits, and . _ : / -")
+def _ollama_tag(url: str, name: str) -> _ollama.Installed | None:
+    """What GET /api/tags lists for ``name`` (an implicit :latest included), or None."""
     try:
-        if _ollama.has(url, name):
-            return Result("install", "already-installed", f"already installed {name}", name)
+        tags = _ollama.installed(url)
     except _ollama.OllamaError as error:
         raise CatalogError("unavailable", "Ollama is not reachable", detail=str(error)) from error
+    return next((tag for tag in tags if _canonical(tag.name) == _canonical(name)), None)
+
+
+def _digest_detail(tag: _ollama.Installed | None, entry: Entry) -> str:
+    have = tag.digest if tag is not None and tag.digest else "no digest"
+    return f"Ollama has {have}; the catalog pins {entry.digest}"
+
+
+def _install_ollama(name: str, url: str, progress: Progress | None, entry: Entry | None = None) -> Result:
+    """Pull ``name``. For a catalog entry the installed manifest must have the pinned digest."""
+    if not ollama_name_ok(name):
+        raise CatalogError("invalid-name", "Ollama names use letters, digits, and . _ : / -")
+    if entry is not None:
+        tag = _ollama_tag(url, name)
+        if tag is not None:
+            if tag.digest != entry.digest:
+                raise CatalogError("conflict", f"{name} is already installed and does not match the catalog",
+                                   detail=_digest_detail(tag, entry))
+            return Result("install", "already-installed", f"already installed {name}", name)
+    else:
+        try:
+            if _ollama.has(url, name):
+                return Result("install", "already-installed", f"already installed {name}", name)
+        except _ollama.OllamaError as error:
+            raise CatalogError("unavailable", "Ollama is not reachable", detail=str(error)) from error
     try:
         _ollama.pull(url, name, progress)
     except _ollama.OllamaError as error:
         raise CatalogError("pull-failed", f"could not pull {name}", detail=str(error)) from error
+    if entry is not None:
+        tag = _ollama_tag(url, name)
+        if tag is None or tag.digest != entry.digest:
+            # The registry's tag has moved on. Ollama keeps what it pulled; nothing is deleted here.
+            raise CatalogError("downloaded-mismatch", f"pulled {name} did not match the catalog",
+                               detail=_digest_detail(tag, entry) + f"; remove it with: kilix-gpu models remove ollama:{name}")
     return Result("install", "pulled", f"pulled {name}", name)
 
 # }}}
@@ -778,7 +815,7 @@ def install(target: str, *, catalog: Catalog | None = None, ollama: str | None =
     if entry is None:
         raise CatalogError("unknown", f"unknown model {target}")
     if entry.kind == "ollama":
-        return _install_ollama(entry.ollama, _ollama_url(ollama), progress)
+        return _install_ollama(entry.ollama, _ollama_url(ollama), progress, entry)
     return _install_file(entry, catalog, progress)
 
 
@@ -896,12 +933,23 @@ def remove(target: str, *, unload: bool = False, catalog: Catalog | None = None,
     return _remove_file(*located, unload, namespace, url)
 
 
-def verify(target: str, *, catalog: Catalog | None = None, progress: Progress | None = None) -> Result:
-    """Recompute an installed catalog file's size and sha256 and compare them with the catalog."""
+def verify(target: str, *, catalog: Catalog | None = None, progress: Progress | None = None,
+           ollama: str | None = None) -> Result:
+    """Recompute an installed catalog file's size and sha256 and compare them with the catalog,
+    or compare an installed catalog Ollama model's manifest digest with its pin."""
     catalog = catalog or load()
+    entry = catalog.get(target)
+    if entry is not None and entry.kind == "ollama":
+        tag = _ollama_tag(_ollama_url(ollama), entry.ollama)
+        if tag is None:
+            raise CatalogError("not-installed", f"{entry.ollama} is not installed")
+        if tag.digest != entry.digest:
+            raise CatalogError("mismatch", f"{entry.ollama} does not match the catalog (digest)",
+                               detail=_digest_detail(tag, entry))
+        return Result("verify", "verified", f"verified {entry.ollama}", entry.ollama)
     located = _locate(target, catalog)
     if isinstance(located, str):
-        raise CatalogError("not-verifiable", "Ollama checks its own models; there is nothing to verify")
+        raise CatalogError("not-verifiable", "only a catalog entry pins an Ollama digest; there is nothing to compare it with")
     directory, file, entry = located
     if entry is None:
         raise CatalogError("not-verifiable", f"{file} is not in the catalog; there is nothing to compare it with")
@@ -992,16 +1040,20 @@ def list_models(*, catalog: Catalog | None = None, namespace: str | None = None,
     on_disk = {_canonical(tag.name): tag for tag in tags}
     for entry in (e for e in catalog.entries if e.kind == "ollama"):
         tag = on_disk.pop(_canonical(entry.ollama), None)
-        models.append(_ollama_row(entry.id, entry.name, entry.ollama, tag, holders, "catalog"))
+        models.append(_ollama_row(entry.id, entry.name, entry.ollama, tag, holders, "catalog", entry))
     for key, tag in sorted(on_disk.items()):
         models.append(_ollama_row(f"ollama:{tag.name}", tag.name, tag.name, tag, holders, "ollama"))
     return Inventory(tuple(models), folders, ollama_state, residency)
 
 
 def _ollama_row(ident: str, name: str, model: str, tag: _ollama.Installed | None,
-                holders: tuple[ResidentInfo, ...], source: str) -> Listed:
+                holders: tuple[ResidentInfo, ...], source: str, entry: Entry | None = None) -> Listed:
     who = sorted({h.app for h in holders if h.backend == "ollama" and _canonical(h.model) == _canonical(model)})
-    return Listed(ident, name, "ollama", source, "installed" if tag else "available", None, None,
-                  tag.size_bytes if tag else None, None, tuple(who))
+    if tag is None:
+        state = "available"
+    else:
+        state = "installed" if entry is None or tag.digest == entry.digest else "mismatch"
+    size = entry.bytes if entry is not None else tag.size_bytes if tag else None
+    return Listed(ident, name, "ollama", source, state, None, None, size, None, tuple(who))
 
 # }}}

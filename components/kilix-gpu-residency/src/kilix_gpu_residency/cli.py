@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None, out=None, err=None) -> int:
     drop_model.add_argument("--unload", action="store_true",
                             help="unload it through the registry first (never a pinned or busy one)")
     drop_model.add_argument("--json", action="store_true")
-    check = actions.add_parser("verify", help="recompute an installed catalog file's sha256")
+    check = actions.add_parser("verify", help="recompute an installed catalog file's sha256, or check a catalog Ollama model's digest")
     check.add_argument("target")
     check.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
@@ -258,7 +258,7 @@ def _models(args: argparse.Namespace, where: dict, out, err) -> int:
         elif args.action == "remove":
             result = _catalog.remove(args.target, unload=args.unload, catalog=catalog, **where)
         else:
-            result = _catalog.verify(args.target, catalog=catalog, progress=progress)
+            result = _catalog.verify(args.target, catalog=catalog, progress=progress, ollama=args.ollama)
         outcome, message, detail = result.outcome, result.message, None
         name, path = result.name, result.path
     except _catalog.CatalogError as error:

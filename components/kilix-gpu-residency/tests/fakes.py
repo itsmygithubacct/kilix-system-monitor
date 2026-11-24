@@ -140,6 +140,12 @@ class FakeNvml:
         return 0
 
 
+def digest_of(name: str) -> str:
+    """The manifest digest FakeOllama lists for a model, unless told otherwise."""
+    import hashlib
+    return hashlib.sha256(name.encode()).hexdigest()
+
+
 class FakeOllama:
     """GET /api/ps and POST /api/generate with keep_alive 0, on a loopback port.
 
@@ -151,6 +157,8 @@ class FakeOllama:
     def __init__(self, scratch: Path, *, legacy: bool = False) -> None:
         self.models: dict[str, dict[str, Any]] = {}
         self.disk: dict[str, int] = {}  # installed models (GET /api/tags) and their sizes
+        self.digests: dict[str, Any] = {}  # a manifest digest to list instead of digest_of(name)
+        self.pull_digest: str | None = None  # the digest the next pulls install, as if the tag had moved
         self.pull_error: str | None = None  # an error line the next pulls report
         self.pull_truncated = False  # end the next pulls' progress before "success"
         self.requests: list[tuple[str, str, Any]] = []
@@ -190,7 +198,9 @@ class FakeOllama:
                 owner.requests.append(("GET", self.path, None))
                 with owner.lock:
                     if self.path == "/api/tags":
-                        models = [{"name": name, "model": name, "size": size} for name, size in owner.disk.items()]
+                        models = [{"name": name, "model": name, "size": size,
+                                   "digest": owner.digests.get(name, digest_of(name))}
+                                  for name, size in owner.disk.items()]
                     else:
                         models = [{"name": name, "model": name, **value} for name, value in owner.models.items()]
                 self.reply({"models": models})
@@ -220,6 +230,8 @@ class FakeOllama:
                     if not owner.pull_error:
                         with owner.lock:
                             owner.disk[body.get("model")] = 2 * GIB
+                            if owner.pull_digest:
+                                owner.digests[body.get("model")] = owner.pull_digest
                     self.send_response(200)
                     self.send_header("Content-Length", str(len(raw)))
                     self.end_headers()
@@ -476,7 +488,7 @@ def wait_for(predicate: Callable[[], bool], timeout: float = 10.0) -> bool:
 
 
 __all__ = ["ResidencyCase", "FakeNvml", "FakeOllama", "FakeDownloads", "make_gpu", "wait_for", "alive", "stop", "GIB", "MIB",
-           "NVIDIA", "SECOND_NVIDIA", "INTEL", "AMD", "ollama_module"]
+           "NVIDIA", "SECOND_NVIDIA", "INTEL", "AMD", "ollama_module", "digest_of"]
 
 
 def blob(size: int, seed: int) -> bytes:
@@ -530,7 +542,8 @@ class CatalogCase(ResidencyCase):
             {"id": "tiny-diffusion", "name": "Tiny diffusion (Q4)", "kind": "diffusion-gguf", "folder": "diffusion",
              "file": self.TINY, "bytes": len(self.tiny), "sha256": hashlib.sha256(self.tiny).hexdigest(),
              "url": (self.scratch / "mirror" / self.TINY).as_uri(), **common},
-            {"id": "tiny-ollama", "name": "Tiny (Ollama)", "kind": "ollama", "ollama": "tiny:1b", **common},
+            {"id": "tiny-ollama", "name": "Tiny (Ollama)", "kind": "ollama", "ollama": "tiny:1b", "bytes": 10**9,
+             "digest": digest_of("tiny:1b"), **common},
         ]}
 
     def write_catalog(self, document: dict | None = None) -> None:
@@ -544,7 +557,7 @@ class CatalogCase(ResidencyCase):
         return self.catalog_module.remove(target, catalog=self.catalog, **self.where(), **kwargs)
 
     def verify(self, target: str, **kwargs: Any):
-        return self.catalog_module.verify(target, catalog=self.catalog, **kwargs)
+        return self.catalog_module.verify(target, catalog=self.catalog, **{"ollama": self.ollama.url, **kwargs})
 
     def inventory(self, **kwargs: Any):
         return self.catalog_module.list_models(catalog=self.catalog, **{**self.where(), **kwargs})

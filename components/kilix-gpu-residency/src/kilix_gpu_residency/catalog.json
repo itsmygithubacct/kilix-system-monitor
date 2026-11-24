@@ -112,6 +112,54 @@
       "context_length": 4096,
       "source": "mradermacher/d3LLM_LLaDA-GGUF, a third-party GGUF of d3LLM/d3LLM_LLaDA (hao-ai-lab)",
       "licence": "apache-2.0, as the model card declares (the GGUF header declares none)"
+    },
+    {
+      "id": "d3-4b",
+      "name": "d3 4B (Ollama, Q8_0)",
+      "kind": "ollama",
+      "ollama": "d3:4b",
+      "bytes": 5833416247,
+      "digest": "2c571f91caf64c47b6ca6bd3adc1daa07dbb84ead8e9489758498cc7e11e533d",
+      "architecture": "qwen35",
+      "context_length": 262144,
+      "source": "ollama.com/library/d3:4b, a Q8_0 model based on Qwen/Qwen3.5-4B, with Ollama's decision capability",
+      "licence": "apache-2.0, as the model's licence layer and its GGUF header declare"
+    },
+    {
+      "id": "d3-2b",
+      "name": "d3 2B (Ollama, Q8_0)",
+      "kind": "ollama",
+      "ollama": "d3:2b",
+      "bytes": 3223742935,
+      "digest": "e1b3991aa4806936d30a6d624b234aca3f99ba89d61d6d3a17ee81739f94dafa",
+      "architecture": "qwen35",
+      "context_length": 262144,
+      "source": "ollama.com/library/d3:2b, a Q8_0 model based on Qwen/Qwen3.5-2B, with Ollama's decision capability",
+      "licence": "apache-2.0, as the model's licence layer and its GGUF header declare"
+    },
+    {
+      "id": "qwen3.5-9b",
+      "name": "Qwen3.5 9B (Ollama, Q4_K_M)",
+      "kind": "ollama",
+      "ollama": "qwen3.5:9b",
+      "bytes": 6550825550,
+      "digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+      "architecture": "qwen35",
+      "context_length": 262144,
+      "source": "ollama.com/library/qwen3.5:9b, a Q4_K_M build of Qwen/Qwen3.5-9B",
+      "licence": "apache-2.0, as the model's licence layer and its GGUF header declare"
+    },
+    {
+      "id": "gemma4-e4b",
+      "name": "Gemma 4 E4B (Ollama, Q4_K_M)",
+      "kind": "ollama",
+      "ollama": "gemma4:e4b",
+      "bytes": 6583656505,
+      "digest": "dc35e8d9c6061baa6f0fa870975ab6932e2542b579b13ea0f199fa4bb7300c9c",
+      "architecture": "gemma4",
+      "context_length": 131072,
+      "source": "ollama.com/library/gemma4:e4b (the manifest gemma4:latest also names), a Q4_K_M build of google/gemma-4-E4B",
+      "licence": "apache-2.0, as the model's licence layer and its GGUF header declare"
     }
   ]
 }

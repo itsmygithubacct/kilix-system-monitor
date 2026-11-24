@@ -20,7 +20,7 @@ import unittest
 
 import residency_containment
 from kilix_gpu_residency import catalog
-from fakes import MIB, CatalogCase, stop
+from fakes import digest_of, MIB, CatalogCase, stop
 
 # The seed entries: puzzllm-fetch's pinned six (puzzllm/libexec/puzzllm-fetch) and
 # d3llm-llada (owner request 2026-11-23, which puzzllm-fetch gains too), copied
@@ -57,21 +57,38 @@ SEED = {
                     "https://huggingface.co/mradermacher/d3LLM_LLaDA-GGUF/resolve/"
                     "6cbf038bb867cd42bb4ff9b9ce931af23b32e3df/d3LLM_LLaDA.Q4_K_M.gguf"),
 }
+# The Ollama pins, chosen for H2 (an 8 GiB NVIDIA GPU, the sizer's reference class) from the
+# local yes/no and BoolQ rankings: id -> (Ollama name, bytes, manifest digest). Each digest is
+# the sha256 of the manifest registry.ollama.ai serves for that name, and the size is its layers
+# and config, as GET /api/tags reports them.
+OLLAMA_SEED = {
+    "d3-4b": ("d3:4b", 5833416247, "2c571f91caf64c47b6ca6bd3adc1daa07dbb84ead8e9489758498cc7e11e533d"),
+    "d3-2b": ("d3:2b", 3223742935, "e1b3991aa4806936d30a6d624b234aca3f99ba89d61d6d3a17ee81739f94dafa"),
+    "qwen3.5-9b": ("qwen3.5:9b", 6550825550, "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90"),
+    "gemma4-e4b": ("gemma4:e4b", 6583656505, "dc35e8d9c6061baa6f0fa870975ab6932e2542b579b13ea0f199fa4bb7300c9c"),
+}
+
 # Read from each file's GGUF header (general.architecture, <arch>.context_length, general.license);
 # d3llm-llada's header declares no licence, so its licence is the model card's.
 HEADERS = {"qwen3.5-0.8b": ("qwen35", 262144, "apache-2.0"), "qwen3.5-4b-q4": ("qwen35", 262144, "apache-2.0"),
            "gemma4-e2b-q4-k-m": ("gemma4", 131072, "apache-2.0"),
            "llada-moe-7b-a1b": ("llada-moe", 8192, "apache-2.0"), "llada-1.5": ("llada", 4096, "mit"),
-           "dream-coder-7b": ("dream", 32768, "apache-2.0"), "d3llm-llada": ("llada", 4096, "apache-2.0")}
+           "dream-coder-7b": ("dream", 32768, "apache-2.0"), "d3llm-llada": ("llada", 4096, "apache-2.0"),
+           # Ollama's /api/show model_info for the pinned manifests.
+           "d3-4b": ("qwen35", 262144, "apache-2.0"), "d3-2b": ("qwen35", 262144, "apache-2.0"),
+           "qwen3.5-9b": ("qwen35", 262144, "apache-2.0"), "gemma4-e4b": ("gemma4", 131072, "apache-2.0")}
 
 
 class CatalogDataTests(unittest.TestCase):
-    def test_the_packaged_catalog_pins_the_seven_seed_models(self):
+    def test_the_packaged_catalog_pins_the_seed_models(self):
         loaded = catalog.load()
-        self.assertEqual({e.id: (e.kind, e.file, e.bytes, e.sha256, e.url) for e in loaded.entries}, SEED)
+        self.assertEqual({e.id: (e.kind, e.file, e.bytes, e.sha256, e.url) for e in loaded.entries
+                          if e.kind != "ollama"}, SEED)
+        self.assertEqual({e.id: (e.ollama, e.bytes, e.digest) for e in loaded.entries if e.kind == "ollama"},
+                         OLLAMA_SEED)
         for entry in loaded.entries:
             with self.subTest(entry=entry.id):
-                self.assertEqual(entry.folder, catalog.FOLDER_FOR_KIND[entry.kind])
+                self.assertEqual(entry.folder, catalog.FOLDER_FOR_KIND.get(entry.kind))
                 self.assertEqual((entry.architecture, entry.context_length), HEADERS[entry.id][:2])
                 self.assertTrue(entry.licence.startswith(HEADERS[entry.id][2] + ","))
                 self.assertIn("/", entry.source)
@@ -156,6 +173,22 @@ class CatalogDataTests(unittest.TestCase):
                 else:
                     with self.assertRaises(catalog.CatalogError):
                         catalog._parse(raw, local=True)
+
+    def test_an_ollama_entry_must_pin_a_digest_and_size(self):
+        packaged = json.loads((Path(catalog.__file__).parent / "catalog.json").read_text())
+        good = next(m for m in packaged["models"] if m["kind"] == "ollama")
+        catalog._parse(json.dumps({**packaged, "models": [good]}).encode(), local=False)
+        for change in ({"digest": "sha256:" + good["digest"]}, {"digest": good["digest"].upper()},
+                       {"digest": good["digest"][:-1]}, {"digest": None}, {"bytes": 0}, {"bytes": "5"},
+                       {"bytes": True}, {"digest": None, "bytes": None}):
+            with self.subTest(change=change):
+                with self.assertRaises(catalog.CatalogError):
+                    catalog._parse(json.dumps({**packaged, "models": [{**good, **change}]}).encode(), local=False)
+        for missing in ("digest", "bytes"):
+            with self.subTest(missing=missing):
+                with self.assertRaises(catalog.CatalogError):
+                    catalog._parse(json.dumps({**packaged, "models": [
+                        {k: v for k, v in good.items() if k != missing}]}).encode(), local=False)
 
     def test_ollama_names_follow_puzzllm_fetch(self):
         for name in ("qwen3.5:2b", "library/llama3", "hf.co/user/repo:Q4_K_M", "a", "a" * 128, "bonsai-2:27b",
@@ -457,8 +490,34 @@ class OllamaInstallTests(CatalogCase):
         self.assertIn(("pulling abc", 5, 10), stages)
         self.assertIn("qwen3.5:2b", self.ollama.disk)
 
-    def test_a_catalog_ollama_entry_pulls_its_name(self):
+    def test_a_catalog_ollama_entry_pulls_its_name_and_then_has_its_pin(self):
         self.assertEqual(self.install("tiny-ollama").message, "pulled tiny:1b")
+        result = self.install("tiny-ollama")
+        self.assertEqual((result.outcome, result.message), ("already-installed", "already installed tiny:1b"))
+        self.assertEqual(len(self.pulls()), 1)
+
+    def test_an_installed_catalog_model_with_another_digest_is_refused(self):
+        self.ollama.disk["tiny:latest"] = 10**9
+        self.ollama.disk["tiny:1b"] = 10**9
+        for listed, shown in (("0" * 64, "0" * 64), ("bad\ndigest", "no digest"), (None, "no digest")):
+            with self.subTest(listed=listed):
+                self.ollama.digests["tiny:1b"] = listed
+                error = self.refused("conflict", self.install, "tiny-ollama")
+                self.assertEqual((str(error), error.exit_code),
+                                 ("tiny:1b is already installed and does not match the catalog", 2))
+                self.assertEqual(error.detail, f"Ollama has {shown}; the catalog pins {digest_of('tiny:1b')}")
+        self.assertEqual(self.install("ollama:tiny:1b").outcome, "already-installed")  # not a catalog pin
+        self.assertEqual(self.pulls(), [])
+
+    def test_a_pull_whose_tag_has_moved_did_not_match_and_is_kept(self):
+        self.ollama.pull_digest = "1" * 64
+        error = self.refused("downloaded-mismatch", self.install, "tiny-ollama")
+        self.assertEqual((str(error), error.exit_code), ("pulled tiny:1b did not match the catalog", 1))
+        self.assertEqual(error.detail, f"Ollama has {'1' * 64}; the catalog pins {digest_of('tiny:1b')}; "
+                                       "remove it with: kilix-gpu models remove ollama:tiny:1b")
+        self.assertIn("tiny:1b", self.ollama.disk)
+        self.assertEqual([r for r in self.ollama.requests if r[0] == "DELETE"], [])
+        self.assertEqual(self.install("ollama:qwen3.5:2b").outcome, "pulled")  # unpinned: any digest
 
     def test_a_failed_pull_says_so(self):
         self.ollama.pull_error = "pull model manifest: file does not exist"

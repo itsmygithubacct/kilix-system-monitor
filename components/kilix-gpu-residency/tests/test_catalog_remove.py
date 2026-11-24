@@ -16,7 +16,9 @@ import unittest
 import residency_containment
 import kilix_gpu_residency as residency
 from kilix_gpu_residency import catalog
-from fakes import GIB, MIB, CatalogCase, alive, stop
+from unittest import mock
+
+from fakes import GIB, MIB, CatalogCase, alive, digest_of, stop
 
 # Maps the file through libc and closes the descriptor, so only /proc/<pid>/maps shows it
 # (Python's mmap module keeps a dup of the descriptor, which the fd scan would find instead).
@@ -258,10 +260,21 @@ class VerifyTests(CatalogCase):
         self.place(self.llm, "Local.gguf", b"x")
         self.refused("not-verifiable", self.verify, "Local.gguf")
         self.refused("not-verifiable", self.verify, "ollama:qwen3.5:2b")
-        self.refused("not-verifiable", self.verify, "tiny-ollama")
+        self.refused("not-installed", self.verify, "tiny-ollama")
         self.place(self.scratch / "elsewhere", "real.gguf", self.small)
         os.symlink(self.scratch / "elsewhere" / "real.gguf", self.llm / self.SMALL)
         self.refused("symlink", self.verify, "small")
+
+
+    def test_a_catalog_ollama_model_is_verified_by_its_manifest_digest(self):
+        self.ollama.disk.update({"tiny:1b": 10**9, "tiny:latest": 10**9})
+        result = self.verify("tiny-ollama")
+        self.assertEqual((result.outcome, result.message, result.exit_code), ("verified", "verified tiny:1b", 0))
+        self.ollama.digests["tiny:1b"] = "2" * 64
+        error = self.refused("mismatch", self.verify, "tiny-ollama")
+        self.assertEqual((str(error), error.exit_code), ("tiny:1b does not match the catalog (digest)", 4))
+        self.assertEqual(error.detail, f"Ollama has {'2' * 64}; the catalog pins {digest_of('tiny:1b')}")
+        self.refused("unavailable", self.verify, "tiny-ollama", ollama="http://127.0.0.1:9")
 
 
 class ListTests(CatalogCase):
@@ -306,6 +319,14 @@ class ListTests(CatalogCase):
         self.place(self.llm, self.SMALL, b"short")
         self.assertEqual(self.by_id(self.inventory())["small"].state, "mismatch")
 
+    def test_a_catalog_ollama_model_with_another_digest_is_a_mismatch(self):
+        self.ollama.disk["tiny:1b"] = 5
+        self.ollama.digests["tiny:1b"] = "3" * 64
+        row = self.by_id(self.inventory())["tiny-ollama"]
+        self.assertEqual((row.state, row.bytes), ("mismatch", 10**9))  # the catalog's size, not what is listed
+        self.ollama.digests.pop("tiny:1b")
+        self.assertEqual(self.by_id(self.inventory())["tiny-ollama"].state, "installed")
+
     def test_the_inventory_survives_an_unreachable_ollama_and_registry(self):
         self.place(self.llm, self.SMALL, self.small)
         value = catalog.list_models(catalog=self.catalog, namespace="relative/registry", ollama="http://127.0.0.1:9")
@@ -316,6 +337,11 @@ class ListTests(CatalogCase):
 
 
 class CliTests(CatalogCase):
+    def test_verify_asks_the_ollama_it_is_given(self):
+        self.ollama.disk["tiny:1b"] = 10**9
+        with mock.patch.dict(os.environ, {"OLLAMA_HOST": "127.0.0.1:9"}):  # nothing listens there
+            self.assertEqual(self.cli("verify", "tiny-ollama"), (0, "verified tiny:1b\n", ""))
+
     def test_every_action_prints_one_line_and_its_exit_code(self):
         self.assertEqual(self.cli("install", "small"), (0, f"saved {self.SMALL}\n", ""))
         self.assertEqual(self.cli("install", "small"), (0, f"already saved {self.SMALL}\n", ""))
