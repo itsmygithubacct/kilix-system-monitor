@@ -217,6 +217,47 @@ receives a confirmed default from this profile. The binary alternate remains
 unknown. Memory estimates do not establish CUDA kernel compatibility, speed,
 installed runtime identity or installation readiness.
 
+## One-token judge input limits
+
+```sh
+plebian-model-sizer recommend binary-judge --model qwen3.5-0.8b-q8_0 \
+  --model-sha256 37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f \
+  --engine llama.cpp@8ea290247c87ced2ab245b056ffe96dbcf90d36c [--backend cpu|cuda] \
+  [--adapter ID --adapter-bytes N] [--reserve-mb 1024] [--template-tokens N] [--json]
+```
+
+`kilix-llm judge` asks this before it starts its engine: how many input tokens
+can one prompt hold on this machine, answered with one token? The response
+(`plebian.models.binary-judge-sizing/v1-development`) gives
+`max_context_tokens`, `max_input_tokens`, `limit_reason` (`memory`,
+`trained_context` or `engine_cap`), the limiting resource and a breakdown.
+`max_input_bytes_estimate` converts the token limit with a bytes-per-token
+ratio measured on bench items; it is an estimate, not a limit.
+
+`binary_judge_profiles.json` holds one profile per base model, engine build,
+backend and CPU architecture. Each was measured by loading the exact base GGUF
+plus a rank-8 stand-in LoRA in the engine's server with the judge's flags (one
+slot, flash attention, f16 KV, no prompt cache), filling the context with one
+prompt and reading the process's peak RSS (`VmHWM`) and, on CUDA, its peak VRAM.
+Where they exist, real `kilix-llm judge` runs at the reported limit count too
+(their engine peak plus the stand-in's bytes): the judge renders and tokenizes
+its whole input in the server, which at 262k tokens cost ~170 MB more than a
+ready-made token prompt. The fit is an upper envelope: the pooled least-squares slope per token and the
+smallest fixed part that keeps every measured peak under the line. Then
+
+    budget      = MemAvailable (free VRAM on a GPU backend) - reserve
+    fixed       = fixed * (1 + margin) + adapter bytes over the stand-in's
+    per_token   = per_token * (1 + margin)
+    max_context = min(floor((budget - fixed) / per_token) down to a multiple
+                      of 256, the model's trained context, any engine cap)
+    max_input   = max_context - template tokens - 1
+
+with a 5% margin and a 1 GiB reserve by default. A profile is keyed by the model
+sha256 and the engine identity and carries its own digest: a request for
+another file or engine build is refused, never estimated, and an edited profile
+fails to load. Cgroup-unknown or stale memory gives no limit. Hosts that were
+measured are named in each profile's evidence only by hardware class.
+
 ## Development interface and checks
 
 `snapshot` emits `plebian.models.resources/v1-development` and `recommend
