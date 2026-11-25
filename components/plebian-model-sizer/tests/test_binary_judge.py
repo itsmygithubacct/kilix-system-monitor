@@ -150,6 +150,15 @@ class BundledProfileTests(unittest.TestCase):
                 self.assertEqual(p["model"]["sha256"], QWEN_SHA)
                 self.assertEqual(p["model"]["n_ctx_train"], 262_144)
 
+    def test_bundled_v1_cpu_profile_answers_on_x86_64(self):
+        engine = "llama.cpp@b1b770d90d94cad9e9ea5b993bdbc383a522fb28"
+        result = binary_judge.recommend_binary_judge(
+            snapshot(62 * GIB), model="qwen3.5-0.8b-q8_0", model_sha256=QWEN_SHA, engine=engine)
+        self.assertEqual(result["profile_id"], "qwen3.5-0.8b-q8_0.llama.cpp-b1b770d.cpu.x86_64")
+        self.assertEqual((result["backend"], result["architecture"]), ("cpu", "x86_64"))
+        self.assertEqual((result["max_context_tokens"], result["max_input_tokens"], result["limit_reason"]),
+                         (262_144, 261_965, "trained_context"))
+
 
 class CliTests(unittest.TestCase):
     def run_cli(self, *extra: str) -> tuple[int, dict]:

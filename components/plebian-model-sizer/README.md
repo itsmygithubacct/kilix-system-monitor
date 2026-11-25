@@ -235,7 +235,10 @@ can one prompt hold on this machine, answered with one token? The response
 ratio measured on bench items; it is an estimate, not a limit.
 
 `binary_judge_profiles.json` holds one profile per base model, engine build,
-backend and CPU architecture. Each was measured by loading the exact base GGUF
+backend and CPU architecture. Bundled engines are
+`llama.cpp@8ea290247c87ced2ab245b056ffe96dbcf90d36c` and, for qwen3.5-0.8b on
+x86_64 CPU, llama.cpp v1.0.0
+`llama.cpp@b1b770d90d94cad9e9ea5b993bdbc383a522fb28`. Each was measured by loading the exact base GGUF
 plus a rank-8 stand-in LoRA in the engine's server with the judge's flags (one
 slot, flash attention, f16 KV, no prompt cache), filling the context with one
 prompt and reading the process's peak RSS (`VmHWM`) and, on CUDA, its peak VRAM.

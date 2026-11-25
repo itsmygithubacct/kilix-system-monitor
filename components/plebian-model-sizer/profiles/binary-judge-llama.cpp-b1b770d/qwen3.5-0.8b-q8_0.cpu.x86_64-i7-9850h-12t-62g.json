@@ -1,0 +1,43 @@
+{
+ "server": "/home/pleb/gpu_terminal/worktrees/024-stack-llm/build/llama.cpp/bin/llama-server",
+ "model": "/home/pleb/.local/gpu_terminal/kilix-llm/models/Qwen3.5-0.8B-Q8_0.gguf",
+ "threads": 6,
+ "points": [
+  {
+   "ctx": 512,
+   "prompt_tokens": 504,
+   "peak_bytes": 1028255744,
+   "seconds": 4.7
+  },
+  {
+   "ctx": 2048,
+   "prompt_tokens": 2040,
+   "peak_bytes": 1070600192,
+   "seconds": 11.3
+  },
+  {
+   "ctx": 8192,
+   "prompt_tokens": 8184,
+   "peak_bytes": 1155657728,
+   "seconds": 49.5
+  },
+  {
+   "ctx": 32768,
+   "prompt_tokens": 32760,
+   "peak_bytes": 1496514560,
+   "seconds": 650.2
+  },
+  {
+   "ctx": 131072,
+   "prompt_tokens": 131064,
+   "peak_bytes": 2827005952,
+   "seconds": 3984.7
+  },
+  {
+   "ctx": 262144,
+   "prompt_tokens": 262136,
+   "peak_bytes": 4597653504,
+   "seconds": 13713.2
+  }
+ ]
+}

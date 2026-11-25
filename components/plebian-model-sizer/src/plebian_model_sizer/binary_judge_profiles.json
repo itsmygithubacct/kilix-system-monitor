@@ -119,6 +119,93 @@
       "vram": null
     },
     {
+      "architecture": "x86_64",
+      "bytes_per_token": 3.688,
+      "engine": {
+        "backend": "cpu",
+        "build": "kilix-llm build-runtime.sh, GGML_NATIVE=ON, 0 patches",
+        "id": "llama.cpp@b1b770d90d94cad9e9ea5b993bdbc383a522fb28",
+        "server_flags": "-fa on --parallel 1 --fit off --cache-ram 0 -ngl 0 --device none, KV f16"
+      },
+      "engine_cap_tokens": null,
+      "evidence": {
+        "bytes_per_token": "1768 OneBit items (c3caf8c1 set), user messages: 369980 bytes / 100332 tokens",
+        "hosts": {
+          "ram": {
+            "x86_64-i7-9850h-12t-62g": {
+              "intercept": 1061958789,
+              "points": [
+                [
+                  512,
+                  1049926752
+                ],
+                [
+                  2048,
+                  1092271200
+                ],
+                [
+                  8192,
+                  1177328736
+                ],
+                [
+                  32768,
+                  1518185568
+                ],
+                [
+                  131072,
+                  2848676960
+                ],
+                [
+                  262144,
+                  4619324512
+                ]
+              ],
+              "slope": 13587.07
+            }
+          }
+        },
+        "judge_proof_checks": {
+          "ram": [
+            {
+              "ctx": 262144,
+              "headroom_bytes": 0,
+              "host": "x86_64-i7-9850h-12t-62g",
+              "peak": 4798495840
+            }
+          ]
+        },
+        "judge_proofs": "one real `kilix-llm judge` run at 261,965 input tokens (base only; the stand-in's bytes added), counted in the fixed part",
+        "judge_proofs_used": [
+          "ram"
+        ],
+        "measured_at": "2026-11-24",
+        "method": "upper envelope: least-squares slope over all hosts' points, smallest intercept covering every measured peak",
+        "peak": "VmHWM of llama-server after one completion whose prompt fills the context (ctx - 8 tokens), base model alone, plus the stand-in adapter's bytes",
+        "template": "kilix-llm judge contract prompt, Qwen chat template, thinking off: 178 tokens",
+        "tool": "profiles/binary-judge-llama.cpp-b1b770d/measure.py and fit.py"
+      },
+      "id": "qwen3.5-0.8b-q8_0.llama.cpp-b1b770d.cpu.x86_64",
+      "margin_basis_points": 500,
+      "model": {
+        "id": "qwen3.5-0.8b-q8_0",
+        "n_ctx_train": 262144,
+        "sha256": "37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f",
+        "weights_bytes": 833592096
+      },
+      "profile_sha256": "57d579e7eefdc6dec8593220e7a71d5f34f32af9969c0109f1bb048ffb6eccfd",
+      "ram": {
+        "fixed_bytes": 1236745312,
+        "per_token_bytes": 13587
+      },
+      "standin_adapter": {
+        "bytes": 21671008,
+        "rank": 8,
+        "sha256": "67031dfc1dfe7142de57a9bd9761100a6cfa87f427f3b41ee8b82562a3ecd010"
+      },
+      "template_tokens": 178,
+      "vram": null
+    },
+    {
       "architecture": "aarch64",
       "bytes_per_token": 3.688,
       "engine": {

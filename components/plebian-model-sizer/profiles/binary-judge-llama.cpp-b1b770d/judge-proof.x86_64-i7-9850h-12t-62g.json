@@ -1,0 +1,9 @@
+{
+ "ctx": 262144,
+ "input_tokens": 261965,
+ "max_input_tokens": 261965,
+ "limit_reason": "trained_context",
+ "answer": 0,
+ "peak_bytes": 4776824832,
+ "seconds": 14687.1
+}
